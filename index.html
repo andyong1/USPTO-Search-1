@@ -177,6 +177,43 @@
     }
     .dl-link:hover { background: #edf2f7; }
     .badge-count { background: #c53030; color: white; border-radius: 10px; padding: 1px 9px; font-size: 0.72rem; margin-left: 8px; vertical-align: middle; }
+
+    /* Application detail */
+    .detail-head {
+      display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+      padding: 4px 0 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px;
+    }
+    .detail-head h3 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
+    .detail-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 24px; }
+    .detail-meta .kv { font-size: 0.85rem; }
+    .detail-meta .kv span { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .04em; color: #718096; }
+    .detail-section-title { font-size: 0.95rem; font-weight: 600; color: #1a3a6b; margin: 4px 0 10px; }
+    .btn-view {
+      cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b;
+      border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px;
+    }
+    .btn-view:hover { background: #15305a; }
+
+    /* Document viewer modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7);
+      z-index: 1000; align-items: center; justify-content: center; padding: 24px;
+    }
+    .modal-box {
+      background: #fff; border-radius: 10px; width: 100%; max-width: 1000px; height: 90vh;
+      display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    }
+    .modal-bar {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      background: #1a3a6b; color: #fff;
+    }
+    .modal-bar .title { font-weight: 600; font-size: 0.95rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .modal-bar a, .modal-bar button {
+      color: #fff; background: rgba(255,255,255,0.15); border: none; cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; text-decoration: none; padding: 5px 12px; border-radius: 5px;
+    }
+    .modal-bar a:hover, .modal-bar button:hover { background: rgba(255,255,255,0.28); }
+    .modal-box iframe { flex: 1; width: 100%; border: none; background: #525659; }
   </style>
 </head>
 <body>
@@ -380,6 +417,19 @@
 
 </div>
 
+<!-- DOCUMENT VIEWER MODAL -->
+<div class="modal-overlay" id="viewer-modal" onclick="if(event.target===this)closeDocViewer()">
+  <div class="modal-box">
+    <div class="modal-bar">
+      <span class="title" id="viewer-title">Document</span>
+      <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+      <a id="viewer-download" href="#" download>Download ⤓</a>
+      <button onclick="closeDocViewer()">Close ✕</button>
+    </div>
+    <iframe id="viewer-frame" title="Document viewer"></iframe>
+  </div>
+</div>
+
 <script>
 let lastData = null;
 let lastLookupApp = '';
@@ -517,17 +567,29 @@ async function runLookup() {
   if (!appNum) { alert('Enter an application number.'); return; }
   lastLookupApp = appNum;
   const section = val('lk-section');
+  const apiUrl = (s) => `/api/application?appNum=${encodeURIComponent(appNum)}` + (s ? `&section=${s}` : '');
 
-  const url = `/api/application?appNum=${encodeURIComponent(appNum)}` + (section ? `&section=${section}` : '');
-  showPayload({ method: 'GET', url });
   startSearch();
-
   try {
-    const res = await fetch(url);
-    const data = await safeJson(res);
-    if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
-    lastData = data;
-    renderResults(data);
+    // "Full Record" → fetch bibliographic data AND documents together for a rich
+    // in-page detail view. Specific sections behave as a single fetch.
+    if (!section) {
+      showPayload({ method: 'GET', urls: [apiUrl(''), apiUrl('documents')] });
+      const [metaRes, docRes] = await Promise.all([fetch(apiUrl('')), fetch(apiUrl('documents'))]);
+      const meta = await safeJson(metaRes);
+      if (!metaRes.ok) throw new Error(meta.error || meta.detail || `HTTP ${metaRes.status}`);
+      const docs = docRes.ok ? await safeJson(docRes) : { documentBag: [] };
+      lastData = { meta, docs };
+      renderAppDetail(meta, docs, appNum);
+    } else {
+      const url = apiUrl(section);
+      showPayload({ method: 'GET', url });
+      const res = await fetch(url);
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      lastData = data;
+      renderResults(data);
+    }
   } catch (err) {
     document.getElementById('results-body').innerHTML = errorHTML(err.message);
     document.getElementById('pagination').innerHTML = '';
@@ -919,26 +981,109 @@ function renderDocuments(data, fallbackApp) {
     document.getElementById('pagination').innerHTML = '';
     return;
   }
+  document.getElementById('results-body').innerHTML = documentsTable(bag, fallbackApp);
+  document.getElementById('pagination').innerHTML = '';
+}
+
+// ── Application detail (metadata + documents, in-page) ─────────────
+function renderAppDetail(meta, docs, appNum) {
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('raw-json').textContent = JSON.stringify({ meta, docs }, null, 2);
+  document.getElementById('results-count').textContent = '';
+  document.getElementById('pagination').innerHTML = '';
+
+  // The single-application endpoint may wrap the record in patentFileWrapperDataBag
+  // (like search results do), so unwrap to reach applicationMetaData.
+  const record =
+    (Array.isArray(meta.patentFileWrapperDataBag) && meta.patentFileWrapperDataBag[0]) ||
+    (Array.isArray(meta.results) && meta.results[0]) ||
+    (Array.isArray(meta) && meta[0]) ||
+    meta || {};
+  const md = record.applicationMetaData || record || {};
+  const num = record.applicationNumberText || md.applicationNumberText || appNum;
+  const title = md.inventionTitle || md.patentTitle || md.inventionTitleText || record.inventionTitle;
+
+  const kv = [
+    ['Application No.', num],
+    ['Patent No.', md.patentNumber],
+    ['Status', md.applicationStatusDescriptionText],
+    ['Filing Date', fmtDate(md.filingDate)],
+    ['Grant Date', fmtDate(md.grantDate)],
+    ['App Type', md.applicationTypeLabelName],
+    ['Inventor(s)', md.firstInventorName || bagNames(md.inventorBag)],
+    ['Applicant(s)', md.firstApplicantName || bagNames(md.applicantBag)],
+    ['Group Art Unit', md.groupArtUnitNumber],
+    ['Examiner', md.examinerNameText || md.firstExaminerName],
+    ['Confirmation No.', md.applicationConfirmationNumber],
+  ].filter(([, v]) => v && v !== '—');
+
+  const metaHtml = kv.map(([k, v]) =>
+    `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('');
+
+  const docRec = (Array.isArray(docs.patentFileWrapperDataBag) && docs.patentFileWrapperDataBag[0]) || docs;
+  const bag = docRec.documentBag || docRec.documents || docs.documentBag || docs.documents || [];
+
+  document.getElementById('results-body').innerHTML = `
+    <div class="detail-head">
+      <div style="flex:1;min-width:260px">
+        <h3>${esc(title || '(No title on record)')}</h3>
+        <div class="detail-meta">${metaHtml}</div>
+      </div>
+      <div>
+        <a class="dl-link" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Open in Patent Center ↗</a>
+      </div>
+    </div>
+    <div class="detail-section-title">Documents in file wrapper (${bag.length})</div>
+    ${bag.length ? documentsTable(bag, num) : '<span class="hint">No documents returned for this application.</span>'}
+  `;
+}
+
+// Shared documents table with an in-page "View" button per document.
+function documentsTable(bag, fallbackApp) {
   const rows = bag.map(d => {
     const appNum = d.applicationNumberText || fallbackApp || '';
     const id = d.documentIdentifier || d.documentId || '';
     const opts = d.downloadOptionBag || d.downloadOptions || [];
-    const dls = opts
-      .map(o => docLink(appNum, id, o.mimeTypeIdentifier || o.mimeType || 'PDF'))
-      .join('');
+    const formats = opts.map(o => o.mimeTypeIdentifier || o.mimeType || '').filter(Boolean);
+    const code = (d.documentCode || 'Document').replace(/[^0-9A-Za-z _.-]/g, '');
+    const viewFmt = formats.find(f => /pdf/i.test(f)) || formats[0] || 'PDF';
+    const viewBtn = id
+      ? `<button class="btn-view" onclick="openDocViewer('${appNum}','${id}','${viewFmt}','${code}')">View</button>`
+      : '';
+    const dls = formats.map(f => docLink(appNum, id, f)).join('');
     return `<tr>
       <td>${esc(d.documentCode || '')}</td>
       <td>${esc(d.documentCodeDescriptionText || d.documentDescriptionText || '')}</td>
       <td>${fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate)}</td>
       <td>${esc(d.directionCategory || '')}</td>
-      <td>${dls || '<span class="hint">—</span>'}</td>
+      <td style="white-space:nowrap">${viewBtn}${dls || (viewBtn ? '' : '<span class="hint">—</span>')}</td>
     </tr>`;
   }).join('');
-  document.getElementById('results-body').innerHTML = `<div class="result-table-wrap"><table>
-    <thead><tr><th>Code</th><th>Description</th><th>Date</th><th>Dir.</th><th>Download</th></tr></thead>
+  return `<div class="result-table-wrap"><table>
+    <thead><tr><th>Code</th><th>Description</th><th>Date</th><th>Dir.</th><th>View / Download</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
-  document.getElementById('pagination').innerHTML = '';
 }
+
+// ── In-page document viewer ────────────────────────────────────────
+function openDocViewer(appNum, documentId, format, label) {
+  const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}`;
+  document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
+  document.getElementById('viewer-frame').src = url;
+  document.getElementById('viewer-newtab').href = url;
+  document.getElementById('viewer-download').href = url;
+  document.getElementById('viewer-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDocViewer() {
+  document.getElementById('viewer-modal').style.display = 'none';
+  document.getElementById('viewer-frame').src = 'about:blank';
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
+});
 
 loadWatchlist();
 </script>

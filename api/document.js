@@ -2,6 +2,11 @@
 // API key. The browser can't hit the USPTO download URL directly because it needs
 // the X-API-KEY header. The upstream host is hard-coded (no open-proxy / SSRF risk).
 //   GET /api/document?appNum=16123456&documentId=KEEQMGWJLDFLYX4&format=PDF
+//
+// disposition=inline  → render in the browser/iframe (forces the real content-type,
+//                       since USPTO often returns application/octet-stream which
+//                       browsers would otherwise download).
+// disposition=attachment (default) → force a download.
 
 const DL_BASE = 'https://api.uspto.gov/api/v1/download/applications';
 
@@ -16,6 +21,7 @@ export default async function handler(req, res) {
   const documentId = String(req.query.documentId || '').replace(/[^0-9A-Za-z._-]/g, '');
   const format     = String(req.query.format || 'PDF').toUpperCase();
   const ext        = EXT[format] || 'pdf';
+  const inline     = String(req.query.disposition || '').toLowerCase() === 'inline';
 
   if (!appNum || !documentId) {
     res.status(400).json({ error: 'appNum and documentId are required.' });
@@ -32,8 +38,19 @@ export default async function handler(req, res) {
       return;
     }
     const buf = Buffer.from(await upstream.arrayBuffer());
-    res.setHeader('Content-Type', upstream.headers.get('content-type') || CTYPE[ext] || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${appNum}-${documentId}.${ext}"`);
+    const filename = `${appNum}-${documentId}.${ext}`;
+
+    if (inline) {
+      // Force the true content-type so the browser renders it instead of downloading.
+      // (USPTO frequently labels downloads as application/octet-stream.)
+      const upstreamType = upstream.headers.get('content-type') || '';
+      const isGeneric = !upstreamType || /octet-stream|force-download|application\/download/i.test(upstreamType);
+      res.setHeader('Content-Type', (isGeneric ? CTYPE[ext] : upstreamType) || CTYPE[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    } else {
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || CTYPE[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    }
     res.status(200).send(buf);
   } catch (err) {
     res.status(502).json({ error: 'Document proxy failed.', detail: String(err.message || err) });

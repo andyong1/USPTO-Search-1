@@ -949,9 +949,14 @@ function trackLoading(on) {
   document.getElementById('track-btn').disabled = on;
 }
 
+function docUrl(appNum, documentId, fmt, disposition) {
+  return `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(fmt)}&disposition=${disposition}`;
+}
+
 function docLink(appNum, documentId, fmt) {
-  const u = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(fmt)}`;
-  return `<a class="dl-link" href="${u}" target="_blank" rel="noopener">${esc(fmt)}</a>`;
+  // Download link (forces a download rather than rendering).
+  const u = docUrl(appNum, documentId, fmt, 'attachment');
+  return `<a class="dl-link" href="${u}" download>${esc(fmt)}</a>`;
 }
 
 function renderDocuments(data, fallbackApp) {
@@ -1049,11 +1054,12 @@ function documentsTable(bag, fallbackApp) {
 
 // ── In-page document viewer ────────────────────────────────────────
 function openDocViewer(appNum, documentId, format, label) {
-  const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}`;
+  const viewUrl = docUrl(appNum, documentId, format, 'inline');       // render in iframe
+  const dlUrl   = docUrl(appNum, documentId, format, 'attachment');   // force download
   document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
-  document.getElementById('viewer-frame').src = url;
-  document.getElementById('viewer-newtab').href = url;
-  document.getElementById('viewer-download').href = url;
+  document.getElementById('viewer-frame').src = viewUrl;
+  document.getElementById('viewer-newtab').href = viewUrl;
+  document.getElementById('viewer-download').href = dlUrl;
   document.getElementById('viewer-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }

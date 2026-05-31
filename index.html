@@ -151,12 +151,6 @@
     }
     .toggle-raw:hover { background: #f7fafc; }
 
-    .payload-preview {
-      background: #edf2f7; border-radius: 6px; padding: 10px 12px;
-      font-family: ui-monospace, monospace; font-size: 0.76rem; color: #4a5568;
-      white-space: pre-wrap; word-break: break-word; margin-top: 12px; max-height: 160px; overflow: auto;
-    }
-
     .keynote {
       background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 6px;
       padding: 10px 14px; font-size: 0.82rem; color: #2c5282; margin-bottom: 16px;
@@ -394,7 +388,6 @@
         </button>
         <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
       </div>
-      <div class="payload-preview" id="payload-preview" style="display:none"></div>
     </div>
   </div>
 
@@ -541,7 +534,6 @@ async function run(offset = 0) {
   currentOffset = offset;
   currentLimit = (payload.pagination && payload.pagination.limit) || 25;
 
-  showPayload(payload);
   startSearch();
 
   try {
@@ -574,7 +566,6 @@ async function runLookup() {
     // "Full Record" → fetch bibliographic data AND documents together for a rich
     // in-page detail view. Specific sections behave as a single fetch.
     if (!section) {
-      showPayload({ method: 'GET', urls: [apiUrl(''), apiUrl('documents')] });
       const [metaRes, docRes] = await Promise.all([fetch(apiUrl('')), fetch(apiUrl('documents'))]);
       const meta = await safeJson(metaRes);
       if (!metaRes.ok) throw new Error(meta.error || meta.detail || `HTTP ${metaRes.status}`);
@@ -583,7 +574,6 @@ async function runLookup() {
       renderAppDetail(meta, docs, appNum);
     } else {
       const url = apiUrl(section);
-      showPayload({ method: 'GET', url });
       const res = await fetch(url);
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
@@ -756,12 +746,6 @@ function bagNames(bag) {
   ).filter(Boolean).join('; ');
 }
 
-function showPayload(obj) {
-  const el = document.getElementById('payload-preview');
-  el.style.display = 'block';
-  el.textContent = JSON.stringify(obj, null, 2);
-}
-
 function toggleRaw() {
   const el = document.getElementById('raw-json');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
@@ -771,7 +755,6 @@ function clearAll() {
   document.querySelectorAll('#tab-basic input, #tab-lookup input').forEach(i => i.value = '');
   document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
   document.getElementById('results-card').style.display = 'none';
-  document.getElementById('payload-preview').style.display = 'none';
 }
 
 function startSearch() {

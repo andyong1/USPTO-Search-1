@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USPTO Patent File Wrapper Search</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #2d3748;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a3a6b;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    .search-card {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .search-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1a3a6b;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+
+    .tab-btn {
+      padding: 8px 18px; border: none; background: none; cursor: pointer;
+      font-size: 0.875rem; font-weight: 500; color: #718096;
+      border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+    }
+    .tab-btn.active { color: #1a3a6b; border-bottom-color: #1a3a6b; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px; margin-bottom: 16px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.8rem; font-weight: 600; color: #4a5568;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+
+    input, select, textarea {
+      padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 6px;
+      font-size: 0.9rem; color: #2d3748; transition: border-color 0.15s; background: white;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none; border-color: #1a3a6b; box-shadow: 0 0 0 3px rgba(26,58,107,0.1);
+    }
+    textarea { resize: vertical; min-height: 160px; font-family: ui-monospace, monospace; font-size: 0.82rem; }
+
+    .hint { font-size: 0.75rem; color: #718096; margin-top: 2px; }
+    .hint code { background: #edf2f7; padding: 1px 5px; border-radius: 3px; font-size: 0.92em; }
+
+    .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+    .btn {
+      padding: 10px 22px; border-radius: 6px; border: none; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary { background: #1a3a6b; color: white; }
+    .btn-primary:hover { background: #15305a; }
+    .btn-primary:disabled { background: #a0aec0; cursor: not-allowed; }
+    .btn-secondary { background: #e2e8f0; color: #4a5568; }
+    .btn-secondary:hover { background: #cbd5e0; }
+
+    .spinner {
+      display: none; width: 16px; height: 16px;
+      border: 2.5px solid rgba(255,255,255,0.4); border-top-color: white;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .results-count { font-size: 0.875rem; color: #718096; }
+    .results-count strong { color: #2d3748; }
+
+    .result-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th {
+      background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600;
+      color: #4a5568; white-space: nowrap; font-size: 0.78rem;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .status-patented  { background: #c6f6d5; color: #276749; }
+    .status-pending   { background: #bee3f8; color: #2b6cb0; }
+    .status-abandoned { background: #fed7d7; color: #c53030; }
+    .status-other     { background: #e2e8f0; color: #4a5568; }
+
+    .app-link { color: #1a3a6b; text-decoration: none; font-weight: 600; }
+    .app-link:hover { text-decoration: underline; }
+
+    .empty-state, .error-state, .loading-state { text-align: center; padding: 48px 24px; color: #718096; }
+    .error-state { color: #c53030; }
+    .empty-state svg, .error-state svg, .loading-state svg { margin: 0 auto 12px; display: block; opacity: 0.4; }
+
+    .pagination { display: flex; justify-content: center; gap: 6px; margin-top: 18px; flex-wrap: wrap; }
+    .page-btn {
+      padding: 6px 12px; border: 1.5px solid #cbd5e0; border-radius: 6px; background: white;
+      cursor: pointer; font-size: 0.85rem; color: #4a5568; transition: all 0.15s;
+    }
+    .page-btn:hover { background: #edf2f7; }
+    .page-btn.active { background: #1a3a6b; color: white; border-color: #1a3a6b; }
+
+    .raw-json {
+      background: #1a202c; color: #a0aec0; border-radius: 8px; padding: 16px;
+      font-family: ui-monospace, monospace; font-size: 0.8rem; overflow: auto;
+      max-height: 500px; white-space: pre; display: none; margin-top: 12px;
+    }
+    .toggle-raw {
+      font-size: 0.78rem; padding: 4px 10px; background: none; border: 1.5px solid #cbd5e0;
+      border-radius: 4px; cursor: pointer; color: #718096;
+    }
+    .toggle-raw:hover { background: #f7fafc; }
+
+    .payload-preview {
+      background: #edf2f7; border-radius: 6px; padding: 10px 12px;
+      font-family: ui-monospace, monospace; font-size: 0.76rem; color: #4a5568;
+      white-space: pre-wrap; word-break: break-word; margin-top: 12px; max-height: 160px; overflow: auto;
+    }
+
+    .keynote {
+      background: #ebf8ff; border: 1px solid #90cdf4; border-radius: 6px;
+      padding: 10px 14px; font-size: 0.82rem; color: #2c5282; margin-bottom: 16px;
+    }
+    .keynote code { background: #bee3f8; padding: 1px 5px; border-radius: 3px; }
+
+    .track-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px; background: #edf2f7;
+      border-radius: 16px; padding: 6px 8px 6px 14px; font-size: 0.85rem; margin: 0 6px 6px 0;
+    }
+    .chip button { border: none; background: none; cursor: pointer; color: #c53030; font-weight: 700; font-size: 1.05rem; line-height: 1; }
+    .chip button:hover { color: #9b2c2c; }
+    .finding-new td { background: #fffbeb; }
+    .dl-link {
+      display: inline-block; margin: 0 6px 4px 0; color: #1a3a6b; font-weight: 600;
+      text-decoration: none; font-size: 0.78rem; border: 1px solid #cbd5e0; padding: 2px 9px; border-radius: 4px;
+    }
+    .dl-link:hover { background: #edf2f7; }
+    .badge-count { background: #c53030; color: white; border-radius: 10px; padding: 1px 9px; font-size: 0.72rem; margin-left: 8px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1>USPTO Patent File Wrapper Search</h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- TRACKED PROCEEDINGS -->
+  <div class="search-card" id="track-card">
+    <h2>Tracked Proceedings <span id="new-count"></span></h2>
+    <div class="track-row" style="margin-bottom:16px">
+      <div class="form-group" style="flex:2; min-width:200px">
+        <label>Application Number</label>
+        <input type="text" id="tr-appnum" placeholder="e.g. 16123456" />
+      </div>
+      <div class="form-group" style="flex:2; min-width:160px">
+        <label>Label (optional)</label>
+        <input type="text" id="tr-label" placeholder="e.g. Competitor X filing" />
+      </div>
+      <button class="btn btn-primary" id="track-btn" onclick="addWatch()">
+        <span id="track-btn-text">Track</span>
+        <div class="spinner" id="track-spinner"></div>
+      </button>
+    </div>
+    <div id="watched-list" style="margin-bottom:20px"></div>
+
+    <div class="results-header" style="margin-bottom:10px">
+      <h2 style="border:none;padding:0;margin:0">New Filings (daily check)</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" id="test-email-btn" style="padding:6px 14px;font-size:0.8rem" onclick="sendTestEmail()">
+          <span id="test-email-text">Send test email</span>
+          <div class="spinner" id="test-email-spinner" style="border-top-color:#4a5568;border-color:rgba(74,85,104,0.3)"></div>
+        </button>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="ackFindings()">Mark all as seen</button>
+      </div>
+    </div>
+    <div id="findings-list"></div>
+  </div>
+
+  <div class="search-card">
+    <h2>Search Parameters</h2>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="basic">Basic Search</button>
+      <button class="tab-btn" data-tab="advanced">Advanced (Raw JSON)</button>
+      <button class="tab-btn" data-tab="lookup">Application Lookup</button>
+    </div>
+
+    <!-- BASIC SEARCH -->
+    <div class="tab-panel active" id="tab-basic">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Invention Title Keywords</label>
+          <input type="text" id="b-title" placeholder="e.g. machine learning image classification" />
+        </div>
+        <div class="form-group">
+          <label>Application Number</label>
+          <input type="text" id="b-appnum" placeholder="e.g. 16123456" />
+        </div>
+        <div class="form-group">
+          <label>Patent Number</label>
+          <input type="text" id="b-patnum" placeholder="e.g. 10123456" />
+        </div>
+        <div class="form-group">
+          <label>Inventor Name</label>
+          <input type="text" id="b-inventor" placeholder="e.g. Smith" />
+        </div>
+        <div class="form-group">
+          <label>Applicant / Assignee</label>
+          <input type="text" id="b-assignee" placeholder="e.g. Google LLC" />
+        </div>
+        <div class="form-group">
+          <label>Application Type</label>
+          <select id="b-apptype">
+            <option value="">All Types</option>
+            <option value="Utility">Utility</option>
+            <option value="Design">Design</option>
+            <option value="Plant">Plant</option>
+            <option value="Reissue">Reissue</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="b-status">
+            <option value="">All Statuses</option>
+            <option value="Patented Case">Patented Case</option>
+            <option value="Docketed New Case - Ready for Examination">Docketed New Case</option>
+            <option value="Abandoned">Abandoned</option>
+            <option value="Final Rejection Mailed">Final Rejection Mailed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Filing Date From</label>
+          <input type="date" id="b-date-from" />
+        </div>
+        <div class="form-group">
+          <label>Filing Date To</label>
+          <input type="date" id="b-date-to" />
+        </div>
+        <div class="form-group">
+          <label>Results per Page</label>
+          <select id="b-limit">
+            <option value="10">10</option>
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sort By</label>
+          <select id="b-sort">
+            <option value="applicationMetaData.filingDate|Desc">Filing Date (Newest)</option>
+            <option value="applicationMetaData.filingDate|Asc">Filing Date (Oldest)</option>
+            <option value="applicationMetaData.inventionTitle|Asc">Title (A–Z)</option>
+            <option value="applicationNumberText|Asc">App Number</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADVANCED RAW JSON -->
+    <div class="tab-panel" id="tab-advanced">
+      <div class="keynote">
+        This payload is sent verbatim as the POST body to
+        <code>/api/search</code> → <code>api.uspto.gov/.../applications/search</code>.
+        Edit it to use the full Open Data Portal query syntax.
+      </div>
+      <div class="form-group full">
+        <label>Request Payload (JSON)</label>
+        <textarea id="adv-json"></textarea>
+        <span class="hint">
+          Fields live under <code>applicationMetaData.*</code> — e.g.
+          <code>inventionTitle</code>, <code>filingDate</code>, <code>grantDate</code>,
+          <code>patentNumber</code>, <code>applicationStatusDescriptionText</code>,
+          <code>applicationTypeLabelName</code>, <code>firstInventorName</code>, <code>firstApplicantName</code>.
+        </span>
+      </div>
+    </div>
+
+    <!-- LOOKUP -->
+    <div class="tab-panel" id="tab-lookup">
+      <div class="form-group" style="max-width:360px; margin-bottom:16px">
+        <label>Application Number</label>
+        <input type="text" id="lk-appnum" placeholder="16123456" />
+        <span class="hint">Fetch one application's file wrapper.</span>
+      </div>
+      <div class="form-group" style="max-width:360px">
+        <label>Data Section</label>
+        <select id="lk-section">
+          <option value="">Full Record</option>
+          <option value="meta-data">Bibliographic Data</option>
+          <option value="transactions">Prosecution History</option>
+          <option value="continuity">Continuity</option>
+          <option value="foreign-priority">Foreign Priority</option>
+          <option value="assignment">Assignments</option>
+          <option value="documents">Documents</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="actions">
+        <button class="btn btn-primary" id="search-btn" onclick="run()">
+          <span id="btn-text">Search</span>
+          <div class="spinner" id="spinner"></div>
+        </button>
+        <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+      </div>
+      <div class="payload-preview" id="payload-preview" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="search-card" id="results-card" style="display:none">
+    <div class="results-header">
+      <div>
+        <h2 style="border:none;padding:0;margin:0">Results</h2>
+        <div class="results-count" id="results-count"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="toggle-raw" onclick="toggleRaw()">{ } Raw JSON</button>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="exportCSV()">Export CSV</button>
+      </div>
+    </div>
+    <div id="results-body"></div>
+    <div class="raw-json" id="raw-json"></div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+</div>
+
+<script>
+let lastData = null;
+let lastLookupApp = '';
+let currentOffset = 0;
+let currentLimit = 25;
+
+const DEFAULT_FIELDS = [
+  'applicationNumberText',
+  'applicationMetaData.inventionTitle',
+  'applicationMetaData.patentNumber',
+  'applicationMetaData.filingDate',
+  'applicationMetaData.grantDate',
+  'applicationMetaData.applicationStatusDescriptionText',
+  'applicationMetaData.applicationTypeLabelName',
+  'applicationMetaData.firstInventorName',
+  'applicationMetaData.firstApplicantName',
+];
+
+// Seed the Advanced editor with a working sample payload.
+const SAMPLE_PAYLOAD = {
+  q: 'applicationMetaData.inventionTitle:"neural network"',
+  filters: [{ name: 'applicationMetaData.applicationTypeLabelName', value: ['Utility'] }],
+  rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: '2020-01-01', valueTo: '2023-12-31' }],
+  pagination: { offset: 0, limit: 25 },
+  sort: [{ field: 'applicationMetaData.filingDate', order: 'Desc' }],
+};
+document.getElementById('adv-json').value = JSON.stringify(SAMPLE_PAYLOAD, null, 2);
+
+// ── Tabs ───────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function activeTab() { return document.querySelector('.tab-btn.active').dataset.tab; }
+
+// ── Build the POST payload from the Basic form ─────────────────────
+function buildBasicPayload(offset) {
+  const q = [];
+  const filters = [];
+  const rangeFilters = [];
+
+  const title    = val('b-title');
+  const appNum   = val('b-appnum').replace(/[^0-9A-Za-z/]/g, '');
+  const patNum   = val('b-patnum').replace(/[^0-9A-Za-z]/g, '');
+  const inventor = val('b-inventor');
+  const assignee = val('b-assignee');
+  const apptype  = val('b-apptype');
+  const status   = val('b-status');
+  const dateFrom = val('b-date-from');
+  const dateTo   = val('b-date-to');
+
+  if (title)    q.push(`applicationMetaData.inventionTitle:"${title}"`);
+  if (appNum)   q.push(`applicationNumberText:${appNum}`);
+  if (patNum)   q.push(`applicationMetaData.patentNumber:${patNum}`);
+  if (inventor) q.push(`applicationMetaData.firstInventorName:"${inventor}"`);
+  if (assignee) q.push(`applicationMetaData.firstApplicantName:"${assignee}"`);
+
+  if (apptype) filters.push({ name: 'applicationMetaData.applicationTypeLabelName', value: [apptype] });
+  if (status)  filters.push({ name: 'applicationMetaData.applicationStatusDescriptionText', value: [status] });
+
+  if (dateFrom || dateTo) {
+    rangeFilters.push({
+      field: 'applicationMetaData.filingDate',
+      valueFrom: dateFrom || '1900-01-01',
+      valueTo: dateTo || '2100-01-01',
+    });
+  }
+
+  if (q.length === 0 && filters.length === 0 && rangeFilters.length === 0) {
+    alert('Enter at least one search term.');
+    return null;
+  }
+
+  const [sortField, sortOrder] = val('b-sort').split('|');
+  const limit = parseInt(val('b-limit')) || 25;
+
+  const payload = { pagination: { offset, limit }, sort: [{ field: sortField, order: sortOrder }], fields: DEFAULT_FIELDS };
+  if (q.length) payload.q = q.join(' AND ');
+  if (filters.length) payload.filters = filters;
+  if (rangeFilters.length) payload.rangeFilters = rangeFilters;
+  return payload;
+}
+
+// ── Run ────────────────────────────────────────────────────────────
+async function run(offset = 0) {
+  const tab = activeTab();
+
+  if (tab === 'lookup') return runLookup();
+
+  let payload;
+  if (tab === 'basic') {
+    payload = buildBasicPayload(offset);
+    if (!payload) return;
+  } else {
+    try {
+      payload = JSON.parse(val('adv-json'));
+    } catch (e) {
+      alert('Invalid JSON: ' + e.message);
+      return;
+    }
+    if (payload.pagination) payload.pagination.offset = offset;
+  }
+
+  currentOffset = offset;
+  currentLimit = (payload.pagination && payload.pagination.limit) || 25;
+
+  showPayload(payload);
+  startSearch();
+
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+    lastData = data;
+    renderResults(data);
+  } catch (err) {
+    document.getElementById('results-body').innerHTML = errorHTML(err.message);
+    document.getElementById('pagination').innerHTML = '';
+  } finally {
+    endSearch();
+  }
+}
+
+async function runLookup() {
+  const appNum = val('lk-appnum').replace(/[^0-9A-Za-z/]/g, '');
+  if (!appNum) { alert('Enter an application number.'); return; }
+  lastLookupApp = appNum;
+  const section = val('lk-section');
+
+  const url = `/api/application?appNum=${encodeURIComponent(appNum)}` + (section ? `&section=${section}` : '');
+  showPayload({ method: 'GET', url });
+  startSearch();
+
+  try {
+    const res = await fetch(url);
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+    lastData = data;
+    renderResults(data);
+  } catch (err) {
+    document.getElementById('results-body').innerHTML = errorHTML(err.message);
+    document.getElementById('pagination').innerHTML = '';
+  } finally {
+    endSearch();
+  }
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function renderResults(data) {
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+
+  // Documents section (from Application Lookup → Documents)
+  if ((data.documentBag || data.documents) && !data.patentFileWrapperDataBag && !data.applicationMetaData) {
+    renderDocuments(data, lastLookupApp);
+    return;
+  }
+
+  const hits = data.patentFileWrapperDataBag || data.results || (Array.isArray(data) ? data : null);
+
+  // Single-application response (no bag)
+  if (!hits && (data.applicationNumberText || data.applicationMetaData)) {
+    renderSingle(data);
+    return;
+  }
+
+  const list = hits || [];
+  const total = data.count ?? data.totalNumFound ?? data.totalCount ?? list.length;
+  document.getElementById('results-count').innerHTML =
+    `<strong>${Number(total).toLocaleString()}</strong> result${total !== 1 ? 's' : ''} found`;
+
+  if (list.length === 0) {
+    document.getElementById('results-body').innerHTML = emptyHTML();
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+
+  const rows = list.map(item => {
+    const md = item.applicationMetaData || {};
+    const appNum = item.applicationNumberText || md.applicationNumberText || '—';
+    const title  = md.inventionTitle || '(No title)';
+    const status = md.applicationStatusDescriptionText || '—';
+    const patNum = md.patentNumber || '—';
+    const filing = fmtDate(md.filingDate);
+    const grant  = fmtDate(md.grantDate);
+    const inv    = md.firstInventorName || bagNames(md.inventorBag) || '—';
+    const asgn   = md.firstApplicantName || bagNames(md.applicantBag) || '—';
+
+    return `<tr>
+      <td><a class="app-link" href="https://patentcenter.uspto.gov/applications/${esc(appNum)}" target="_blank" rel="noopener">${esc(appNum)}</a></td>
+      <td>${esc(title)}</td>
+      <td><span class="status-badge ${statusClass(status)}">${esc(status)}</span></td>
+      <td>${esc(patNum)}</td>
+      <td>${filing}</td>
+      <td>${grant}</td>
+      <td>${esc(inv)}</td>
+      <td>${esc(asgn)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('results-body').innerHTML = `
+    <div class="result-table-wrap">
+      <table>
+        <thead><tr>
+          <th>App Number</th><th>Title</th><th>Status</th><th>Patent No.</th>
+          <th>Filing</th><th>Grant</th><th>Inventor</th><th>Applicant</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  renderPagination(Number(total));
+}
+
+function renderSingle(data) {
+  const md = data.applicationMetaData || data;
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('results-count').textContent = 'Single application record';
+
+  const fields = [
+    ['Application Number', data.applicationNumberText || md.applicationNumberText],
+    ['Patent Number', md.patentNumber],
+    ['Title', md.inventionTitle],
+    ['Status', md.applicationStatusDescriptionText],
+    ['Filing Date', fmtDate(md.filingDate)],
+    ['Grant Date', fmtDate(md.grantDate)],
+    ['App Type', md.applicationTypeLabelName],
+    ['Inventor(s)', md.firstInventorName || bagNames(md.inventorBag)],
+    ['Applicant(s)', md.firstApplicantName || bagNames(md.applicantBag)],
+    ['Group Art Unit', md.groupArtUnitNumber],
+    ['Examiner', md.examinerNameText || (md.firstExaminerName)],
+    ['Confirmation No.', md.applicationConfirmationNumber],
+  ].filter(([, v]) => v && v !== '—');
+
+  const rows = fields.map(([k, v]) => `<tr><th style="width:220px">${k}</th><td>${esc(String(v))}</td></tr>`).join('');
+  document.getElementById('results-body').innerHTML =
+    `<div class="result-table-wrap"><table><tbody>${rows}</tbody></table></div>`;
+  document.getElementById('pagination').innerHTML = '';
+}
+
+function renderPagination(total) {
+  const pages = Math.ceil(total / currentLimit);
+  const cur = Math.floor(currentOffset / currentLimit);
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+
+  const show = [];
+  for (let i = 0; i < pages; i++) {
+    if (i === 0 || i === pages - 1 || Math.abs(i - cur) <= 2) show.push(i);
+    else if (show[show.length - 1] !== '…') show.push('…');
+  }
+  const btns = show.map(p => p === '…'
+    ? `<span class="page-btn" style="cursor:default">…</span>`
+    : `<button class="page-btn ${p === cur ? 'active' : ''}" onclick="run(${p * currentLimit})">${p + 1}</button>`
+  ).join('');
+
+  const prev = cur > 0 ? `<button class="page-btn" onclick="run(${(cur-1)*currentLimit})">← Prev</button>` : '';
+  const next = cur < pages - 1 ? `<button class="page-btn" onclick="run(${(cur+1)*currentLimit})">Next →</button>` : '';
+  document.getElementById('pagination').innerHTML = prev + btns + next;
+}
+
+// ── CSV ────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!lastData) return;
+  const list = lastData.patentFileWrapperDataBag || lastData.results || [];
+  if (!list.length) { alert('No tabular results to export.'); return; }
+
+  const cols = [
+    ['App Number', i => i.applicationNumberText],
+    ['Title', i => md(i).inventionTitle],
+    ['Status', i => md(i).applicationStatusDescriptionText],
+    ['Patent No', i => md(i).patentNumber],
+    ['Filing Date', i => md(i).filingDate],
+    ['Grant Date', i => md(i).grantDate],
+    ['App Type', i => md(i).applicationTypeLabelName],
+    ['Inventor', i => md(i).firstInventorName || bagNames(md(i).inventorBag)],
+    ['Applicant', i => md(i).firstApplicantName || bagNames(md(i).applicantBag)],
+  ];
+  const header = cols.map(c => c[0]).join(',');
+  const body = list.map(i => cols.map(c => `"${String(c[1](i) ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'uspto-results.csv';
+  a.click();
+}
+
+// ── Utilities ──────────────────────────────────────────────────────
+function md(i) { return i.applicationMetaData || {}; }
+function val(id) { return document.getElementById(id).value.trim(); }
+
+async function safeJson(res) {
+  const t = await res.text();
+  try { return JSON.parse(t); } catch { return { error: t.slice(0, 300) || `HTTP ${res.status}` }; }
+}
+
+function bagNames(bag) {
+  if (!Array.isArray(bag)) return '';
+  return bag.map(p =>
+    p.inventorNameText || p.applicantNameText ||
+    [p.firstName, p.lastName].filter(Boolean).join(' ') ||
+    p.nameText || p.partyName || ''
+  ).filter(Boolean).join('; ');
+}
+
+function showPayload(obj) {
+  const el = document.getElementById('payload-preview');
+  el.style.display = 'block';
+  el.textContent = JSON.stringify(obj, null, 2);
+}
+
+function toggleRaw() {
+  const el = document.getElementById('raw-json');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function clearAll() {
+  document.querySelectorAll('#tab-basic input, #tab-lookup input').forEach(i => i.value = '');
+  document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+  document.getElementById('results-card').style.display = 'none';
+  document.getElementById('payload-preview').style.display = 'none';
+}
+
+function startSearch() {
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('btn-text').textContent = 'Searching…';
+  document.getElementById('search-btn').disabled = true;
+  document.getElementById('results-card').style.display = 'block';
+  document.getElementById('results-body').innerHTML = loadingHTML();
+  document.getElementById('pagination').innerHTML = '';
+  document.getElementById('raw-json').style.display = 'none';
+}
+function endSearch() {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('btn-text').textContent = 'Search';
+  document.getElementById('search-btn').disabled = false;
+}
+
+function fmtDate(raw) {
+  if (!raw) return '—';
+  const s = String(raw);
+  const m = s.match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : s;
+}
+
+function statusClass(s) {
+  const l = (s || '').toLowerCase();
+  if (l.includes('patent')) return 'status-patented';
+  if (l.includes('abandon')) return 'status-abandoned';
+  if (l.includes('pending') || l.includes('docket') || l.includes('examination') || l.includes('published')) return 'status-pending';
+  return 'status-other';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadingHTML() {
+  return `<div class="loading-state">
+    <svg width="40" height="40" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="16" stroke="#1a3a6b" stroke-width="3" fill="none" stroke-dasharray="80" stroke-dashoffset="60">
+        <animateTransform attributeName="transform" type="rotate" from="0 20 20" to="360 20 20" dur="0.9s" repeatCount="indefinite"/>
+      </circle>
+    </svg>Querying USPTO…</div>`;
+}
+function emptyHTML() {
+  return `<div class="empty-state">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <rect x="8" y="6" width="32" height="36" rx="3" stroke="#718096" stroke-width="2"/>
+      <line x1="14" y1="16" x2="34" y2="16" stroke="#718096" stroke-width="2"/>
+      <line x1="14" y1="22" x2="28" y2="22" stroke="#718096" stroke-width="2"/>
+    </svg>No results found. Try broadening your search.</div>`;
+}
+function errorHTML(msg) {
+  return `<div class="error-state">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="18" stroke="#c53030" stroke-width="2"/>
+      <line x1="24" y1="14" x2="24" y2="26" stroke="#c53030" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="24" cy="32" r="1.5" fill="#c53030"/>
+    </svg><strong>Request failed</strong><br/>
+    <span style="font-size:0.82rem;color:#718096">${esc(msg)}</span><br/><br/>
+    <span style="font-size:0.8rem">If this is a 401/403, the server's <code>USPTO_API_KEY</code> is missing or invalid.
+    A network error usually means the <code>/api/*</code> proxy isn't deployed yet.</span>
+  </div>`;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') run();
+});
+
+// ── Tracked proceedings + new filings ──────────────────────────────
+async function loadWatchlist() {
+  renderWatched([]);   // show friendly empty states immediately
+  renderFindings([]);
+  try {
+    const res = await fetch('/api/watchlist');
+    if (!res.ok) return; // proxy/DB not configured yet (e.g. local static preview)
+    const data = await res.json();
+    renderWatched(data.watched || []);
+    renderFindings(data.findings || []);
+  } catch { /* not deployed / offline — keep empty states */ }
+}
+
+function renderWatched(list) {
+  const el = document.getElementById('watched-list');
+  if (!list.length) {
+    el.innerHTML = '<span class="hint">No proceedings tracked yet. Add an application number above to start monitoring it daily.</span>';
+    return;
+  }
+  el.innerHTML = list.map(w => `<span class="chip">
+    <strong>${esc(w.application_number)}</strong>${w.label ? ' · ' + esc(w.label) : ''}
+    <button title="Stop tracking" onclick="removeWatch('${esc(w.application_number)}')">&times;</button>
+  </span>`).join('');
+}
+
+function renderFindings(list) {
+  document.getElementById('new-count').innerHTML =
+    list.length ? `<span class="badge-count">${list.length} new</span>` : '';
+
+  const el = document.getElementById('findings-list');
+  if (!list.length) {
+    el.innerHTML = '<span class="hint">No new filings detected yet. The daily job lists newly filed documents here.</span>';
+    return;
+  }
+  const rows = list.map(f => {
+    const formats = (f.formats || '').split(',').filter(Boolean);
+    const dls = formats.map(fmt => docLink(f.application_number, f.document_identifier, fmt)).join('');
+    return `<tr class="finding-new">
+      <td><a class="app-link" href="https://patentcenter.uspto.gov/applications/${esc(f.application_number)}" target="_blank" rel="noopener">${esc(f.application_number)}</a>${f.label ? '<br><span class="hint">' + esc(f.label) + '</span>' : ''}</td>
+      <td>${esc(f.document_code || '')}<br><span class="hint">${esc(f.description || '')}</span></td>
+      <td>${fmtDate(f.official_date)}</td>
+      <td>${esc(f.direction || '')}</td>
+      <td>${dls || '<span class="hint">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<div class="result-table-wrap"><table>
+    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>Download</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+async function addWatch() {
+  const appNum = document.getElementById('tr-appnum').value.trim().replace(/[^0-9A-Za-z/]/g, '');
+  const label  = document.getElementById('tr-label').value.trim();
+  if (!appNum) { alert('Enter an application number to track.'); return; }
+
+  trackLoading(true);
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ applicationNumber: appNum, label }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    document.getElementById('tr-appnum').value = '';
+    document.getElementById('tr-label').value = '';
+    renderWatched(data.watched || []);
+    if (data.baseline && data.baseline.error) {
+      alert('Tracking started, but the initial document sync failed:\n' + data.baseline.error);
+    }
+  } catch (e) {
+    alert('Could not track this application:\n' + e.message + '\n\n(Is the database added and the app deployed?)');
+  } finally {
+    trackLoading(false);
+  }
+}
+
+async function removeWatch(appNum) {
+  if (!confirm('Stop tracking ' + appNum + '?')) return;
+  try {
+    await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), { method: 'DELETE' });
+    loadWatchlist();
+  } catch (e) { alert('Could not remove: ' + e.message); }
+}
+
+async function ackFindings() {
+  try {
+    await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'acknowledge' }),
+    });
+    loadWatchlist();
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+
+async function sendTestEmail() {
+  const btn = document.getElementById('test-email-btn');
+  document.getElementById('test-email-spinner').style.display = 'block';
+  document.getElementById('test-email-text').textContent = 'Sending…';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/test-email', { method: 'POST' });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      alert('Test email sent to ' + (data.to || 'your configured address') + '.\nCheck your inbox (and spam).');
+    } else {
+      alert('Could not send test email:\n' + (data.reason || ('HTTP ' + res.status)) +
+        '\n\nMake sure RESEND_API_KEY, DIGEST_FROM and DIGEST_TO are set, then redeploy.');
+    }
+  } catch (e) {
+    alert('Request failed: ' + e.message + '\n\n(Is the app deployed? The /api routes only run on the server.)');
+  } finally {
+    document.getElementById('test-email-spinner').style.display = 'none';
+    document.getElementById('test-email-text').textContent = 'Send test email';
+    btn.disabled = false;
+  }
+}
+
+function trackLoading(on) {
+  document.getElementById('track-spinner').style.display = on ? 'block' : 'none';
+  document.getElementById('track-btn-text').textContent = on ? 'Tracking…' : 'Track';
+  document.getElementById('track-btn').disabled = on;
+}
+
+function docLink(appNum, documentId, fmt) {
+  const u = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(fmt)}`;
+  return `<a class="dl-link" href="${u}" target="_blank" rel="noopener">${esc(fmt)}</a>`;
+}
+
+function renderDocuments(data, fallbackApp) {
+  const bag = data.documentBag || data.documents || [];
+  document.getElementById('results-count').innerHTML =
+    `<strong>${bag.length}</strong> document${bag.length !== 1 ? 's' : ''}`;
+
+  if (!bag.length) {
+    document.getElementById('results-body').innerHTML = emptyHTML();
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+  const rows = bag.map(d => {
+    const appNum = d.applicationNumberText || fallbackApp || '';
+    const id = d.documentIdentifier || d.documentId || '';
+    const opts = d.downloadOptionBag || d.downloadOptions || [];
+    const dls = opts
+      .map(o => docLink(appNum, id, o.mimeTypeIdentifier || o.mimeType || 'PDF'))
+      .join('');
+    return `<tr>
+      <td>${esc(d.documentCode || '')}</td>
+      <td>${esc(d.documentCodeDescriptionText || d.documentDescriptionText || '')}</td>
+      <td>${fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate)}</td>
+      <td>${esc(d.directionCategory || '')}</td>
+      <td>${dls || '<span class="hint">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('results-body').innerHTML = `<div class="result-table-wrap"><table>
+    <thead><tr><th>Code</th><th>Description</th><th>Date</th><th>Dir.</th><th>Download</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  document.getElementById('pagination').innerHTML = '';
+}
+
+loadWatchlist();
+</script>
+</body>
+</html>

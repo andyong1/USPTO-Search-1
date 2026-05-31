@@ -1,0 +1,13 @@
+{
+  "name": "uspto-patent-search",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web UI + serverless proxy for the USPTO Open Data Portal Patent File Wrapper API",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

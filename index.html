@@ -563,15 +563,14 @@ async function runLookup() {
 
   startSearch();
   try {
-    // "Full Record" → fetch bibliographic data AND documents together for a rich
-    // in-page detail view. Specific sections behave as a single fetch.
+    // "Full Record" → tabbed detail view. The overview loads now; the other
+    // tabs (documents, continuity, etc.) load lazily when first opened.
     if (!section) {
-      const [metaRes, docRes] = await Promise.all([fetch(apiUrl('')), fetch(apiUrl('documents'))]);
-      const meta = await safeJson(metaRes);
-      if (!metaRes.ok) throw new Error(meta.error || meta.detail || `HTTP ${metaRes.status}`);
-      const docs = docRes.ok ? await safeJson(docRes) : { documentBag: [] };
-      lastData = { meta, docs };
-      renderAppDetail(meta, docs, appNum);
+      const res = await fetch(apiUrl(''));
+      const meta = await safeJson(res);
+      if (!res.ok) throw new Error(meta.error || meta.detail || `HTTP ${res.status}`);
+      lastData = meta;
+      renderAppTabs(meta, appNum);
     } else {
       const url = apiUrl(section);
       const res = await fetch(url);
@@ -973,26 +972,103 @@ function renderDocuments(data, fallbackApp) {
   document.getElementById('pagination').innerHTML = '';
 }
 
-// ── Application detail (metadata + documents, in-page) ─────────────
-function renderAppDetail(meta, docs, appNum) {
+// ── Application detail: tabbed view ────────────────────────────────
+// Each tab (except Overview) lazily fetches its own section endpoint the
+// first time it is opened, then caches the result.
+const DETAIL_TABS = [
+  { id: 'overview',         label: 'Overview' },
+  { id: 'documents',        label: 'Documents',        section: 'documents' },
+  { id: 'continuity',       label: 'Continuity',       section: 'continuity' },
+  { id: 'foreign-priority', label: 'Foreign Priority', section: 'foreign-priority' },
+  { id: 'assignment',       label: 'Assignments',      section: 'assignment' },
+  { id: 'transactions',     label: 'Transactions',     section: 'transactions' },
+  { id: 'associated',       label: 'Associated Docs',  section: 'associated-documents' },
+];
+
+let detailAppNum = '';
+let detailMeta = null;
+let detailCache = {};
+
+function unwrapRecord(data) {
+  if (data && Array.isArray(data.patentFileWrapperDataBag) && data.patentFileWrapperDataBag.length) return data.patentFileWrapperDataBag[0];
+  if (data && Array.isArray(data.results) && data.results.length) return data.results[0];
+  if (Array.isArray(data) && data.length) return data[0];
+  return data || {};
+}
+
+function renderAppTabs(meta, appNum) {
+  detailAppNum = appNum;
+  detailMeta = meta;
+  detailCache = {};
+
   document.getElementById('results-card').style.display = 'block';
-  document.getElementById('raw-json').textContent = JSON.stringify({ meta, docs }, null, 2);
+  document.getElementById('raw-json').textContent = JSON.stringify(meta, null, 2);
   document.getElementById('results-count').textContent = '';
   document.getElementById('pagination').innerHTML = '';
 
-  // The single-application endpoint may wrap the record in patentFileWrapperDataBag
-  // (like search results do), so unwrap to reach applicationMetaData.
-  const record =
-    (Array.isArray(meta.patentFileWrapperDataBag) && meta.patentFileWrapperDataBag[0]) ||
-    (Array.isArray(meta.results) && meta.results[0]) ||
-    (Array.isArray(meta) && meta[0]) ||
-    meta || {};
-  const md = record.applicationMetaData || record || {};
-  const num = record.applicationNumberText || md.applicationNumberText || appNum;
-  const title = md.inventionTitle || md.patentTitle || md.inventionTitleText || record.inventionTitle;
+  const rec = unwrapRecord(meta);
+  const md = rec.applicationMetaData || rec || {};
+  const num = rec.applicationNumberText || md.applicationNumberText || appNum;
+  const title = md.inventionTitle || md.patentTitle || md.inventionTitleText || rec.inventionTitle || '(No title on record)';
+
+  const tabBtns = DETAIL_TABS.map((t, i) =>
+    `<button class="tab-btn ${i === 0 ? 'active' : ''}" onclick="selectDetailTab(${i})">${esc(t.label)}</button>`).join('');
+
+  document.getElementById('results-body').innerHTML = `
+    <div class="detail-head">
+      <div style="flex:1;min-width:260px">
+        <h3>${esc(title)}</h3>
+        <div class="hint">Application ${esc(num)}</div>
+      </div>
+      <div>
+        <a class="dl-link" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Open in Patent Center ↗</a>
+      </div>
+    </div>
+    <div class="tabs" id="detail-tabs" style="margin-bottom:16px">${tabBtns}</div>
+    <div id="detail-panel"></div>`;
+
+  selectDetailTab(0);
+}
+
+function selectDetailTab(idx) {
+  const tab = DETAIL_TABS[idx];
+  document.querySelectorAll('#detail-tabs .tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  const panel = document.getElementById('detail-panel');
+
+  if (tab.id === 'overview') { panel.innerHTML = overviewHtml(detailMeta); return; }
+
+  if (detailCache[tab.id]) { renderSectionInto(panel, tab, detailCache[tab.id]); return; }
+
+  panel.innerHTML = loadingHTML();
+  fetch(`/api/application?appNum=${encodeURIComponent(detailAppNum)}&section=${tab.section}`)
+    .then(async (res) => {
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      detailCache[tab.id] = data;
+      renderSectionInto(panel, tab, data);
+    })
+    .catch((err) => { panel.innerHTML = errorHTML(err.message); });
+}
+
+function renderSectionInto(panel, tab, data) {
+  if (tab.id === 'documents' || tab.id === 'associated') {
+    const rec = unwrapRecord(data);
+    const bag = rec.documentBag || rec.documents || data.documentBag || data.documents || [];
+    panel.innerHTML = bag.length
+      ? documentsTable(bag, detailAppNum)
+      : '<span class="hint">No documents in this section.</span>';
+    return;
+  }
+  panel.innerHTML = genericSectionHtml(data);
+}
+
+// Overview: key bibliographic fields + parties + attorney/agent of record.
+function overviewHtml(meta) {
+  const rec = unwrapRecord(meta);
+  const md = rec.applicationMetaData || rec || {};
 
   const kv = [
-    ['Application No.', num],
+    ['Application No.', rec.applicationNumberText || md.applicationNumberText],
     ['Patent No.', md.patentNumber],
     ['Status', md.applicationStatusDescriptionText],
     ['Filing Date', fmtDate(md.filingDate)],
@@ -1000,30 +1076,101 @@ function renderAppDetail(meta, docs, appNum) {
     ['App Type', md.applicationTypeLabelName],
     ['Inventor(s)', md.firstInventorName || bagNames(md.inventorBag)],
     ['Applicant(s)', md.firstApplicantName || bagNames(md.applicantBag)],
+    ['Attorney/Agent', attorneyText(md)],
+    ['Customer No.', md.customerNumber || md.correspondenceAddressCustomerNumber],
     ['Group Art Unit', md.groupArtUnitNumber],
     ['Examiner', md.examinerNameText || md.firstExaminerName],
+    ['Entity Status', md.businessEntityStatusCategory],
     ['Confirmation No.', md.applicationConfirmationNumber],
+    ['Earliest Pub.', md.earliestPublicationNumber],
   ].filter(([, v]) => v && v !== '—');
 
-  const metaHtml = kv.map(([k, v]) =>
-    `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('');
+  return `<div class="detail-meta">${kv.map(([k, v]) =>
+    `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('')}</div>`;
+}
 
-  const docRec = (Array.isArray(docs.patentFileWrapperDataBag) && docs.patentFileWrapperDataBag[0]) || docs;
-  const bag = docRec.documentBag || docRec.documents || docs.documentBag || docs.documents || [];
+function attorneyText(md) {
+  const bag = md.recordAttorneyBag || md.attorneyBag || md.powerOfAttorneyBag || md.recordAttorney;
+  if (Array.isArray(bag) && bag.length) {
+    return bag.map(a =>
+      a.attorneyName || a.recordAttorneyName || a.nameText ||
+      [a.firstName, a.middleName, a.lastName].filter(Boolean).join(' ') ||
+      (a.registrationNumber ? `Reg# ${a.registrationNumber}` : '')
+    ).filter(Boolean).join('; ');
+  }
+  return md.attorneyName || '';
+}
 
-  document.getElementById('results-body').innerHTML = `
-    <div class="detail-head">
-      <div style="flex:1;min-width:260px">
-        <h3>${esc(title || '(No title on record)')}</h3>
-        <div class="detail-meta">${metaHtml}</div>
-      </div>
-      <div>
-        <a class="dl-link" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Open in Patent Center ↗</a>
-      </div>
-    </div>
-    <div class="detail-section-title">Documents in file wrapper (${bag.length})</div>
-    ${bag.length ? documentsTable(bag, num) : '<span class="hint">No documents returned for this application.</span>'}
-  `;
+// Generic renderer for arbitrary section shapes: shows top-level scalar fields
+// as a grid, and every array of records as its own titled table.
+function genericSectionHtml(data) {
+  const rec = unwrapRecord(data);
+  if (!rec || typeof rec !== 'object') return '<span class="hint">No data available for this section.</span>';
+
+  const scalars = [];
+  const arrays = [];
+  for (const [k, v] of Object.entries(rec)) {
+    if (Array.isArray(v)) { if (v.length) arrays.push([k, v]); }
+    else if (v && typeof v === 'object') {
+      for (const [k2, v2] of Object.entries(v)) {
+        if (v2 != null && typeof v2 !== 'object') scalars.push([`${humanize(k)} ${humanize(k2)}`, v2]);
+      }
+    } else if (v != null && v !== '') scalars.push([humanize(k), v]);
+  }
+
+  let html = '';
+  if (scalars.length) {
+    html += `<div class="detail-meta">${scalars.map(([k, v]) =>
+      `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('')}</div>`;
+  }
+  for (const [k, arr] of arrays) {
+    html += `<div class="detail-section-title">${esc(humanize(k))} (${arr.length})</div>${genericTable(arr)}`;
+  }
+  return html || '<span class="hint">No data available for this section.</span>';
+}
+
+function flattenScalars(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v == null || v === '') continue;
+    if (Array.isArray(v)) {
+      out[k] = v.map(x => (x && typeof x === 'object') ? Object.values(x).filter(z => z != null && typeof z !== 'object').join(' ') : x).filter(Boolean).join('; ');
+    } else if (typeof v === 'object') {
+      for (const [k2, v2] of Object.entries(v)) {
+        if (v2 != null && typeof v2 !== 'object') out[`${k} ${k2}`] = v2;
+      }
+    } else out[k] = v;
+  }
+  return out;
+}
+
+function genericTable(arr) {
+  const rows = arr.map(flattenScalars);
+  const cols = [];
+  const seen = new Set();
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!seen.has(k)) { seen.add(k); cols.push(k); } }));
+  if (!cols.length) return '<span class="hint">No fields to display.</span>';
+
+  const thead = cols.map(c => `<th>${esc(humanize(c))}</th>`).join('');
+  const tbody = rows.map(r =>
+    `<tr>${cols.map(c => `<td>${esc(formatCell(r[c]))}</td>`).join('')}</tr>`).join('');
+  return `<div class="result-table-wrap"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+}
+
+function formatCell(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{8}$/.test(s)) return fmtDate(s);
+  return s;
+}
+
+function humanize(s) {
+  return String(s)
+    .replace(/Bag$/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_.]+/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .trim();
 }
 
 // Shared documents table with an in-page "View" button per document.

@@ -33,12 +33,11 @@ export default async function handler(req, res) {
       }
     }
 
-    // Email a digest if there's anything new (no-op if email env vars aren't set).
-    let email = { skipped: true };
-    if (newDocs.length) {
-      try { email = await sendDigest(newDocs); }
-      catch (e) { email = { error: String(e.message || e) }; }
-    }
+    // Email a daily digest every run (a "no new filings today" note when empty),
+    // so you always know the job ran. No-op if email env vars aren't set.
+    let email;
+    try { email = await sendDigest(newDocs, { checked: watched.length }); }
+    catch (e) { email = { error: String(e.message || e) }; }
 
     res.status(200).json({ ok: true, checked: watched.length, totalNew, email, results });
   } catch (err) {

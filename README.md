@@ -125,10 +125,13 @@ default** and turns on automatically once these env vars are set:
      links in the email is wrong
 
 The digest groups new documents by application and includes one-click download
-links (pointing back at your `/api/document` proxy). If the email vars are unset,
-the cron simply skips sending and you still get the in-app "New Filings" panel.
-The cron's JSON response includes an `email` field showing `sent` / `skipped` /
-`error` so you can confirm it's working from the manual `curl` test above.
+links (pointing back at your `/api/document` proxy). An email is sent on **every**
+daily run: when there are new filings it lists them; when there aren't, it sends a
+short "no new filings today" note (with the number of applications checked) so you
+always know the job ran. If the email vars are unset, the cron simply skips sending
+and you still get the in-app "New Filings" panel. The cron's JSON response includes
+an `email` field showing `sent` / `skipped` / `error` so you can confirm it's
+working from the manual `curl` test above.
 
 ## How document access works
 

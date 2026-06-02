@@ -282,7 +282,6 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="basic">Basic Search</button>
-      <button class="tab-btn" data-tab="advanced">Advanced (Raw JSON)</button>
       <button class="tab-btn" data-tab="lookup">Application Lookup</button>
     </div>
 
@@ -358,25 +357,6 @@
       </div>
     </div>
 
-    <!-- ADVANCED RAW JSON -->
-    <div class="tab-panel" id="tab-advanced">
-      <div class="keynote">
-        This payload is sent verbatim as the POST body to
-        <code>/api/search</code> → <code>api.uspto.gov/.../applications/search</code>.
-        Edit it to use the full Open Data Portal query syntax.
-      </div>
-      <div class="form-group full">
-        <label>Request Payload (JSON)</label>
-        <textarea id="adv-json"></textarea>
-        <span class="hint">
-          Fields live under <code>applicationMetaData.*</code> — e.g.
-          <code>inventionTitle</code>, <code>filingDate</code>, <code>grantDate</code>,
-          <code>patentNumber</code>, <code>applicationStatusDescriptionText</code>,
-          <code>applicationTypeLabelName</code>, <code>firstInventorName</code>, <code>firstApplicantName</code>.
-        </span>
-      </div>
-    </div>
-
     <!-- LOOKUP -->
     <div class="tab-panel" id="tab-lookup">
       <div class="form-group" style="max-width:360px">
@@ -449,16 +429,6 @@ const DEFAULT_FIELDS = [
   'applicationMetaData.firstApplicantName',
 ];
 
-// Seed the Advanced editor with a working sample payload.
-const SAMPLE_PAYLOAD = {
-  q: 'applicationMetaData.inventionTitle:"neural network"',
-  filters: [{ name: 'applicationMetaData.applicationTypeLabelName', value: ['Utility'] }],
-  rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: '2020-01-01', valueTo: '2023-12-31' }],
-  pagination: { offset: 0, limit: 25 },
-  sort: [{ field: 'applicationMetaData.filingDate', order: 'Desc' }],
-};
-document.getElementById('adv-json').value = JSON.stringify(SAMPLE_PAYLOAD, null, 2);
-
 // ── Tabs ───────────────────────────────────────────────────────────
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -525,19 +495,8 @@ async function run(offset = 0) {
 
   if (tab === 'lookup') return runLookup();
 
-  let payload;
-  if (tab === 'basic') {
-    payload = buildBasicPayload(offset);
-    if (!payload) return;
-  } else {
-    try {
-      payload = JSON.parse(val('adv-json'));
-    } catch (e) {
-      alert('Invalid JSON: ' + e.message);
-      return;
-    }
-    if (payload.pagination) payload.pagination.offset = offset;
-  }
+  const payload = buildBasicPayload(offset);
+  if (!payload) return;
 
   currentOffset = offset;
   currentLimit = (payload.pagination && payload.pagination.limit) || 25;

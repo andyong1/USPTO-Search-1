@@ -80,12 +80,15 @@ Your site is live at `https://<project>.vercel.app`.
 `vercel.json` registers:
 
 ```json
-"crons": [{ "path": "/api/cron/check-filings", "schedule": "0 9 * * *" }]
+"crons": [{ "path": "/api/cron/check-filings", "schedule": "0 1 * * *" }]
 ```
 
-- Runs **once a day** (~09:00 **UTC** — Vercel runs crons in UTC; adjust the hour
-  for your timezone). On the **Hobby plan**, daily is the max frequency, timing is
-  approximate (within the hour), and there are no automatic retries.
+- Runs **once a day** at **01:00 UTC = 6:00 PM Pacific Daylight Time** (5:00 PM
+  during Pacific Standard Time). Vercel runs crons in **UTC with no DST
+  adjustment**, so the Pacific time shifts by an hour across DST changes; to keep
+  6 PM during *standard* time instead, change the schedule to `0 2 * * *`. On the
+  **Hobby plan**, daily is the max frequency, timing is approximate (the job fires
+  sometime within the chosen hour), and there are no automatic retries.
 - For each tracked application it pulls the current document list, inserts any
   `documentIdentifier` it hasn't seen before, and flags it `is_new = true`.
 - When you **start tracking** an application, its *existing* documents are

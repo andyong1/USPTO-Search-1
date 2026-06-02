@@ -521,6 +521,16 @@ async function run(offset = 0) {
   }
 }
 
+// Open the in-app Application Lookup (full tabbed record) for a given number,
+// e.g. from a Basic Search result row.
+function openInAppLookup(appNum) {
+  const lookupBtn = document.querySelector('.tab-btn[data-tab="lookup"]');
+  if (lookupBtn) lookupBtn.click();
+  document.getElementById('lk-appnum').value = appNum;
+  document.getElementById('results-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  runLookup();
+}
+
 async function runLookup() {
   const appNum = val('lk-appnum').replace(/[^0-9A-Za-z/]/g, '');
   if (!appNum) { alert('Enter an application number.'); return; }
@@ -585,7 +595,10 @@ function renderResults(data) {
     const asgn   = md.firstApplicantName || bagNames(md.applicantBag) || '—';
 
     return `<tr>
-      <td><a class="app-link" href="https://patentcenter.uspto.gov/applications/${esc(appNum)}" target="_blank" rel="noopener">${esc(appNum)}</a></td>
+      <td>
+        <a class="app-link" href="#" onclick="openInAppLookup('${jsq(appNum)}');return false;" title="View full record in this app">${esc(appNum)}</a>
+        <br><a class="hint" href="https://patentcenter.uspto.gov/applications/${esc(appNum)}" target="_blank" rel="noopener">USPTO ↗</a>
+      </td>
       <td>${esc(title)}</td>
       <td><span class="status-badge ${statusClass(status)}">${esc(status)}</span></td>
       <td>${esc(patNum)}</td>

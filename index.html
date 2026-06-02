@@ -860,16 +860,19 @@ function renderFindings(list) {
   const rows = list.map(f => {
     const formats = (f.formats || '').split(',').filter(Boolean);
     const dls = formats.map(fmt => docLink(f.application_number, f.document_identifier, fmt)).join('');
+    const appJs = jsq(f.application_number);
+    const idJs  = jsq(f.document_identifier);
     return `<tr class="finding-new">
       <td><a class="app-link" href="https://patentcenter.uspto.gov/applications/${esc(f.application_number)}" target="_blank" rel="noopener">${esc(f.application_number)}</a>${f.label ? '<br><span class="hint">' + esc(f.label) + '</span>' : ''}</td>
       <td>${esc(f.document_code || '')}<br><span class="hint">${esc(f.description || '')}</span></td>
       <td>${fmtDate(f.official_date)}</td>
       <td>${esc(f.direction || '')}</td>
       <td>${dls || '<span class="hint">—</span>'}</td>
+      <td><button class="dl-link" style="cursor:pointer" onclick="ackOne('${appJs}','${idJs}')">✓ Seen</button></td>
     </tr>`;
   }).join('');
   el.innerHTML = `<div class="result-table-wrap"><table>
-    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>Download</th></tr></thead>
+    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>Download</th><th>Action</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -917,6 +920,23 @@ async function ackFindings() {
     });
     loadWatchlist();
   } catch (e) { alert('Could not update: ' + e.message); }
+}
+
+// Mark a single finding as seen.
+async function ackOne(appNum, documentId) {
+  try {
+    await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'acknowledge', applicationNumber: appNum, documentIdentifier: documentId }),
+    });
+    loadWatchlist();
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+
+// Escape a value for safe use inside a single-quoted inline onclick string.
+function jsq(s) {
+  return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 async function sendTestEmail() {

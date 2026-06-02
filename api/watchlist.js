@@ -6,7 +6,7 @@
 
 import {
   listWatched, addWatched, removeWatched,
-  listFindings, acknowledgeFindings, syncApplication,
+  listFindings, acknowledgeFindings, acknowledgeFinding, syncApplication,
 } from '../lib/db.js';
 
 export default async function handler(req, res) {
@@ -23,7 +23,12 @@ export default async function handler(req, res) {
       body = body || {};
 
       if (body.action === 'acknowledge') {
-        await acknowledgeFindings();
+        // Acknowledge a single finding if identified, otherwise all of them.
+        if (body.applicationNumber && body.documentIdentifier) {
+          await acknowledgeFinding(String(body.applicationNumber), String(body.documentIdentifier));
+        } else {
+          await acknowledgeFindings();
+        }
         res.status(200).json({ ok: true });
         return;
       }

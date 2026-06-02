@@ -379,22 +379,10 @@
 
     <!-- LOOKUP -->
     <div class="tab-panel" id="tab-lookup">
-      <div class="form-group" style="max-width:360px; margin-bottom:16px">
+      <div class="form-group" style="max-width:360px">
         <label>Application Number</label>
         <input type="text" id="lk-appnum" placeholder="16123456" />
-        <span class="hint">Fetch one application's file wrapper.</span>
-      </div>
-      <div class="form-group" style="max-width:360px">
-        <label>Data Section</label>
-        <select id="lk-section">
-          <option value="">Full Record</option>
-          <option value="meta-data">Bibliographic Data</option>
-          <option value="transactions">Prosecution History</option>
-          <option value="continuity">Continuity</option>
-          <option value="foreign-priority">Foreign Priority</option>
-          <option value="assignment">Assignments</option>
-          <option value="documents">Documents</option>
-        </select>
+        <span class="hint">Pulls the full record: overview, documents, continuity, and more.</span>
       </div>
     </div>
 
@@ -578,27 +566,16 @@ async function runLookup() {
   const appNum = val('lk-appnum').replace(/[^0-9A-Za-z/]/g, '');
   if (!appNum) { alert('Enter an application number.'); return; }
   lastLookupApp = appNum;
-  const section = val('lk-section');
-  const apiUrl = (s) => `/api/application?appNum=${encodeURIComponent(appNum)}` + (s ? `&section=${s}` : '');
 
   startSearch();
   try {
-    // "Full Record" → tabbed detail view. The overview loads now; the other
+    // Full record → tabbed detail view. The overview loads now; the other
     // tabs (documents, continuity, etc.) load lazily when first opened.
-    if (!section) {
-      const res = await fetch(apiUrl(''));
-      const meta = await safeJson(res);
-      if (!res.ok) throw new Error(meta.error || meta.detail || `HTTP ${res.status}`);
-      lastData = meta;
-      renderAppTabs(meta, appNum);
-    } else {
-      const url = apiUrl(section);
-      const res = await fetch(url);
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || data.detail || `HTTP ${res.status}`);
-      lastData = data;
-      renderResults(data);
-    }
+    const res = await fetch(`/api/application?appNum=${encodeURIComponent(appNum)}`);
+    const meta = await safeJson(res);
+    if (!res.ok) throw new Error(meta.error || meta.detail || `HTTP ${res.status}`);
+    lastData = meta;
+    renderAppTabs(meta, appNum);
   } catch (err) {
     document.getElementById('results-body').innerHTML = errorHTML(err.message);
     document.getElementById('pagination').innerHTML = '';

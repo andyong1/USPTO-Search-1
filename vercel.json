@@ -4,10 +4,6 @@
   "redirects": [
     { "source": "/", "destination": "/uspto-search", "permanent": false }
   ],
-  "rewrites": [
-    { "source": "/uspto-search", "destination": "/index.html" },
-    { "source": "/uspto-search/", "destination": "/index.html" }
-  ],
   "crons": [
     { "path": "/api/cron/check-filings", "schedule": "0 1 * * *" }
   ]

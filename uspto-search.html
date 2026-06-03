@@ -246,15 +246,20 @@
   <div class="search-card" id="track-card">
     <h2>Tracked Proceedings <span id="new-count"></span></h2>
     <div class="track-row" style="margin-bottom:16px">
-      <div class="form-group" style="flex:2; min-width:200px">
+      <div class="form-group" style="flex:1 1 100%; min-width:180px">
         <label>Application Number</label>
         <input type="text" id="tr-appnum" placeholder="e.g. 16123456" />
       </div>
-      <div class="form-group" style="flex:2; min-width:160px">
+      <div class="form-group" style="flex:1 1 100%; min-width:160px">
         <label>Label (optional)</label>
         <input type="text" id="tr-label" placeholder="e.g. Competitor X filing" />
       </div>
-      <button class="btn btn-primary" id="track-btn" onclick="addWatch()">
+      <div class="form-group" style="flex:1 1 100%; min-width:180px">
+        <label>Notify (emails)</label>
+        <input type="text" id="tr-recipients" placeholder="a@x.com, b@y.com" />
+        <span class="hint">Comma-separated. Leave blank to send no alert for this application.</span>
+      </div>
+      <button class="btn btn-primary" id="track-btn" onclick="addWatch()" style="align-self:flex-start">
         <span id="track-btn-text">Track</span>
         <div class="spinner" id="track-spinner"></div>
       </button>
@@ -811,10 +816,21 @@ function renderWatched(list) {
     el.innerHTML = '<span class="hint">No proceedings tracked yet. Add an application number above to start monitoring it daily.</span>';
     return;
   }
-  el.innerHTML = list.map(w => `<span class="chip">
-    <strong>${esc(w.application_number)}</strong>${w.label ? ' · ' + esc(w.label) : ''}
-    <button title="Stop tracking" onclick="removeWatch('${esc(w.application_number)}')">&times;</button>
-  </span>`).join('');
+  el.innerHTML = list.map(w => {
+    const appJs = jsq(w.application_number);
+    const recips = w.recipients || '';
+    const recipText = recips
+      ? 'Notify: ' + esc(recips)
+      : '<em>No recipients — no alert will be sent</em>';
+    return `<div style="margin-bottom:10px">
+      <span class="chip">
+        <strong>${esc(w.application_number)}</strong>${w.label ? ' · ' + esc(w.label) : ''}
+        <button title="Edit notification emails" onclick="editRecipients('${appJs}','${jsq(recips)}')" style="color:#1a3a6b">&#9998;</button>
+        <button title="Stop tracking" onclick="removeWatch('${appJs}')">&times;</button>
+      </span>
+      <div class="hint" style="margin-top:2px">${recipText}</div>
+    </div>`;
+  }).join('');
 }
 
 function renderFindings(list) {
@@ -848,6 +864,7 @@ function renderFindings(list) {
 async function addWatch() {
   const appNum = document.getElementById('tr-appnum').value.trim().replace(/[^0-9A-Za-z/]/g, '');
   const label  = document.getElementById('tr-label').value.trim();
+  const recipients = document.getElementById('tr-recipients').value.trim();
   if (!appNum) { alert('Enter an application number to track.'); return; }
 
   trackLoading(true);
@@ -855,12 +872,13 @@ async function addWatch() {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationNumber: appNum, label }),
+      body: JSON.stringify({ applicationNumber: appNum, label, recipients }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     document.getElementById('tr-appnum').value = '';
     document.getElementById('tr-label').value = '';
+    document.getElementById('tr-recipients').value = '';
     renderWatched(data.watched || []);
     if (data.baseline && data.baseline.error) {
       alert('Tracking started, but the initial document sync failed:\n' + data.baseline.error);
@@ -869,6 +887,23 @@ async function addWatch() {
     alert('Could not track this application:\n' + e.message + '\n\n(Is the database added and the app deployed?)');
   } finally {
     trackLoading(false);
+  }
+}
+
+async function editRecipients(appNum, current) {
+  const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, current || '');
+  if (v === null) return; // cancelled
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'updateRecipients', applicationNumber: appNum, recipients: v }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    renderWatched(data.watched || []);
+  } catch (e) {
+    alert('Could not update recipients: ' + e.message);
   }
 }
 

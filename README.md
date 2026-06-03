@@ -59,7 +59,7 @@ In **Project → Settings → Environment Variables**:
 | `POSTGRES_URL` | ✅ | Auto-added by the Postgres integration above |
 | `RESEND_API_KEY` | optional | Enables email digests (see below) |
 | `DIGEST_FROM` | optional | Verified sender, e.g. `USPTO Watch <alerts@yourdomain.com>` |
-| `DIGEST_TO` | optional | Recipient(s), comma-separated |
+| `DIGEST_TO` | optional | Daily "no new filings" summary recipient (per-app recipients are set in the UI) |
 | `APP_BASE_URL` | optional | Overrides the auto-detected site URL in email links |
 
 > After adding/changing env vars, **redeploy** so the functions pick them up.
@@ -122,19 +122,27 @@ default** and turns on automatically once these env vars are set:
 3. Set the env vars and redeploy:
    - `RESEND_API_KEY` — your Resend key
    - `DIGEST_FROM` — e.g. `USPTO Watch <alerts@yourdomain.com>` (must match a
-     verified domain)
-   - `DIGEST_TO` — recipient(s), comma-separated
+     verified domain) — the global sender
+   - `DIGEST_TO` — the **daily summary** recipient (the "no new filings today"
+     report goes here)
    - `APP_BASE_URL` *(optional)* — only if the auto-detected URL for the download
      links in the email is wrong
 
-The digest groups new documents by application and includes one-click download
-links (pointing back at your `/api/document` proxy). An email is sent on **every**
-daily run: when there are new filings it lists them; when there aren't, it sends a
-short "no new filings today" note (with the number of applications checked) so you
-always know the job ran. If the email vars are unset, the cron simply skips sending
-and you still get the in-app "New Filings" panel. The cron's JSON response includes
-an `email` field showing `sent` / `skipped` / `error` so you can confirm it's
-working from the manual `curl` test above.
+**Per-application recipients.** New-filing alerts are addressed **per application**:
+when you track an application you set its **Notify (emails)** list (comma-separated,
+editable later via the ✎ button on each tracked item). Each daily run:
+
+- **New filings** → grouped by recipient set, so each recipient set gets **one
+  email** covering all of their applications, with one-click download links
+  (pointing back at your `/api/document` proxy).
+- **An application with no recipients listed sends nothing.**
+- **A daily "no new filings today" summary** — listing every application that had
+  nothing new — is sent to `DIGEST_TO`.
+
+If the email vars are unset, the cron simply skips sending and you still get the
+in-app "New Filings" panel. The cron's JSON response includes `emails` (the
+per-recipient-set sends) and `summary` fields showing `sent` / `skipped` / `error`
+so you can confirm it from the manual `curl` test above.
 
 ## How document access works
 

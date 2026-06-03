@@ -282,7 +282,7 @@
 
   <!-- RIGHT: SEARCH + RESULTS -->
   <main class="col-right">
-  <div class="search-card">
+  <div class="search-card" id="search-card">
     <h2>Search Parameters</h2>
 
     <div class="tabs">
@@ -385,9 +385,12 @@
   <!-- RESULTS -->
   <div class="search-card" id="results-card" style="display:none">
     <div class="results-header">
-      <div>
-        <h2 style="border:none;padding:0;margin:0">Results</h2>
-        <div class="results-count" id="results-count"></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="history.back()">← Back</button>
+        <div>
+          <h2 style="border:none;padding:0;margin:0">Results</h2>
+          <div class="results-count" id="results-count"></div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="toggle-raw" onclick="toggleRaw()">{ } Raw JSON</button>
@@ -494,20 +497,50 @@ function buildBasicPayload(offset) {
   return payload;
 }
 
+// ── Navigation / browser history ───────────────────────────────────
+// Each search or app view is pushed as a history entry so the browser Back
+// button returns to the prior "page". Tab-switching within a full record does
+// NOT push (stays on the same page).
+function pushView(state) { history.pushState(state, ''); }
+
+function showHome() {
+  document.getElementById('search-card').style.display = '';
+  document.getElementById('results-card').style.display = 'none';
+  window.scrollTo({ top: 0 });
+}
+
+function showResultsView() {
+  document.getElementById('search-card').style.display = 'none';
+  document.getElementById('results-card').style.display = 'block';
+  window.scrollTo({ top: 0 });
+}
+
+window.addEventListener('popstate', (e) => {
+  const st = e.state;
+  if (!st || st.view === 'home') { showHome(); return; }
+  if (st.view === 'results') { doBasicSearch(st.payload); return; }
+  if (st.view === 'record')  { doLookup(st.appNum); return; }
+});
+
 // ── Run ────────────────────────────────────────────────────────────
 async function run(offset = 0) {
   const tab = activeTab();
-
   if (tab === 'lookup') return runLookup();
 
   const payload = buildBasicPayload(offset);
   if (!payload) return;
 
-  currentOffset = offset;
+  pushView({ view: 'results', payload });
+  await doBasicSearch(payload);
+}
+
+// Performs the Basic Search and renders results (no history push — callers push).
+async function doBasicSearch(payload) {
+  currentOffset = (payload.pagination && payload.pagination.offset) || 0;
   currentLimit = (payload.pagination && payload.pagination.limit) || 25;
 
+  showResultsView();
   startSearch();
-
   try {
     const res = await fetch('/api/search', {
       method: 'POST',
@@ -527,20 +560,26 @@ async function run(offset = 0) {
 }
 
 // Open the in-app Application Lookup (full tabbed record) for a given number,
-// e.g. from a Basic Search result row.
+// e.g. from a Basic Search result row — pushes a new history entry.
 function openInAppLookup(appNum) {
-  const lookupBtn = document.querySelector('.tab-btn[data-tab="lookup"]');
-  if (lookupBtn) lookupBtn.click();
-  document.getElementById('lk-appnum').value = appNum;
-  document.getElementById('results-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  runLookup();
+  pushView({ view: 'record', appNum });
+  doLookup(appNum);
 }
 
 async function runLookup() {
   const appNum = val('lk-appnum').replace(/[^0-9A-Za-z/]/g, '');
   if (!appNum) { alert('Enter an application number.'); return; }
-  lastLookupApp = appNum;
+  pushView({ view: 'record', appNum });
+  await doLookup(appNum);
+}
 
+// Fetches and renders a full application record (no history push — callers push).
+async function doLookup(appNum) {
+  lastLookupApp = appNum;
+  const lk = document.getElementById('lk-appnum');
+  if (lk) lk.value = appNum;
+
+  showResultsView();
   startSearch();
   try {
     // Full record → tabbed detail view. The overview loads now; the other
@@ -1253,6 +1292,9 @@ function closeDocViewer() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
 });
+
+// Establish the initial "home" history entry so the first search's Back returns here.
+history.replaceState({ view: 'home' }, '');
 
 loadWatchlist();
 </script>

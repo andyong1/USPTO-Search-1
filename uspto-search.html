@@ -979,27 +979,55 @@ async function loadWatchlist() {
   } catch { /* not deployed / offline — keep empty states */ }
 }
 
+let watchedData = [];
+let watchedSort = { key: 'application_number', dir: 'asc' };
+
+function sortWatched(key) {
+  if (watchedSort.key === key) watchedSort.dir = watchedSort.dir === 'asc' ? 'desc' : 'asc';
+  else watchedSort = { key, dir: 'asc' };
+  renderWatched(watchedData);
+}
+
 function renderWatched(list) {
+  watchedData = list || [];
   const el = document.getElementById('watched-list');
-  if (!list.length) {
+  if (!watchedData.length) {
     el.innerHTML = '<span class="hint">No proceedings tracked yet. Add an application number above to start monitoring it daily.</span>';
     return;
   }
-  el.innerHTML = list.map(w => {
+
+  const { key, dir } = watchedSort;
+  const sorted = [...watchedData].sort((a, b) => {
+    const av = (a[key] || '').toString();
+    const bv = (b[key] || '').toString();
+    const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+    return dir === 'asc' ? cmp : -cmp;
+  });
+  const arrow = (k) => (watchedSort.key === k ? (watchedSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  const rows = sorted.map((w) => {
     const appJs = jsq(w.application_number);
     const recips = w.recipients || '';
-    const recipText = recips
-      ? 'Notify: ' + esc(recips)
-      : '<em>No recipients — no alert will be sent</em>';
-    return `<div style="margin-bottom:10px">
-      <span class="chip">
-        <strong>${esc(w.application_number)}</strong>${w.label ? ' · ' + esc(w.label) : ''}
-        <button title="Edit notification emails" onclick="editRecipients('${appJs}','${jsq(recips)}')" style="color:#1a3a6b">&#9998;</button>
-        <button title="Stop tracking" onclick="removeWatch('${appJs}')">&times;</button>
-      </span>
-      <div class="hint" style="margin-top:2px">${recipText}</div>
-    </div>`;
+    return `<tr>
+      <td><a class="app-link" href="#" onclick="openInAppLookup('${appJs}');return false;" title="View full record in this app">${esc(w.application_number)}</a></td>
+      <td>${w.label ? esc(w.label) : '<span class="hint">—</span>'}</td>
+      <td>${recips ? esc(recips) : '<span class="hint">— no alert</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="dl-link" style="cursor:pointer" onclick="editRecipients('${appJs}','${jsq(recips)}')">✎ Edit emails</button>
+        <button class="dl-link" style="cursor:pointer;color:#c53030" onclick="removeWatch('${appJs}')">× Remove</button>
+      </td>
+    </tr>`;
   }).join('');
+
+  el.innerHTML = `<div class="result-table-wrap"><table>
+    <thead><tr>
+      <th style="cursor:pointer" onclick="sortWatched('application_number')" title="Sort by application number">Application${arrow('application_number')}</th>
+      <th style="cursor:pointer" onclick="sortWatched('label')" title="Sort by label">Label${arrow('label')}</th>
+      <th>Notify</th>
+      <th>Actions</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function renderFindings(list) {

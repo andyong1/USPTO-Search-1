@@ -1012,6 +1012,7 @@ function renderWatched(list) {
     return `<tr>
       <td><a class="app-link" href="#" onclick="openInAppLookup('${appJs}');return false;" title="View full record in this app">${esc(w.application_number)}</a></td>
       <td>${w.label ? esc(w.label) : '<span class="hint">—</span>'}</td>
+      <td>${w.latest_date ? fmtDate(w.latest_date) : '<span class="hint">—</span>'}</td>
       <td>${recips ? esc(recips) : '<span class="hint">— no alert</span>'}</td>
       <td style="white-space:nowrap">
         <button class="dl-link" style="cursor:pointer" onclick="editRecipients('${appJs}','${jsq(recips)}')">✎ Edit emails</button>
@@ -1024,6 +1025,7 @@ function renderWatched(list) {
     <thead><tr>
       <th style="cursor:pointer" onclick="sortWatched('application_number')" title="Sort by application number">Application${arrow('application_number')}</th>
       <th style="cursor:pointer" onclick="sortWatched('label')" title="Sort by label">Label${arrow('label')}</th>
+      <th style="cursor:pointer" onclick="sortWatched('latest_date')" title="Sort by most recent filing">Latest Filing${arrow('latest_date')}</th>
       <th>Notify</th>
       <th>Actions</th>
     </tr></thead>

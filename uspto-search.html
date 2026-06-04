@@ -233,7 +233,7 @@
     <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
   </svg>
   <div>
-    <h1>USPTO Patent File Wrapper Search - Created by A. Ong</h1>
+    <h1 onclick="goHome()" style="cursor:pointer" title="Go to home page">USPTO Patent File Wrapper Search - Created by A. Ong</h1>
     <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
   </div>
 </header>
@@ -387,6 +387,7 @@
     <div class="results-header">
       <div style="display:flex;align-items:center;gap:12px">
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="history.back()">← Back</button>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="goHome()">⌂ Home</button>
         <div>
           <h2 style="border:none;padding:0;margin:0">Results</h2>
           <div class="results-count" id="results-count"></div>
@@ -563,6 +564,12 @@ function showHome() {
   document.getElementById('search-card').style.display = '';
   document.getElementById('results-card').style.display = 'none';
   window.scrollTo({ top: 0 });
+}
+
+// Navigate to the home (search) page, with a clean URL and a history entry.
+function goHome() {
+  pushView({ view: 'home' });
+  showHome();
 }
 
 function showResultsView() {

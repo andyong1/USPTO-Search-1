@@ -745,9 +745,7 @@ function renderResults(data) {
     const grant  = fmtDate(md.grantDate);
     const inv    = md.firstInventorName || bagNames(md.inventorBag) || '—';
     const asgn   = md.firstApplicantName || bagNames(md.applicantBag) || '—';
-    const patCell = patNum
-      ? `${esc(patNum)}<br><a class="hint" href="https://patents.google.com/patent/US${encodeURIComponent(patNum.replace(/[^0-9A-Za-z]/g, ''))}" target="_blank" rel="noopener">Google Patents ↗</a>`
-      : '—';
+    const patCell = patNum ? `${esc(patNum)}<br>${googlePatentsLink(patNum)}` : '—';
 
     return `<tr>
       <td>
@@ -1270,8 +1268,18 @@ function overviewHtml(meta) {
     ['Earliest Pub.', md.earliestPublicationNumber],
   ].filter(([, v]) => v && v !== '—');
 
-  return `<div class="detail-meta">${kv.map(([k, v]) =>
-    `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('')}</div>`;
+  return `<div class="detail-meta">${kv.map(([k, v]) => {
+    const valHtml = (k === 'Patent No.')
+      ? `${esc(String(v))} &middot; ${googlePatentsLink(v)}`
+      : esc(String(v));
+    return `<div class="kv"><span>${esc(k)}</span>${valHtml}</div>`;
+  }).join('')}</div>`;
+}
+
+// Google Patents link for a US patent number (digits/letters only).
+function googlePatentsLink(patNum) {
+  const clean = String(patNum).replace(/[^0-9A-Za-z]/g, '');
+  return `<a class="hint" href="https://patents.google.com/patent/US${encodeURIComponent(clean)}" target="_blank" rel="noopener">Google Patents ↗</a>`;
 }
 
 function attorneyText(md) {

@@ -1,9 +1,12 @@
 // CRUD for the proceedings you track + listing detected new filings.
 //   GET    /api/watchlist                                              → { watched, findings }
 //   POST   /api/watchlist  { applicationNumber, label, recipients }    → add + baseline sync
-//   POST   /api/watchlist  { action: "updateRecipients", applicationNumber, recipients }
+//   POST   /api/watchlist  { action: "updateRecipients", applicationNumber, recipients }   [admin]
 //   POST   /api/watchlist  { action: "acknowledge" [, applicationNumber, documentIdentifier] }
-//   DELETE /api/watchlist?applicationNumber=...                        → stop tracking
+//   DELETE /api/watchlist?applicationNumber=...                        → stop tracking      [admin]
+//
+// "[admin]" actions require the X-Admin-Password header to match the
+// ADMIN_PASSWORD env var (enforced only if ADMIN_PASSWORD is set).
 
 import {
   listWatched, addWatched, removeWatched, setRecipients,
@@ -14,6 +17,14 @@ import {
 function normalizeRecipients(s) {
   const list = String(s || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean);
   return list.length ? list.join(', ') : null;
+}
+
+// True if admin protection passes. If ADMIN_PASSWORD isn't set, protection is
+// off (returns true) so the app still works until you configure it.
+function isAdmin(req) {
+  const required = process.env.ADMIN_PASSWORD;
+  if (!required) return true;
+  return (req.headers['x-admin-password'] || '') === required;
 }
 
 export default async function handler(req, res) {
@@ -41,6 +52,7 @@ export default async function handler(req, res) {
       }
 
       if (body.action === 'updateRecipients') {
+        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
         const num = String(body.applicationNumber || '').replace(/[^0-9A-Za-z/]/g, '');
         if (!num) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
         await setRecipients(num, normalizeRecipients(body.recipients));
@@ -65,6 +77,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
       const appNum = String(req.query.applicationNumber || '').replace(/[^0-9A-Za-z/]/g, '');
       if (!appNum) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
       await removeWatched(appNum);

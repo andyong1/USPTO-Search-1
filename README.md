@@ -57,9 +57,10 @@ In **Project → Settings → Environment Variables**:
 | `USPTO_API_KEY` | ✅ | Your USPTO key, sent as `X-API-KEY` |
 | `CRON_SECRET` | ✅ (prod) | Secures the cron route. Generate with `openssl rand -base64 32`. Your scheduler (cron-job.org) sends it as `Authorization: Bearer …`; the handler rejects anything that doesn't match. |
 | `POSTGRES_URL` | ✅ | Auto-added by the Postgres integration above |
+| `ADMIN_PASSWORD` | optional | Protects **Edit emails** and **Remove** in Tracked Proceedings. If set, those actions require it (sent as the `X-Admin-Password` header); if unset, they're open. |
 | `RESEND_API_KEY` | optional | Enables email digests (see below) |
 | `DIGEST_FROM` | optional | Verified sender, e.g. `USPTO Watch <alerts@yourdomain.com>` |
-| `DIGEST_TO` | optional | Daily "no new filings" summary recipient (per-app recipients are set in the UI) |
+| `DIGEST_TO` | optional | Recipient for the **"Send test email"** button |
 | `APP_BASE_URL` | optional | Overrides the auto-detected site URL in email links |
 
 > After adding/changing env vars, **redeploy** so the functions pick them up.

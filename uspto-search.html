@@ -1093,15 +1093,30 @@ async function addWatch() {
   }
 }
 
+// Admin password for protected actions (Edit / Remove), cached for the session.
+function getAdminPassword() {
+  let pw = sessionStorage.getItem('adminPw');
+  if (!pw) {
+    pw = prompt('Enter the admin password to edit or remove tracked proceedings:');
+    if (pw === null || pw === '') return null; // cancelled / empty
+    sessionStorage.setItem('adminPw', pw);
+  }
+  return pw;
+}
+function clearAdminPassword() { sessionStorage.removeItem('adminPw'); }
+
 async function editRecipients(appNum, current) {
+  const pw = getAdminPassword();
+  if (pw === null) return; // cancelled
   const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, current || '');
   if (v === null) return; // cancelled
   try {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
       body: JSON.stringify({ action: 'updateRecipients', applicationNumber: appNum, recipients: v }),
     });
+    if (res.status === 401) { clearAdminPassword(); alert('Incorrect admin password. Please try again.'); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     renderWatched(data.watched || []);
@@ -1111,9 +1126,15 @@ async function editRecipients(appNum, current) {
 }
 
 async function removeWatch(appNum) {
+  const pw = getAdminPassword();
+  if (pw === null) return; // cancelled
   if (!confirm('Stop tracking ' + appNum + '?')) return;
   try {
-    await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), { method: 'DELETE' });
+    const res = await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), {
+      method: 'DELETE',
+      headers: { 'X-Admin-Password': pw },
+    });
+    if (res.status === 401) { clearAdminPassword(); alert('Incorrect admin password. Please try again.'); return; }
     loadWatchlist();
   } catch (e) { alert('Could not remove: ' + e.message); }
 }

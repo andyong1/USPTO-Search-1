@@ -393,6 +393,7 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="copyShareLink(this)">🔗 Copy link</button>
         <button class="toggle-raw" onclick="toggleRaw()">{ } Raw JSON</button>
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="exportCSV()">Export CSV</button>
       </div>
@@ -498,10 +499,65 @@ function buildBasicPayload(offset) {
 }
 
 // ── Navigation / browser history ───────────────────────────────────
-// Each search or app view is pushed as a history entry so the browser Back
-// button returns to the prior "page". Tab-switching within a full record does
-// NOT push (stays on the same page).
-function pushView(state) { history.pushState(state, ''); }
+// Each search or app view is pushed as a history entry with a shareable URL,
+// so the browser Back button works AND the address-bar link can be sent to
+// someone else. Tab-switching within a full record does NOT push.
+
+// Basic-search form fields <-> URL query params.
+const BASIC_FIELDS = {
+  title: 'b-title', appnum: 'b-appnum', patnum: 'b-patnum', inventor: 'b-inventor',
+  assignee: 'b-assignee', type: 'b-apptype', status: 'b-status',
+  from: 'b-date-from', to: 'b-date-to', sort: 'b-sort', limit: 'b-limit',
+};
+// Only these indicate an actual search (sort/limit alone don't).
+const BASIC_TERM_KEYS = ['title', 'appnum', 'patnum', 'inventor', 'assignee', 'type', 'status', 'from', 'to'];
+
+function readBasicForm() {
+  const o = {};
+  for (const [k, id] of Object.entries(BASIC_FIELDS)) {
+    const v = (document.getElementById(id).value || '').trim();
+    if (v) o[k] = v;
+  }
+  return o;
+}
+function applyBasicForm(params) {
+  for (const [k, id] of Object.entries(BASIC_FIELDS)) {
+    if (params.has(k)) { const el = document.getElementById(id); if (el) el.value = params.get(k); }
+  }
+}
+function hasBasicTerms(params) {
+  return BASIC_TERM_KEYS.some((k) => params.has(k));
+}
+
+function buildShareUrl(state) {
+  const base = location.pathname;
+  if (!state || state.view === 'home') return base;
+  if (state.view === 'record') return `${base}?app=${encodeURIComponent(state.appNum)}`;
+  if (state.view === 'results') {
+    const sp = new URLSearchParams(state.formParams || {});
+    if (state.offset) sp.set('offset', String(state.offset));
+    const qs = sp.toString();
+    return qs ? `${base}?${qs}` : base;
+  }
+  return base;
+}
+
+function pushView(state) { history.pushState(state, '', buildShareUrl(state)); }
+
+function activateTab(name) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
+  if (btn) btn.click();
+}
+
+function copyShareLink(btn) {
+  const url = location.href;
+  const done = () => { const t = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => { btn.textContent = t; }, 1500); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(done).catch(() => prompt('Copy this link:', url));
+  } else {
+    prompt('Copy this link:', url);
+  }
+}
 
 function showHome() {
   document.getElementById('search-card').style.display = '';
@@ -522,6 +578,32 @@ window.addEventListener('popstate', (e) => {
   if (st.view === 'record')  { doLookup(st.appNum); return; }
 });
 
+// Restore the view from the URL on first load (so shared links work).
+function restoreFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const app = (p.get('app') || '').replace(/[^0-9A-Za-z/]/g, '');
+  if (app) {
+    history.replaceState({ view: 'record', appNum: app }, '', buildShareUrl({ view: 'record', appNum: app }));
+    doLookup(app);
+    return;
+  }
+  if (hasBasicTerms(p)) {
+    activateTab('basic');
+    applyBasicForm(p);
+    const offset = parseInt(p.get('offset') || '0', 10) || 0;
+    const payload = buildBasicPayload(offset);
+    if (payload) {
+      const formParams = readBasicForm();
+      const state = { view: 'results', payload, formParams, offset };
+      history.replaceState(state, '', buildShareUrl(state));
+      doBasicSearch(payload);
+      return;
+    }
+  }
+  history.replaceState({ view: 'home' }, '', location.pathname);
+  showHome();
+}
+
 // ── Run ────────────────────────────────────────────────────────────
 async function run(offset = 0) {
   const tab = activeTab();
@@ -530,7 +612,8 @@ async function run(offset = 0) {
   const payload = buildBasicPayload(offset);
   if (!payload) return;
 
-  pushView({ view: 'results', payload });
+  const formParams = readBasicForm();
+  pushView({ view: 'results', payload, formParams, offset });
   await doBasicSearch(payload);
 }
 
@@ -1312,8 +1395,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
 });
 
-// Establish the initial "home" history entry so the first search's Back returns here.
-history.replaceState({ view: 'home' }, '');
+// Restore view from the URL (shared links) and set the initial history entry.
+restoreFromUrl();
 
 loadWatchlist();
 </script>

@@ -648,11 +648,14 @@ function renderResults(data) {
     const appNum = item.applicationNumberText || md.applicationNumberText || '—';
     const title  = md.inventionTitle || '(No title)';
     const status = md.applicationStatusDescriptionText || '—';
-    const patNum = md.patentNumber || '—';
+    const patNum = md.patentNumber || '';
     const filing = fmtDate(md.filingDate);
     const grant  = fmtDate(md.grantDate);
     const inv    = md.firstInventorName || bagNames(md.inventorBag) || '—';
     const asgn   = md.firstApplicantName || bagNames(md.applicantBag) || '—';
+    const patCell = patNum
+      ? `${esc(patNum)}<br><a class="hint" href="https://patents.google.com/patent/US${encodeURIComponent(patNum.replace(/[^0-9A-Za-z]/g, ''))}" target="_blank" rel="noopener">Google Patents ↗</a>`
+      : '—';
 
     return `<tr>
       <td>
@@ -661,7 +664,7 @@ function renderResults(data) {
       </td>
       <td>${esc(title)}</td>
       <td><span class="status-badge ${statusClass(status)}">${esc(status)}</span></td>
-      <td>${esc(patNum)}</td>
+      <td>${patCell}</td>
       <td>${filing}</td>
       <td>${grant}</td>
       <td>${esc(inv)}</td>

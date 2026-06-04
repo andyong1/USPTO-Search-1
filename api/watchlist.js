@@ -40,6 +40,12 @@ export default async function handler(req, res) {
       if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
       body = body || {};
 
+      if (body.action === 'verifyAdmin') {
+        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+        res.status(200).json({ ok: true });
+        return;
+      }
+
       if (body.action === 'acknowledge') {
         // Acknowledge a single finding if identified, otherwise all of them.
         if (body.applicationNumber && body.documentIdentifier) {

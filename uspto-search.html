@@ -1094,20 +1094,35 @@ async function addWatch() {
 }
 
 // Admin password for protected actions (Edit / Remove), cached for the session.
-function getAdminPassword() {
-  let pw = sessionStorage.getItem('adminPw');
-  if (!pw) {
-    pw = prompt('Enter the admin password to edit or remove tracked proceedings:');
-    if (pw === null || pw === '') return null; // cancelled / empty
-    sessionStorage.setItem('adminPw', pw);
+// Verifies the password with the server before caching, so an incorrect entry
+// is reported immediately (not after the next prompt).
+async function getAdminPassword() {
+  const cached = sessionStorage.getItem('adminPw');
+  if (cached) return cached;
+
+  const pw = prompt('Enter the admin password to edit or remove tracked proceedings:');
+  if (pw === null || pw === '') return null; // cancelled / empty
+
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+      body: JSON.stringify({ action: 'verifyAdmin' }),
+    });
+    if (res.status === 401) { alert('Incorrect admin password.'); return null; }
+    if (!res.ok) { alert('Could not verify password (HTTP ' + res.status + ').'); return null; }
+  } catch (e) {
+    alert('Could not verify password: ' + e.message);
+    return null;
   }
+  sessionStorage.setItem('adminPw', pw);
   return pw;
 }
 function clearAdminPassword() { sessionStorage.removeItem('adminPw'); }
 
 async function editRecipients(appNum, current) {
-  const pw = getAdminPassword();
-  if (pw === null) return; // cancelled
+  const pw = await getAdminPassword();
+  if (pw === null) return; // cancelled / incorrect
   const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, current || '');
   if (v === null) return; // cancelled
   try {
@@ -1126,8 +1141,8 @@ async function editRecipients(appNum, current) {
 }
 
 async function removeWatch(appNum) {
-  const pw = getAdminPassword();
-  if (pw === null) return; // cancelled
+  const pw = await getAdminPassword();
+  if (pw === null) return; // cancelled / incorrect
   if (!confirm('Stop tracking ' + appNum + '?')) return;
   try {
     const res = await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), {

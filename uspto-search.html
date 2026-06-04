@@ -410,7 +410,7 @@
 
  <!-- TRACKED PROCEEDINGS LIST (full width, below) -->
  <div class="search-card" id="tracked-list-card">
-   <h2>Tracked Proceedings</h2>
+   <h2 id="tracked-heading">Tracked Proceedings</h2>
    <div id="watched-list"></div>
  </div>
 
@@ -991,6 +991,8 @@ function sortWatched(key) {
 
 function renderWatched(list) {
   watchedData = list || [];
+  const heading = document.getElementById('tracked-heading');
+  if (heading) heading.textContent = `Tracked Proceedings (Total: ${watchedData.length})`;
   const el = document.getElementById('watched-list');
   if (!watchedData.length) {
     el.innerHTML = '<span class="hint">No proceedings tracked yet. Add an application number above to start monitoring it daily.</span>';

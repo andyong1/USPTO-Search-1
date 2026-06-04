@@ -1037,7 +1037,7 @@ function renderFindings(list) {
 
   const el = document.getElementById('findings-list');
   if (!list.length) {
-    el.innerHTML = '<span class="hint">No new filings detected yet. The daily job lists newly filed documents here.</span>';
+    el.innerHTML = '<p class="hint">No new filings detected yet. The daily job lists newly filed documents here.</p>';
     return;
   }
   const rows = list.map(f => {

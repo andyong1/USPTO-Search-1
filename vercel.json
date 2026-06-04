@@ -3,8 +3,5 @@
   "cleanUrls": true,
   "redirects": [
     { "source": "/", "destination": "/uspto-search", "permanent": false }
-  ],
-  "crons": [
-    { "path": "/api/cron/check-filings", "schedule": "0 1 * * *" }
   ]
 }

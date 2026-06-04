@@ -4,8 +4,8 @@ A web UI for the **USPTO Open Data Portal** Patent File Wrapper API
 (`api.uspto.gov`), with:
 
 - a serverless **proxy** that keeps your API key private and avoids browser CORS,
-- a **daily cron job** that watches the patent applications you track and flags
-  newly filed documents,
+- a **scheduled cron job** (run via cron-job.org) that watches the patent
+  applications you track and flags newly filed documents,
 - optional **email digests** of new filings (via Resend),
 - in-app **document access** (download the actual PDF/XML/DOCX of any filing).
 
@@ -24,7 +24,7 @@ uspto-search/
 │   ├── uspto.js                # USPTO API helper
 │   ├── db.js                   # Postgres helpers + schema
 │   └── email.js                # Resend digest (optional)
-├── vercel.json                 # cleanUrls + crons entry
+├── vercel.json                 # cleanUrls + root redirect
 ├── package.json
 └── .env.example
 ```
@@ -55,7 +55,7 @@ In **Project → Settings → Environment Variables**:
 | Variable | Required | Purpose |
 |---|---|---|
 | `USPTO_API_KEY` | ✅ | Your USPTO key, sent as `X-API-KEY` |
-| `CRON_SECRET` | ✅ (prod) | Secures the cron route. Generate with `openssl rand -base64 32`. Vercel sends it as `Authorization: Bearer …`; the handler rejects anything that doesn't match. |
+| `CRON_SECRET` | ✅ (prod) | Secures the cron route. Generate with `openssl rand -base64 32`. Your scheduler (cron-job.org) sends it as `Authorization: Bearer …`; the handler rejects anything that doesn't match. |
 | `POSTGRES_URL` | ✅ | Auto-added by the Postgres integration above |
 | `RESEND_API_KEY` | optional | Enables email digests (see below) |
 | `DIGEST_FROM` | optional | Verified sender, e.g. `USPTO Watch <alerts@yourdomain.com>` |
@@ -69,47 +69,58 @@ In **Project → Settings → Environment Variables**:
 Push this folder to a GitHub repo and **Import** it at https://vercel.com
 (or run `vercel` from the folder with the CLI). On deploy, Vercel:
 
-- serves `public/` as static,
-- turns each file in `api/` into a serverless function,
-- registers the cron from `vercel.json`.
+- serves the root static files (`uspto-search.html` at `/uspto-search`, `privacy.html` at `/privacy`),
+- turns each file in `api/` into a serverless function.
 
 Your site is live at `https://<project>.vercel.app`.
 
-## How the daily cron works
+## How the cron works
 
-`vercel.json` registers:
+The check job is the HTTP endpoint **`/api/cron/check-filings`**. Each run:
 
-```json
-"crons": [{ "path": "/api/cron/check-filings", "schedule": "0 1 * * *" }]
-```
-
-- Runs **once a day** at **01:00 UTC = 6:00 PM Pacific Daylight Time** (5:00 PM
-  during Pacific Standard Time). Vercel runs crons in **UTC with no DST
-  adjustment**, so the Pacific time shifts by an hour across DST changes; to keep
-  6 PM during *standard* time instead, change the schedule to `0 2 * * *`. On the
-  **Hobby plan**, daily is the max frequency, timing is approximate (the job fires
-  sometime within the chosen hour), and there are no automatic retries.
 - For each tracked application it pulls the current document list, inserts any
   `documentIdentifier` it hasn't seen before, and flags it `is_new = true`.
 - When you **start tracking** an application, its *existing* documents are
   recorded as a baseline (`is_new = false`) so only **future** filings show up
   as new.
-- New filings appear in the **"New Filings"** panel on the page; click
-  **Mark all as seen** to clear them.
+- New filings appear in the **"New Filings"** panel on the page (click **Mark all
+  as seen** to clear them) and trigger email alerts to each application's
+  recipients. **No email is sent when there are nothing new.**
 
-**Test the cron manually** (use your real secret):
+The endpoint requires `Authorization: Bearer <CRON_SECRET>`.
+
+### Scheduling with cron-job.org (free, hourly)
+
+Vercel's Hobby plan limits *Vercel's own* cron scheduler to once per day, but the
+endpoint is a normal URL that any scheduler can call as often as you like. To run
+it hourly for free, use [cron-job.org](https://cron-job.org):
+
+1. Create a free account → **Create cronjob**.
+2. **Title:** USPTO check filings
+3. **URL:** `https://andy-ong.com/api/cron/check-filings`
+4. **Schedule:** Every hour (e.g. "Every 1 hour", or pattern: minute `0`, every hour).
+5. **Request method:** GET
+6. Under **Advanced → Headers**, add one header:
+   - **Name:** `Authorization`
+   - **Value:** `Bearer <your CRON_SECRET>`  *(the same value set in Vercel's env vars)*
+7. Save. (Optional: enable failure notifications so you're told if a run errors.)
+
+> There is **no** `crons` entry in `vercel.json` — scheduling is handled entirely
+> by cron-job.org.
+
+**Test it manually** with the same request:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" \
-  https://<project>.vercel.app/api/cron/check-filings
+  https://andy-ong.com/api/cron/check-filings
 ```
 
-### Want more frequent checks?
+A successful run returns JSON like `{ "ok": true, "checked": N, "totalNew": M, "emails": [...] }`.
 
-The Hobby plan caps crons at once-daily. To check more often, either upgrade to
-Pro, or leave the route as-is and trigger it on your own schedule from a free
-external scheduler (e.g. cron-job.org / GitHub Actions) by calling the URL above
-with the `Authorization` header.
+> **Function duration note:** on Vercel Hobby, functions have a short max
+> duration. Each run checks every tracked application sequentially, so a very
+> large tracked list could approach the limit — fine for a normal number of
+> applications.
 
 ## Email digests (optional)
 
@@ -123,26 +134,25 @@ default** and turns on automatically once these env vars are set:
    - `RESEND_API_KEY` — your Resend key
    - `DIGEST_FROM` — e.g. `USPTO Watch <alerts@yourdomain.com>` (must match a
      verified domain) — the global sender
-   - `DIGEST_TO` — the **daily summary** recipient (the "no new filings today"
-     report goes here)
+   - `DIGEST_TO` — recipient for the **"Send test email"** button only
    - `APP_BASE_URL` *(optional)* — only if the auto-detected URL for the download
      links in the email is wrong
 
 **Per-application recipients.** New-filing alerts are addressed **per application**:
 when you track an application you set its **Notify (emails)** list (comma-separated,
-editable later via the ✎ button on each tracked item). Each daily run:
+editable later via the ✎ button on each tracked item). Each run:
 
 - **New filings** → grouped by recipient set, so each recipient set gets **one
   email** covering all of their applications, with one-click download links
   (pointing back at your `/api/document` proxy).
 - **An application with no recipients listed sends nothing.**
-- **A daily "no new filings today" summary** — listing every application that had
-  nothing new — is sent to `DIGEST_TO`.
+- **No email is sent when there are no new filings** (so frequent runs don't
+  flood your inbox).
 
 If the email vars are unset, the cron simply skips sending and you still get the
-in-app "New Filings" panel. The cron's JSON response includes `emails` (the
-per-recipient-set sends) and `summary` fields showing `sent` / `skipped` / `error`
-so you can confirm it from the manual `curl` test above.
+in-app "New Filings" panel. The cron's JSON response includes an `emails` array
+(the per-recipient-set sends) so you can confirm it from the manual `curl` test
+above.
 
 ## How document access works
 

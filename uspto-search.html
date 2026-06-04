@@ -1080,6 +1080,9 @@ async function addWatch() {
     document.getElementById('tr-label').value = '';
     document.getElementById('tr-recipients').value = '';
     renderWatched(data.watched || []);
+    if (data.existed) {
+      alert(appNum + ' is already tracked — any new notification email(s) were added to its existing list.');
+    }
     if (data.baseline && data.baseline.error) {
       alert('Tracking started, but the initial document sync failed:\n' + data.baseline.error);
     }

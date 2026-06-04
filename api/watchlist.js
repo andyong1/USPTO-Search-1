@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const appNum = String(body.applicationNumber || '').replace(/[^0-9A-Za-z/]/g, '');
       if (!appNum) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
 
-      await addWatched(appNum, body.label, normalizeRecipients(body.recipients));
+      const addResult = await addWatched(appNum, body.label, normalizeRecipients(body.recipients));
 
       // Baseline existing documents so only FUTURE filings count as "new".
       let baseline = null;
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       catch (e) { baseline = { error: String(e.message || e) }; }
 
       const watched = await listWatched();
-      res.status(200).json({ ok: true, watched, baseline });
+      res.status(200).json({ ok: true, watched, baseline, existed: addResult.existed });
       return;
     }
 

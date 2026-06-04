@@ -12,6 +12,9 @@
 import { listWatched, syncApplication } from '../../lib/db.js';
 import { sendDigestTo, parseRecipients } from '../../lib/email.js';
 
+// Give the job more time than the default (in case of many tracked applications).
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET;
   const auth = req.headers.authorization || '';
@@ -28,24 +31,32 @@ export default async function handler(req, res) {
     const groups = new Map(); // recipientSetKey -> { recipients: [...], docs: [...] }
     let totalNew = 0;
 
-    for (const w of watched) {
-      try {
-        const r = await syncApplication(w.application_number, true);
-        totalNew += r.added;
-        results.push({ application: w.application_number, total: r.total, added: r.added });
+    // Check applications with limited concurrency so total time is bounded by the
+    // slowest application rather than the sum of all of them.
+    const CONCURRENCY = 5;
+    const checked = [];
+    for (let i = 0; i < watched.length; i += CONCURRENCY) {
+      const chunk = watched.slice(i, i + CONCURRENCY).map(async (w) => {
+        try { return { w, r: await syncApplication(w.application_number, true) }; }
+        catch (e) { return { w, error: String(e.message || e) }; }
+      });
+      checked.push(...await Promise.all(chunk));
+    }
 
-        if (r.added > 0) {
-          const recipients = parseRecipients(w.recipients);
-          if (recipients.length) {
-            // Group by the exact recipient set so shared recipients get one email.
-            const key = recipients.map((e) => e.toLowerCase()).sort().join(',');
-            if (!groups.has(key)) groups.set(key, { recipients, docs: [] });
-            groups.get(key).docs.push(...r.addedDocs);
-          }
-          // No recipients listed → send nothing for this application.
+    for (const { w, r, error } of checked) {
+      if (error) { results.push({ application: w.application_number, error }); continue; }
+      totalNew += r.added;
+      results.push({ application: w.application_number, total: r.total, added: r.added });
+
+      if (r.added > 0) {
+        const recipients = parseRecipients(w.recipients);
+        if (recipients.length) {
+          // Group by the exact recipient set so shared recipients get one email.
+          const key = recipients.map((e) => e.toLowerCase()).sort().join(',');
+          if (!groups.has(key)) groups.set(key, { recipients, docs: [] });
+          groups.get(key).docs.push(...r.addedDocs);
         }
-      } catch (e) {
-        results.push({ application: w.application_number, error: String(e.message || e) });
+        // No recipients listed → send nothing for this application.
       }
     }
 

@@ -566,8 +566,10 @@ function showHome() {
   window.scrollTo({ top: 0 });
 }
 
-// Navigate to the home (search) page, with a clean URL and a history entry.
+// Navigate to the home (search) page with empty fields, a clean URL, and a
+// history entry.
 function goHome() {
+  clearSearchForms();
   pushView({ view: 'home' });
   showHome();
 }
@@ -872,9 +874,20 @@ function toggleRaw() {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+// Empty the Basic Search and Application Lookup fields, resetting dropdowns to
+// their defaults (leaves Tracked Proceedings inputs alone).
+function clearSearchForms() {
+  ['b-title', 'b-appnum', 'b-patnum', 'b-inventor', 'b-assignee', 'b-date-from', 'b-date-to', 'lk-appnum']
+    .forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('b-apptype', '');       // All Types
+  set('b-status', '');        // All Statuses
+  set('b-limit', '25');       // default page size
+  const sort = document.getElementById('b-sort'); if (sort) sort.selectedIndex = 0;
+}
+
 function clearAll() {
-  document.querySelectorAll('#tab-basic input, #tab-lookup input').forEach(i => i.value = '');
-  document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+  clearSearchForms();
   document.getElementById('results-card').style.display = 'none';
 }
 

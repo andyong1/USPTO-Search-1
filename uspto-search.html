@@ -245,7 +245,7 @@
   <!-- LEFT: TRACKED PROCEEDINGS -->
   <aside class="col-left">
   <div class="search-card" id="track-card">
-    <h2>Tracked Proceedings <span id="new-count"></span></h2>
+    <h2>Add a Tracked Proceeding</h2>
     <div class="track-row" style="margin-bottom:16px">
       <div class="form-group" style="flex:1 1 100%; min-width:180px">
         <label>Application Number</label>
@@ -265,10 +265,9 @@
         <div class="spinner" id="track-spinner"></div>
       </button>
     </div>
-    <div id="watched-list" style="margin-bottom:20px"></div>
 
     <div class="results-header" style="margin-bottom:10px">
-      <h2 style="border:none;padding:0;margin:0">New Filings (daily check)</h2>
+      <h2 style="border:none;padding:0;margin:0">New Filings (daily check) <span id="new-count"></span></h2>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-secondary" id="test-email-btn" style="padding:6px 14px;font-size:0.8rem" onclick="sendTestEmail()">
           <span id="test-email-text">Send test email</span>
@@ -406,6 +405,12 @@
   </div>
   </main>
 
+ </div>
+
+ <!-- TRACKED PROCEEDINGS LIST (full width, below) -->
+ <div class="search-card" id="tracked-list-card">
+   <h2>Tracked Proceedings</h2>
+   <div id="watched-list"></div>
  </div>
 
  <footer style="text-align:center;padding:24px 16px 8px;color:#718096;font-size:0.8rem">

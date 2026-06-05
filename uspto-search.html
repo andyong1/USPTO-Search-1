@@ -68,7 +68,7 @@
       border-bottom: 2px solid #e2e8f0;
     }
 
-    .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
 
     .tab-btn {
       padding: 8px 18px; border: none; background: none; cursor: pointer;
@@ -1252,10 +1252,12 @@ function renderDocuments(data, fallbackApp) {
 // first time it is opened, then caches the result.
 const DETAIL_TABS = [
   { id: 'overview',         label: 'Overview' },
+  { id: 'attorney',         label: 'Attorney / Address', section: 'attorney' },
   { id: 'documents',        label: 'Documents',        section: 'documents' },
   { id: 'continuity',       label: 'Continuity',       section: 'continuity' },
   { id: 'foreign-priority', label: 'Foreign Priority', section: 'foreign-priority' },
   { id: 'assignment',       label: 'Assignments',      section: 'assignment' },
+  { id: 'pta',              label: 'Patent Term Adj.', section: 'adjustment' },
   { id: 'transactions',     label: 'Transactions',     section: 'transactions' },
   { id: 'associated',       label: 'Associated Docs',  section: 'associated-documents' },
 ];

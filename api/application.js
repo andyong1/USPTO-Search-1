@@ -11,6 +11,8 @@ const ALLOWED_SECTIONS = new Set([
   'continuity',           // parent/child continuity
   'foreign-priority',     // foreign priority claims
   'assignment',           // assignment / ownership
+  'attorney',             // address + attorney/agent information
+  'adjustment',           // patent term adjustment (PTA)
   'transactions',         // prosecution history
   'associated-documents', // associated docs
 ]);

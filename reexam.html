@@ -116,8 +116,11 @@ function statsByArtUnitHtml(list) {
     return a[0].localeCompare(b[0], undefined, { numeric: true });
   });
   if (!entries.length) return '';
-  const rows = entries.map(([au, e]) =>
-    `<tr><td>${esc(au)}</td><td>${e.ordered}</td><td>${e.denied}</td><td>${e.ordered + e.denied}</td></tr>`).join('');
+  const rows = entries.map(([au, e]) => {
+    const total = e.ordered + e.denied;
+    const pct = (n) => (total ? (n / total * 100).toFixed(1) : '0.0');
+    return `<tr><td>${esc(au)}</td><td>${e.ordered} (${pct(e.ordered)}%)</td><td>${e.denied} (${pct(e.denied)}%)</td><td>${total}</td></tr>`;
+  }).join('');
   return `<div class="stats-title">By Group Art Unit</div>
     <div class="table-wrap" style="margin-bottom:18px"><table>
       <thead><tr><th>Group Art Unit</th><th>Ordered</th><th>Denied</th><th>Total</th></tr></thead>

@@ -52,7 +52,7 @@
 <div class="container">
   <a class="back-link" href="/uspto-search">← Back to search</a>
   <div class="card">
-    <h2>Ex Parte Reexamination Determinations</h2>
+    <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
     <div class="sub">Orders granting (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
@@ -75,6 +75,8 @@ function fmtDate(raw) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const list = data.determinations || [];
+    const heading = document.getElementById('reexam-heading');
+    if (heading) heading.textContent = `Ex Parte Reexamination Determinations (Total: ${list.length})`;
     if (!list.length) {
       body.innerHTML = '<div class="state">No determinations recorded yet. The daily scan will list them here as they issue.</div>';
       return;

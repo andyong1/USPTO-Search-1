@@ -83,7 +83,14 @@ function fmtDate(raw) {
     }
     const rows = list.map((d) => {
       const num = d.application_number || '';
+      const docId = d.document_identifier || '';
       const denied = /denied/i.test(d.determination_type || '');
+      let pdf = '<span class="ext">—</span>';
+      if (docId) {
+        const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+        pdf = `<a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View PDF ↗</a>
+               <a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
+      }
       return `<tr>
         <td>
           <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
@@ -91,10 +98,11 @@ function fmtDate(raw) {
         </td>
         <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span></td>
         <td>${fmtDate(d.official_date)}</td>
+        <td style="white-space:nowrap">${pdf}</td>
       </tr>`;
     }).join('');
     body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Determination</th><th>Date</th></tr></thead>
+      <thead><tr><th>Control No.</th><th>Determination</th><th>Date</th><th>Determination PDF</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';

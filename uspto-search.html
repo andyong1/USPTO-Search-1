@@ -1461,7 +1461,10 @@ function fmtAppNumber(s) {
 function formatCell(v, key = '') {
   if (v == null) return '';
   const s = String(v);
-  const k = key.toLowerCase();
+  // Normalize the key (strip spaces/punctuation) so humanized labels like
+  // "Application Number Text" still match — otherwise an 8-digit app number
+  // falls through to the date formatter and renders like "1650-00-00".
+  const k = key.toLowerCase().replace(/[^a-z0-9]/g, '');
   if (k.includes('applicationnumber')) return fmtAppNumber(s);  // ##/###,###
   if (k.includes('patentnumber')) return s.replace(/-/g, '');   // strip dashes
   if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{8}$/.test(s)) return fmtDate(s);

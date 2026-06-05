@@ -15,7 +15,7 @@ import {
   reexamState, setReexamEnumerated, setReexamDigestSent,
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
-  reexamCounts,
+  reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { sendReexamDigest } from '../../lib/email.js';
@@ -120,6 +120,21 @@ export default async function handler(req, res) {
       await Promise.all(slice);
     }
 
+    // 2b) Backfill examiner / group art unit for older determinations missing
+    // them (one metadata fetch per application; self-completes over a few runs).
+    let backfilled = 0;
+    const backfillApps = await getAppsMissingDeterminationMeta(10);
+    for (let i = 0; i < backfillApps.length; i += CONCURRENCY) {
+      const slice = backfillApps.slice(i, i + CONCURRENCY).map(async (appNum) => {
+        try {
+          const m = await fetchMetaData(appNum);
+          await updateDeterminationMeta(appNum, m.groupArtUnit, m.examiner);
+          backfilled++;
+        } catch { /* leave for a later run */ }
+      });
+      await Promise.all(slice);
+    }
+
     // 3) Daily digest of newly found determinations.
     let digest = { skipped: true };
     if (hoursSince(state.last_digest_at) >= 23) {
@@ -139,6 +154,7 @@ export default async function handler(req, res) {
       enumerated,
       scanned: batch.length,
       newDeterminations,
+      backfilled,
       counts, // { total, remaining, determined }
       digest,
       errors,

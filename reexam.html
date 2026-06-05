@@ -59,6 +59,7 @@
   <div class="card">
     <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
     <div class="sub">Orders granting (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
+    <div id="asof" class="sub"></div>
     <div id="stats"></div>
     <div id="stats30"></div>
     <div id="stats60"></div>
@@ -109,6 +110,15 @@ function statsHtml(label, items) {
     if (!list.length) {
       body.innerHTML = '<div class="state">No determinations recorded yet. The daily scan will list them here as they issue.</div>';
       return;
+    }
+
+    // "Collected since" note — earliest determination date on record.
+    const times = list.map((d) => parseDate(d.official_date)).filter((t) => !isNaN(t));
+    if (times.length) {
+      const earliest = new Date(Math.min(...times));
+      const opts = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' };
+      document.getElementById('asof').textContent =
+        'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry).';
     }
 
     // Statistics: overall (all collected) and last 30 days, by official_date.

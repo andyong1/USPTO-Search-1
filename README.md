@@ -6,24 +6,29 @@ A web UI for the **USPTO Open Data Portal** Patent File Wrapper API
 - a serverless **proxy** that keeps your API key private and avoids browser CORS,
 - a **scheduled cron job** (run via cron-job.org) that watches the patent
   applications you track and flags newly filed documents,
-- optional **email digests** of new filings (via Resend),
+- a **reexamination determinations watcher** across all ex parte reexams,
+- optional **email digests** of new filings and reexam determinations (via Resend),
 - in-app **document access** (download the actual PDF/XML/DOCX of any filing).
 
 ```
 uspto-search/
-├── index.html                  # search UI + "Tracked Proceedings" panel (served at /)
+├── uspto-search.html           # search UI + "Tracked Proceedings" (served at /uspto-search)
+├── privacy.html                # privacy policy (served at /privacy)
+├── reexam.html                 # reexam determinations list (served at /reexam)
 ├── api/
 │   ├── search.js               # POST  → /applications/search
 │   ├── application.js          # GET   → /applications/{appNum}[/{section}]
 │   ├── document.js             # GET   → streams a document PDF/XML/DOCX
 │   ├── watchlist.js            # GET/POST/DELETE tracked proceedings + findings
+│   ├── reexam.js               # GET   → recent reexam determinations
 │   ├── test-email.js           # POST  → send a test digest email
 │   └── cron/
-│       └── check-filings.js    # daily diff job (secured by CRON_SECRET)
+│       ├── check-filings.js    # tracked-application filings scan
+│       └── reexam-scan.js      # reexam determinations scan
 ├── lib/
-│   ├── uspto.js                # USPTO API helper
+│   ├── uspto.js                # USPTO API helpers
 │   ├── db.js                   # Postgres helpers + schema
-│   └── email.js                # Resend digest (optional)
+│   └── email.js                # Resend digests (optional)
 ├── vercel.json                 # cleanUrls + root redirect
 ├── package.json
 └── .env.example
@@ -61,6 +66,7 @@ In **Project → Settings → Environment Variables**:
 | `RESEND_API_KEY` | optional | Enables email digests (see below) |
 | `DIGEST_FROM` | optional | Verified sender, e.g. `USPTO Watch <alerts@yourdomain.com>` |
 | `DIGEST_TO` | optional | Recipient for the **"Send test email"** button |
+| `REEXAM_DIGEST_TO` | optional | Recipient(s) for the daily reexam-determinations digest (falls back to `DIGEST_TO`) |
 | `APP_BASE_URL` | optional | Overrides the auto-detected site URL in email links |
 
 > After adding/changing env vars, **redeploy** so the functions pick them up.
@@ -154,6 +160,39 @@ If the email vars are unset, the cron simply skips sending and you still get the
 in-app "New Filings" panel. The cron's JSON response includes an `emails` array
 (the per-recipient-set sends) so you can confirm it from the manual `curl` test
 above.
+
+## Reexamination determinations watcher (all ex parte reexams)
+
+A separate subsystem watches **all** ex parte reexaminations (90/ series) for new
+**determinations** — orders granting (`RXREXO`) or denying (`RXREXD`) reexam —
+without you naming specific proceedings. Endpoint: **`/api/cron/reexam-scan`**.
+
+Each run:
+1. **Once/day:** enumerates ex parte reexams filed in the last 6 months into a
+   watch table (and prunes ones older than ~9 months — past the determination window).
+2. **Every run:** scans the next chunk (~25, least-recently-scanned first) of
+   not-yet-determined reexams for `RXREXO`/`RXREXD` documents; records new ones.
+   A reexam drops out of the scan once its determination is found.
+3. **Once/day:** emails a digest of newly found determinations to
+   `REEXAM_DIGEST_TO` (or `DIGEST_TO`). No email on days with none.
+
+Results are also listed at **`/reexam`** (linked in the footer).
+
+**Schedule it** with a second cron-job.org job (same as the filings one, different URL):
+- **URL:** `https://andy-ong.com/api/cron/reexam-scan`
+- **Schedule:** every hour · **Method:** GET
+- **Header:** `Authorization: Bearer <CRON_SECRET>`
+
+The work is chunked across the hourly runs (rolling cursor) so each invocation
+stays within Vercel Hobby limits. Test manually:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://andy-ong.com/api/cron/reexam-scan
+```
+
+> Reexams aren't tagged by a "type" field in ODP — they're identified by
+> control-number prefix (`applicationNumberText:90*`). Coverage and the exact
+> determination codes (`RXREXO`/`RXREXD`) were confirmed against live data.
 
 ## How document access works
 

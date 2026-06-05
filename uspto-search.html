@@ -22,8 +22,15 @@
       display: flex;
       align-items: center;
       gap: 16px;
+      flex-wrap: wrap;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
+    .header-nav { margin-left: auto; }
+    .header-nav a {
+      color: #fff; text-decoration: none; font-size: 0.85rem; font-weight: 600;
+      background: rgba(255,255,255,0.15); padding: 8px 14px; border-radius: 6px; white-space: nowrap;
+    }
+    .header-nav a:hover { background: rgba(255,255,255,0.28); }
 
     header svg { flex-shrink: 0; }
     header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
@@ -237,6 +244,9 @@
     <h1 onclick="goHome()" style="cursor:pointer" title="Go to home page">USPTO Patent File Wrapper Search - Created by A. Ong</h1>
     <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
   </div>
+  <nav class="header-nav">
+    <a href="/reexam">Reexam Determinations</a>
+  </nav>
 </header>
 
 <div class="container">

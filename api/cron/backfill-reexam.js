@@ -4,7 +4,7 @@
 // Processes as many as it can within a time budget, then returns how many remain.
 // If "done" is false, call it again until done is true.
 
-import { getAppsMissingDeterminationMeta, updateDeterminationMeta } from '../../lib/db.js';
+import { getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta } from '../../lib/db.js';
 import { fetchMetaData } from '../../lib/uspto.js';
 
 export const config = { maxDuration: 60 };
@@ -22,6 +22,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?reset=1 re-pools rows that previously ended up blank, so they get retried.
+    let reset = 0;
+    if (req.query && req.query.reset === '1') reset = await resetEmptyDeterminationMeta();
+
     const deadline = Date.now() + TIME_BUDGET_MS;
     let processed = 0;
 
@@ -38,7 +42,7 @@ export default async function handler(req, res) {
     }
 
     const remaining = (await getAppsMissingDeterminationMeta(100000)).length;
-    res.status(200).json({ ok: true, processed, remaining, done: remaining === 0 });
+    res.status(200).json({ ok: true, reset, processed, remaining, done: remaining === 0 });
   } catch (err) {
     res.status(500).json({ error: 'Backfill failed.', detail: String(err.message || err) });
   }

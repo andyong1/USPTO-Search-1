@@ -17,7 +17,7 @@ import {
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
   reexamCounts,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { sendReexamDigest } from '../../lib/email.js';
 
 export const config = { maxDuration: 60 };
@@ -60,20 +60,30 @@ async function enumerate() {
 
 async function scanOne(appNum) {
   const docs = await fetchDocuments(appNum);
-  let found = 0;
-  for (const d of docs) {
-    if (DET_CODES[d.documentCode]) {
-      const isNew = await recordDetermination({
-        applicationNumber: appNum,
-        documentIdentifier: d.documentIdentifier,
-        code: d.documentCode,
-        type: DET_CODES[d.documentCode],
-        officialDate: d.officialDate,
-      });
-      if (isNew) found++;
-    }
+  const detDocs = docs.filter((d) => DET_CODES[d.documentCode]);
+
+  if (!detDocs.length) {
+    await markReexamScanned(appNum, false);
+    return 0;
   }
-  await markReexamScanned(appNum, found > 0);
+
+  // A determination exists — fetch metadata once for group art unit + examiner.
+  const meta = await fetchMetaData(appNum).catch(() => ({}));
+
+  let found = 0;
+  for (const d of detDocs) {
+    const isNew = await recordDetermination({
+      applicationNumber: appNum,
+      documentIdentifier: d.documentIdentifier,
+      code: d.documentCode,
+      type: DET_CODES[d.documentCode],
+      officialDate: d.officialDate,
+      groupArtUnit: meta.groupArtUnit,
+      examiner: meta.examiner,
+    });
+    if (isNew) found++;
+  }
+  await markReexamScanned(appNum, true);
   return found;
 }
 

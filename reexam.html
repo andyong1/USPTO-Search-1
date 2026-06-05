@@ -135,11 +135,13 @@ function statsHtml(label, items) {
         </td>
         <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span></td>
         <td>${fmtDate(d.official_date)}</td>
+        <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
+        <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
         <td style="white-space:nowrap">${pdf}</td>
       </tr>`;
     }).join('');
     body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Determination</th><th>Date</th><th>Determination PDF</th></tr></thead>
+      <thead><tr><th>Control No.</th><th>Determination</th><th>Date</th><th>Examiner Name</th><th>Group Art Unit</th><th>Determination PDF</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';

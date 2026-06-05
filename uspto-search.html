@@ -1388,30 +1388,40 @@ function attorneyText(md) {
   return md.attorneyName || '';
 }
 
-// Generic renderer for arbitrary section shapes: shows top-level scalar fields
-// as a grid, and every array of records as its own titled table.
+// Generic renderer for arbitrary section shapes. Recursively walks the record:
+// every array-of-records becomes its own titled table (at any nesting depth),
+// and scalar leaf fields are collected into a key/value grid.
 function genericSectionHtml(data) {
   const rec = unwrapRecord(data);
   if (!rec || typeof rec !== 'object') return '<span class="hint">No data available for this section.</span>';
 
-  const scalars = [];
-  const arrays = [];
-  for (const [k, v] of Object.entries(rec)) {
-    if (Array.isArray(v)) { if (v.length) arrays.push([k, v]); }
-    else if (v && typeof v === 'object') {
-      for (const [k2, v2] of Object.entries(v)) {
-        if (v2 != null && typeof v2 !== 'object') scalars.push([`${humanize(k)} ${humanize(k2)}`, v2]);
+  const scalars = []; // [label, value]
+  const tables = [];  // [label, arrayOfRecords]
+
+  const walk = (obj, prefix) => {
+    for (const [k, v] of Object.entries(obj)) {
+      if (v == null || v === '') continue;
+      const label = prefix ? `${prefix} ${humanize(k)}` : humanize(k);
+      if (Array.isArray(v)) {
+        if (!v.length) continue;
+        if (typeof v[0] === 'object' && v[0] !== null) tables.push([label, v]);
+        else scalars.push([label, v.join('; ')]); // array of scalars
+      } else if (typeof v === 'object') {
+        walk(v, label); // recurse into nested objects
+      } else {
+        scalars.push([label, v]);
       }
-    } else if (v != null && v !== '') scalars.push([humanize(k), v]);
-  }
+    }
+  };
+  walk(rec, '');
 
   let html = '';
   if (scalars.length) {
     html += `<div class="detail-meta">${scalars.map(([k, v]) =>
-      `<div class="kv"><span>${esc(k)}</span>${esc(String(v))}</div>`).join('')}</div>`;
+      `<div class="kv"><span>${esc(k)}</span>${esc(formatCell(v, k))}</div>`).join('')}</div>`;
   }
-  for (const [k, arr] of arrays) {
-    html += `<div class="detail-section-title">${esc(humanize(k))} (${arr.length})</div>${genericTable(arr)}`;
+  for (const [k, arr] of tables) {
+    html += `<div class="detail-section-title">${esc(k)} (${arr.length})</div>${genericTable(arr)}`;
   }
   return html || '<span class="hint">No data available for this section.</span>';
 }

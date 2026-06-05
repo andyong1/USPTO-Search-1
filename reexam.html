@@ -66,6 +66,7 @@
     <div id="stats30"></div>
     <div id="stats60"></div>
     <div id="stats-au"></div>
+    <div id="stats-examiner"></div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -125,6 +126,28 @@ function statsByArtUnitHtml(list) {
     <div class="table-wrap" style="margin-bottom:18px"><table>
       <thead><tr><th>Group Art Unit</th><th>Ordered</th><th>Denied</th><th>Total</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
+}
+
+// "By Examiner" — a dropdown; pick an examiner to see their ordered/denied stats.
+function buildExaminerSection(list) {
+  const el = document.getElementById('stats-examiner');
+  const names = [...new Set(list.map((d) => (d.examiner_name || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  if (!names.length) { el.innerHTML = ''; return; }
+
+  const options = ['<option value="">Select an examiner…</option>']
+    .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
+  el.innerHTML = `<div class="stats-title">By Examiner</div>
+    <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;max-width:360px;margin-bottom:12px;width:100%">${options}</select>
+    <div id="examiner-stats"></div>`;
+
+  document.getElementById('examiner-select').addEventListener('change', (e) => {
+    const name = e.target.value;
+    const target = document.getElementById('examiner-stats');
+    if (!name) { target.innerHTML = ''; return; }
+    const subset = list.filter((d) => (d.examiner_name || '').trim() === name);
+    target.innerHTML = statsHtml('Examiner: ' + name, subset);
+  });
 }
 
 // ── Sortable determinations table ──────────────────────────────────
@@ -214,6 +237,7 @@ function renderTable() {
     document.getElementById('stats60').innerHTML =
       statsHtml('Last 60 days', list.filter((d) => withinDays(d.official_date, 60)));
     document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(list);
+    buildExaminerSection(list);
 
     allDeterminations = list;
     renderTable();

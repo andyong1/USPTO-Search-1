@@ -33,6 +33,8 @@
     .denied { background: #fed7d7; color: #c53030; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
     .stat { flex: 1; min-width: 150px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
     .stat-num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -63,6 +65,7 @@
     <div id="stats"></div>
     <div id="stats30"></div>
     <div id="stats60"></div>
+    <div id="stats-au"></div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -98,6 +101,86 @@ function statsHtml(label, items) {
     </div>`;
 }
 
+// Ordered/denied breakdown grouped by group art unit.
+function statsByArtUnitHtml(list) {
+  const map = new Map();
+  for (const d of list) {
+    const au = (d.group_art_unit && String(d.group_art_unit).trim()) || '(Unknown)';
+    if (!map.has(au)) map.set(au, { ordered: 0, denied: 0 });
+    const e = map.get(au);
+    if (/denied/i.test(d.determination_type || '')) e.denied++; else e.ordered++;
+  }
+  const entries = [...map.entries()].sort((a, b) => {
+    if (a[0] === '(Unknown)') return 1;
+    if (b[0] === '(Unknown)') return -1;
+    return a[0].localeCompare(b[0], undefined, { numeric: true });
+  });
+  if (!entries.length) return '';
+  const rows = entries.map(([au, e]) =>
+    `<tr><td>${esc(au)}</td><td>${e.ordered}</td><td>${e.denied}</td><td>${e.ordered + e.denied}</td></tr>`).join('');
+  return `<div class="stats-title">By Group Art Unit</div>
+    <div class="table-wrap" style="margin-bottom:18px"><table>
+      <thead><tr><th>Group Art Unit</th><th>Ordered</th><th>Denied</th><th>Total</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+}
+
+// ── Sortable determinations table ──────────────────────────────────
+let allDeterminations = [];
+let tableSort = { key: 'official_date', dir: 'desc' };
+
+function sortReexam(key) {
+  if (tableSort.key === key) tableSort.dir = tableSort.dir === 'asc' ? 'desc' : 'asc';
+  else tableSort = { key, dir: key === 'official_date' ? 'desc' : 'asc' };
+  renderTable();
+}
+
+function renderTable() {
+  const body = document.getElementById('body');
+  const { key, dir } = tableSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  const items = [...allDeterminations].sort((a, b) => {
+    if (key === 'official_date') {
+      const av = parseDate(a.official_date), bv = parseDate(b.official_date);
+      return sign * ((isNaN(av) ? -Infinity : av) - (isNaN(bv) ? -Infinity : bv));
+    }
+    return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
+  const arrow = (k) => (tableSort.key === k ? (tableSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  const rows = items.map((d) => {
+    const num = d.application_number || '';
+    const docId = d.document_identifier || '';
+    const denied = /denied/i.test(d.determination_type || '');
+    let pdf = '<span class="ext">—</span>';
+    if (docId) {
+      const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+      pdf = `<a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View PDF ↗</a>
+             <a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
+    }
+    return `<tr>
+      <td>
+        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
+        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
+      </td>
+      <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span></td>
+      <td>${fmtDate(d.official_date)}</td>
+      <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
+      <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
+      <td style="white-space:nowrap">${pdf}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th class="sortable" onclick="sortReexam('application_number')">Control No.${arrow('application_number')}</th>
+      <th>Determination</th>
+      <th class="sortable" onclick="sortReexam('official_date')">Date${arrow('official_date')}</th>
+      <th class="sortable" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
+      <th class="sortable" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
+      <th>Determination PDF</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 (async () => {
   const body = document.getElementById('body');
   try {
@@ -121,38 +204,16 @@ function statsHtml(label, items) {
         'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry).';
     }
 
-    // Statistics: overall (all collected) and last 30 days, by official_date.
+    // Statistics: overall (all collected), last 30/60 days, and by group art unit.
     document.getElementById('stats').innerHTML = statsHtml('Overall (all collected)', list);
     document.getElementById('stats30').innerHTML =
       statsHtml('Last 30 days', list.filter((d) => withinDays(d.official_date, 30)));
     document.getElementById('stats60').innerHTML =
       statsHtml('Last 60 days', list.filter((d) => withinDays(d.official_date, 60)));
+    document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(list);
 
-    const rows = list.map((d) => {
-      const num = d.application_number || '';
-      const docId = d.document_identifier || '';
-      const denied = /denied/i.test(d.determination_type || '');
-      let pdf = '<span class="ext">—</span>';
-      if (docId) {
-        const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-        pdf = `<a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View PDF ↗</a>
-               <a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
-      }
-      return `<tr>
-        <td>
-          <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
-          <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
-        </td>
-        <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span></td>
-        <td>${fmtDate(d.official_date)}</td>
-        <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
-        <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
-        <td style="white-space:nowrap">${pdf}</td>
-      </tr>`;
-    }).join('');
-    body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Determination</th><th>Date</th><th>Examiner Name</th><th>Group Art Unit</th><th>Determination PDF</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+    allDeterminations = list;
+    renderTable();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';
   }

@@ -15,6 +15,7 @@ import {
   reexamState, setReexamEnumerated, setReexamDigestSent,
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
+  reexamCounts,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments } from '../../lib/uspto.js';
 import { sendReexamDigest } from '../../lib/email.js';
@@ -120,11 +121,15 @@ export default async function handler(req, res) {
       await setReexamDigestSent();
     }
 
+    // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
+    const counts = await reexamCounts();
+
     res.status(200).json({
       ok: true,
       enumerated,
       scanned: batch.length,
       newDeterminations,
+      counts, // { total, remaining, determined }
       digest,
       errors,
     });

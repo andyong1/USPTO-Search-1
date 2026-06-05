@@ -61,6 +61,7 @@
     <div class="sub">Orders granting (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
     <div id="stats"></div>
     <div id="stats30"></div>
+    <div id="stats60"></div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -114,6 +115,8 @@ function statsHtml(label, items) {
     document.getElementById('stats').innerHTML = statsHtml('Overall (all collected)', list);
     document.getElementById('stats30').innerHTML =
       statsHtml('Last 30 days', list.filter((d) => withinDays(d.official_date, 30)));
+    document.getElementById('stats60').innerHTML =
+      statsHtml('Last 60 days', list.filter((d) => withinDays(d.official_date, 60)));
 
     const rows = list.map((d) => {
       const num = d.application_number || '';

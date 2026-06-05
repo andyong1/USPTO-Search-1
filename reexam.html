@@ -32,6 +32,7 @@
     .ordered { background: #c6f6d5; color: #276749; }
     .denied { background: #fed7d7; color: #c53030; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
+    .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
     .stat { flex: 1; min-width: 150px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
     .stat-num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -59,6 +60,7 @@
     <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
     <div class="sub">Orders granting (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
     <div id="stats"></div>
+    <div id="stats30"></div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -71,6 +73,27 @@ function fmtDate(raw) {
   if (!raw) return '—';
   const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/);
   return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw);
+}
+function parseDate(raw) {
+  const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`).getTime() : NaN;
+}
+function withinDays(raw, days) {
+  const t = parseDate(raw);
+  if (isNaN(t)) return false;
+  const now = Date.now();
+  return t <= now + 86400000 && (now - t) <= days * 86400000;
+}
+function statsHtml(label, items) {
+  const total = items.length;
+  const ordered = items.filter((d) => /ordered/i.test(d.determination_type || '')).length;
+  const denied = items.filter((d) => /denied/i.test(d.determination_type || '')).length;
+  const pct = (n) => (total ? (n / total * 100).toFixed(1) : '0.0');
+  return `<div class="stats-title">${esc(label)} (Total: ${total})</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num" style="color:#276749">${ordered}</div><div class="stat-label">Ordered · ${pct(ordered)}%</div></div>
+      <div class="stat"><div class="stat-num" style="color:#c53030">${denied}</div><div class="stat-label">Denied · ${pct(denied)}%</div></div>
+    </div>`;
 }
 
 (async () => {
@@ -87,15 +110,10 @@ function fmtDate(raw) {
       return;
     }
 
-    // Statistics: ordered / denied counts and their share of the total collected.
-    const total = list.length;
-    const ordered = list.filter((d) => /ordered/i.test(d.determination_type || '')).length;
-    const denied = list.filter((d) => /denied/i.test(d.determination_type || '')).length;
-    const pct = (n) => (total ? (n / total * 100).toFixed(1) : '0.0');
-    document.getElementById('stats').innerHTML = `<div class="stats">
-      <div class="stat"><div class="stat-num" style="color:#276749">${ordered}</div><div class="stat-label">Ordered · ${pct(ordered)}%</div></div>
-      <div class="stat"><div class="stat-num" style="color:#c53030">${denied}</div><div class="stat-label">Denied · ${pct(denied)}%</div></div>
-    </div>`;
+    // Statistics: overall (all collected) and last 30 days, by official_date.
+    document.getElementById('stats').innerHTML = statsHtml('Overall (all collected)', list);
+    document.getElementById('stats30').innerHTML =
+      statsHtml('Last 30 days', list.filter((d) => withinDays(d.official_date, 30)));
 
     const rows = list.map((d) => {
       const num = d.application_number || '';

@@ -1252,14 +1252,12 @@ function renderDocuments(data, fallbackApp) {
 // first time it is opened, then caches the result.
 const DETAIL_TABS = [
   { id: 'overview',         label: 'Overview' },
-  { id: 'attorney',         label: 'Attorney / Address', section: 'attorney' },
   { id: 'documents',        label: 'Documents',        section: 'documents' },
+  { id: 'transactions',     label: 'Transactions',     section: 'transactions' },
   { id: 'continuity',       label: 'Continuity',       section: 'continuity' },
   { id: 'foreign-priority', label: 'Foreign Priority', section: 'foreign-priority' },
+  { id: 'attorney',         label: 'Attorney / Address', section: 'attorney' },
   { id: 'assignment',       label: 'Assignments',      section: 'assignment' },
-  { id: 'pta',              label: 'Patent Term Adj.', section: 'adjustment' },
-  { id: 'transactions',     label: 'Transactions',     section: 'transactions' },
-  { id: 'associated',       label: 'Associated Docs',  section: 'associated-documents' },
 ];
 
 let detailAppNum = '';

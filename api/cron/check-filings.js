@@ -16,11 +16,12 @@ import { sendDigestTo, parseRecipients } from '../../lib/email.js';
 export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.authorization || '';
-
-  // If CRON_SECRET is set, require it so only your scheduler can trigger this.
-  if (secret && auth !== `Bearer ${secret}`) {
+  // Accept the secret from the Authorization header (with or without "Bearer ")
+  // or from a ?key= query param. Whitespace is trimmed. Enforced only if set.
+  const secret = (process.env.CRON_SECRET || '').trim();
+  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    || (req.query && req.query.key) || '').trim();
+  if (secret && provided !== secret) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

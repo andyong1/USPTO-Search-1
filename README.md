@@ -107,10 +107,13 @@ it hourly for free, use [cron-job.org](https://cron-job.org):
 3. **URL:** `https://andy-ong.com/api/cron/check-filings`
 4. **Schedule:** Every hour (e.g. "Every 1 hour", or pattern: minute `0`, every hour).
 5. **Request method:** GET
-6. Under **Advanced → Headers**, add one header:
-   - **Name:** `Authorization`
-   - **Value:** `Bearer <your CRON_SECRET>`  *(the same value set in Vercel's env vars)*
+6. Authenticate one of two ways (the secret must equal the `CRON_SECRET` env var):
+   - **Header (preferred):** under **Advanced → Headers**, add `Authorization` = `Bearer <CRON_SECRET>` (the value may also be just `<CRON_SECRET>`), **or**
+   - **URL key (simplest):** append `?key=<CRON_SECRET>` to the URL, e.g. `https://andy-ong.com/api/cron/check-filings?key=<CRON_SECRET>` — no header needed.
 7. Save. (Optional: enable failure notifications so you're told if a run errors.)
+
+> A **401 Unauthorized** means the secret didn't match. Check for typos/trailing
+> spaces in either place, or just use the `?key=` URL form to rule out header issues.
 
 > There is **no** `crons` entry in `vercel.json` — scheduling is handled entirely
 > by cron-job.org.
@@ -179,9 +182,9 @@ Each run:
 Results are also listed at **`/reexam`** (linked in the footer).
 
 **Schedule it** with a second cron-job.org job (same as the filings one, different URL):
-- **URL:** `https://andy-ong.com/api/cron/reexam-scan`
+- **URL:** `https://andy-ong.com/api/cron/reexam-scan` (or `…/reexam-scan?key=<CRON_SECRET>`)
 - **Schedule:** every hour · **Method:** GET
-- **Header:** `Authorization: Bearer <CRON_SECRET>`
+- **Auth:** header `Authorization: Bearer <CRON_SECRET>` **or** the `?key=` URL form above
 
 The work is chunked across the hourly runs (rolling cursor) so each invocation
 stays within Vercel Hobby limits. Test manually:

@@ -77,8 +77,12 @@ async function scanOne(appNum) {
 }
 
 export default async function handler(req, res) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && (req.headers.authorization || '') !== `Bearer ${secret}`) {
+  // Accept the secret from the Authorization header (with or without "Bearer ")
+  // or from a ?key= query param. Whitespace is trimmed. Enforced only if set.
+  const secret = (process.env.CRON_SECRET || '').trim();
+  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
+    || (req.query && req.query.key) || '').trim();
+  if (secret && provided !== secret) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }

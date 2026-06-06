@@ -5,7 +5,7 @@
 
 import {
   getReexamsForPreorderBackfill, markPreorderChecked, recordPreorder,
-  updatePreorderPetition, countReexamsForPreorderBackfill, PREORDER_CUTOFF,
+  updatePreorderPetition, countReexamsForPreorderBackfill, resetPreorderChecked, PREORDER_CUTOFF,
 } from '../../lib/db.js';
 import { fetchDocuments, analyzePetition } from '../../lib/uspto.js';
 
@@ -25,6 +25,10 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?reset=1 re-checks all post-cutoff reexams (e.g., to pick up granted decisions).
+    let reset = 0;
+    if (req.query && req.query.reset === '1') reset = await resetPreorderChecked();
+
     const deadline = Date.now() + TIME_BUDGET_MS;
     let processed = 0, found = 0;
 
@@ -56,7 +60,7 @@ export default async function handler(req, res) {
     }
 
     const remaining = await countReexamsForPreorderBackfill();
-    res.status(200).json({ ok: true, cutoff: PREORDER_CUTOFF, processed, found, remaining, done: remaining === 0 });
+    res.status(200).json({ ok: true, cutoff: PREORDER_CUTOFF, reset, processed, found, remaining, done: remaining === 0 });
   } catch (err) {
     res.status(500).json({ error: 'Pre-order backfill failed.', detail: String(err.message || err) });
   }

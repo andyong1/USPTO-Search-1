@@ -35,6 +35,13 @@
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { background: #e2e8f0; }
+    .chart-wrap { position: relative; }
+    .chart-tip {
+      position: absolute; display: none; background: #1a3a6b; color: #fff;
+      padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45;
+      pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .chart-wrap svg .pt { cursor: pointer; }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
     .stat { flex: 1; min-width: 150px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
     .stat-num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -199,8 +206,14 @@ function grantRateLineSvg(data) {
   const dots = data.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(rate(d))}" r="3.5" fill="#1a3a6b"/>`).join('');
   const vals = data.map((d, i) => `<text x="${px(i)}" y="${yfor(rate(d)) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${rate(d).toFixed(0)}%</text>`).join('');
   const xlabels = data.map((d, i) => `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(monthLabel(d.month))}</text>`).join('');
+  // Transparent larger hit-circles for easy hover; carry the counts as data-*.
+  const hits = data.map((d, i) => {
+    const t = d.ordered + d.denied;
+    return `<circle class="pt" cx="${px(i)}" cy="${yfor(rate(d))}" r="14" fill="transparent"`
+      + ` data-m="${esc(monthLabel(d.month))}" data-o="${d.ordered}" data-d="${d.denied}" data-t="${t}" data-r="${rate(d).toFixed(0)}"></circle>`;
+  }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}`
-    + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
+    + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}${hits}</svg>`;
 }
 
 function buildTrend(list) {
@@ -208,7 +221,26 @@ function buildTrend(list) {
   const data = monthlyData(list);
   if (!data.length) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="stats-title">Monthly Grant Rate (% of determinations ordered)</div>
-    ${grantRateLineSvg(data)}`;
+    <div class="chart-wrap">${grantRateLineSvg(data)}<div class="chart-tip"></div></div>`;
+
+  const wrap = el.querySelector('.chart-wrap');
+  const tip = wrap.querySelector('.chart-tip');
+  wrap.addEventListener('mousemove', (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('pt')) {
+      const ds = t.dataset;
+      tip.innerHTML = `<strong>${esc(ds.m)}</strong><br>Ordered: ${ds.o}<br>Denied: ${ds.d}<br>Total: ${ds.t}<br>Grant rate: ${ds.r}%`;
+      tip.style.display = 'block';
+      const r = wrap.getBoundingClientRect();
+      let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;
+      if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 12;
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    } else {
+      tip.style.display = 'none';
+    }
+  });
+  wrap.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 }
 
 // ── Pendency: filing → determination (#2) ──────────────────────────

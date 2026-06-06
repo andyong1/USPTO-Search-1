@@ -216,7 +216,8 @@ function grantRateLineSvg(data) {
 
 function buildTrend(list) {
   const el = document.getElementById('stats-trend');
-  const data = monthlyData(list);
+  // Start the graph at January 2026 (Dec 2025 has only a single entry).
+  const data = monthlyData(list).filter((m) => m.month >= '2026-01');
   if (!data.length) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="stats-title">Monthly Grant Rate (% of determinations ordered)</div>
     <div class="chart-wrap">${grantRateLineSvg(data)}<div class="chart-tip"></div></div>`;

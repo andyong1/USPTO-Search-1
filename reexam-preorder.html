@@ -35,6 +35,11 @@
     .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge.granted { background: #c6f6d5; color: #276749; }
+    .badge.dismissed { background: #fed7d7; color: #c53030; }
+    .badge.other { background: #e2e8f0; color: #4a5568; }
+    .doclinks { margin-top: 3px; font-size: 0.8rem; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
   </style>
@@ -99,27 +104,36 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }
+    const docLinks = (num, docId) => {
+      if (!docId) return '';
+      const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+      return `<div class="doclinks"><a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View ↗</a>`
+        + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
+    };
+    const dash = '<span class="ext">—</span>';
+
     const rows = subs.map((s) => {
       const num = s.application_number || '';
-      const docId = s.document_identifier || '';
-      let pdf = '<span class="ext">—</span>';
-      if (docId) {
-        const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-        pdf = `<a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View PDF ↗</a>
-               <a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
+      const preCell = `${fmtDate(s.official_date)}${docLinks(num, s.document_identifier)}`;
+      const petCell = s.petition_doc_id ? `${fmtDate(s.petition_date)}${docLinks(num, s.petition_doc_id)}` : dash;
+      let decCell = dash;
+      if (s.decision_doc_id) {
+        const o = s.decision_outcome || 'other';
+        const lbl = o === 'granted' ? 'Granted' : (o === 'dismissed' ? 'Dismissed' : 'Decided');
+        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id)}`;
       }
       return `<tr>
         <td>
           <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
           <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
         </td>
-        <td>${fmtDate(s.filing_date)}</td>
-        <td>${fmtDate(s.official_date)}</td>
-        <td style="white-space:nowrap">${pdf}</td>
+        <td>${preCell}</td>
+        <td>${petCell}</td>
+        <td>${decCell}</td>
       </tr>`;
     }).join('');
     body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Reexam Filed</th><th>Submission Date</th><th>Pre-Order PDF</th></tr></thead>
+      <thead><tr><th>Control No.</th><th>Pre-Order SNQ Submission Date</th><th>Requestor Petition Date</th><th>Petition Decision Date</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load submissions (' + esc(e.message) + ').</div>';

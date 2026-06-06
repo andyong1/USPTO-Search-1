@@ -5,9 +5,9 @@
 
 import {
   getReexamsForPreorderBackfill, markPreorderChecked, recordPreorder,
-  countReexamsForPreorderBackfill, PREORDER_CUTOFF,
+  updatePreorderPetition, countReexamsForPreorderBackfill, PREORDER_CUTOFF,
 } from '../../lib/db.js';
-import { fetchDocuments } from '../../lib/uspto.js';
+import { fetchDocuments, analyzePetition } from '../../lib/uspto.js';
 
 export const config = { maxDuration: 60 };
 
@@ -35,7 +35,8 @@ export default async function handler(req, res) {
         const appNum = row.application_number;
         try {
           const docs = await fetchDocuments(appNum);
-          for (const d of docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE)) {
+          const preDocs = docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE);
+          for (const d of preDocs) {
             const isNew = await recordPreorder({
               applicationNumber: appNum,
               documentIdentifier: d.documentIdentifier,
@@ -43,6 +44,10 @@ export default async function handler(req, res) {
               filingDate: row.filing_date,
             });
             if (isNew) found++;
+          }
+          if (preDocs.length) {
+            const { petition, decision } = analyzePetition(docs, preDocs[0].officialDate);
+            await updatePreorderPetition(appNum, petition, decision);
           }
         } catch { /* leave unmarked; retried next run */ return; }
         await markPreorderChecked(appNum);

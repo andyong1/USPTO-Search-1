@@ -16,9 +16,9 @@ import {
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
-  recordPreorder, PREORDER_CUTOFF,
+  recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest } from '../../lib/email.js';
 
 export const config = { maxDuration: 60 };
@@ -63,10 +63,16 @@ async function enumerate() {
 async function scanOne(appNum, filingDate) {
   const docs = await fetchDocuments(appNum);
 
-  // Patent-owner pre-order SNQ submissions (for reexams filed on/after cutoff).
+  // Patent-owner pre-order SNQ submissions (for reexams filed on/after cutoff),
+  // plus any requestor petition within 20 days and its decision.
   if (filingDate && filingDate >= PREORDER_CUTOFF) {
-    for (const d of docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE)) {
+    const preDocs = docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE);
+    for (const d of preDocs) {
       await recordPreorder({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, officialDate: d.officialDate, filingDate });
+    }
+    if (preDocs.length) {
+      const { petition, decision } = analyzePetition(docs, preDocs[0].officialDate);
+      await updatePreorderPetition(appNum, petition, decision);
     }
   }
 

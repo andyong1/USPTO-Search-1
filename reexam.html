@@ -181,57 +181,34 @@ function monthlyData(list) {
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, v]) => ({ month, ...v }));
 }
 
-function chartScaffold(data) {
-  const W = 720, H = 280, mL = 42, mR = 12, mT = 12, mB = 42;
+// Line graph of the monthly grant rate: % of that month's determinations ordered.
+function grantRateLineSvg(data) {
+  const W = 720, H = 280, mL = 46, mR = 16, mT = 16, mB = 42;
   const pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
-  const maxV = Math.max(1, ...data.flatMap((d) => [d.ordered, d.denied]));
-  const yMax = Math.max(5, Math.ceil(maxV / 5) * 5);
-  const yfor = (v) => yBase - (v / yMax) * ph;
+  const yfor = (v) => yBase - (v / 100) * ph;
   let grid = '';
   for (let i = 0; i <= 4; i++) {
-    const v = yMax * i / 4, y = yfor(v);
+    const v = 25 * i, y = yfor(v);
     grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/>`
-      + `<text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${Math.round(v)}</text>`;
+      + `<text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}%</text>`;
   }
-  return { W, H, mL, mR, mT, mB, pw, ph, yBase, yMax, yfor, grid };
-}
-
-function barChartSvg(data) {
-  const s = chartScaffold(data);
-  const n = data.length, groupW = s.pw / n, barW = Math.min(26, groupW * 0.34);
-  let bars = '', labels = '';
-  data.forEach((d, i) => {
-    const gx = s.mL + groupW * i + groupW / 2;
-    bars += `<rect x="${gx - barW - 2}" y="${s.yfor(d.ordered)}" width="${barW}" height="${s.yBase - s.yfor(d.ordered)}" fill="#276749"/>`;
-    bars += `<rect x="${gx + 2}" y="${s.yfor(d.denied)}" width="${barW}" height="${s.yBase - s.yfor(d.denied)}" fill="#c53030"/>`;
-    labels += `<text x="${gx}" y="${s.H - s.mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(monthLabel(d.month))}</text>`;
-  });
-  return `<svg viewBox="0 0 ${s.W} ${s.H}" style="width:100%;height:auto">${s.grid}${bars}${labels}</svg>`;
-}
-
-function lineChartSvg(data) {
-  const s = chartScaffold(data);
   const n = data.length;
-  const px = (i) => s.mL + (n > 1 ? (s.pw / (n - 1)) * i : s.pw / 2);
-  const series = (key, color) => {
-    const pts = data.map((d, i) => `${px(i)},${s.yfor(d[key])}`).join(' ');
-    const dots = data.map((d, i) => `<circle cx="${px(i)}" cy="${s.yfor(d[key])}" r="3" fill="${color}"/>`).join('');
-    return `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2"/>${dots}`;
-  };
-  const labels = data.map((d, i) => `<text x="${px(i)}" y="${s.H - s.mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(monthLabel(d.month))}</text>`).join('');
-  return `<svg viewBox="0 0 ${s.W} ${s.H}" style="width:100%;height:auto">${s.grid}${series('ordered', '#276749')}${series('denied', '#c53030')}${labels}</svg>`;
+  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
+  const rate = (d) => { const t = d.ordered + d.denied; return t ? (d.ordered / t * 100) : 0; };
+  const pts = data.map((d, i) => `${px(i)},${yfor(rate(d))}`).join(' ');
+  const dots = data.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(rate(d))}" r="3.5" fill="#1a3a6b"/>`).join('');
+  const vals = data.map((d, i) => `<text x="${px(i)}" y="${yfor(rate(d)) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${rate(d).toFixed(0)}%</text>`).join('');
+  const xlabels = data.map((d, i) => `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(monthLabel(d.month))}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}`
+    + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
 }
 
 function buildTrend(list) {
   const el = document.getElementById('stats-trend');
   const data = monthlyData(list);
   if (!data.length) { el.innerHTML = ''; return; }
-  const legend = `<div style="font-size:0.8rem;color:#4a5568;margin:4px 0 2px">
-    <span style="display:inline-block;width:11px;height:11px;background:#276749;border-radius:2px;margin-right:5px;vertical-align:middle"></span>Ordered
-    <span style="display:inline-block;width:11px;height:11px;background:#c53030;border-radius:2px;margin:0 5px 0 16px;vertical-align:middle"></span>Denied</div>`;
-  el.innerHTML = `<div class="stats-title">Monthly Trend (by determination month)</div>${legend}
-    <div style="font-size:0.78rem;color:#718096;margin:10px 0 2px;font-weight:600">Bar chart</div>${barChartSvg(data)}
-    <div style="font-size:0.78rem;color:#718096;margin:16px 0 2px;font-weight:600">Line graph</div>${lineChartSvg(data)}`;
+  el.innerHTML = `<div class="stats-title">Monthly Grant Rate (% of determinations ordered)</div>
+    ${grantRateLineSvg(data)}`;
 }
 
 // ── Pendency: filing → determination (#2) ──────────────────────────

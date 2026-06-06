@@ -42,6 +42,19 @@
       pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .chart-wrap svg .pt { cursor: pointer; }
+    /* KPI summary strip */
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; text-align: center; }
+    .kpi .num { font-size: 1.55rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .kpi .sub { font-size: 0.72rem; color: #a0aec0; margin-top: 2px; }
+    /* Two-column stats grid + panels */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+    @media (max-width: 760px) { .stats-grid { grid-template-columns: 1fr; } }
+    .stats-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
+    .stats-panel.full { grid-column: 1 / -1; }
+    .stats-panel > div > :last-child { margin-bottom: 0 !important; }
+    .stats-panel .stats-title:first-child { margin-top: 0; }
     .stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
     .stat { flex: 1; min-width: 150px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; }
     .stat-num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -73,11 +86,13 @@
 
   <div class="card" style="margin-top:24px">
     <h2>Statistics from Dec. 22, 2025 Through Present</h2>
-    <div id="stats"></div>
-    <div id="stats-trend"></div>
-    <div id="stats-au"></div>
-    <div id="stats-examiner"></div>
-    <div id="stats-pendency"></div>
+    <div id="stats-kpi"></div>
+    <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
+    <div class="stats-grid">
+      <div class="stats-panel"><div id="stats-au"></div></div>
+      <div class="stats-panel"><div id="stats-pendency"></div></div>
+      <div class="stats-panel full"><div id="stats-examiner"></div></div>
+    </div>
   </div>
 
   <div class="card" style="margin-top:24px">
@@ -109,6 +124,33 @@ function withinDays(raw, days) {
   const now = Date.now();
   return t <= now + 86400000 && (now - t) <= days * 86400000;
 }
+// KPI summary strip: headline figures across the collected determinations.
+function buildKpi(list) {
+  const el = document.getElementById('stats-kpi');
+  const ordered = list.filter((d) => /ordered/i.test(d.determination_type || '')).length;
+  const denied = list.filter((d) => /denied/i.test(d.determination_type || '')).length;
+  const tot = ordered + denied || list.length;
+  const pct = (n) => (tot ? (n / tot * 100).toFixed(1) : '0.0');
+  const days = [];
+  for (const d of list) {
+    const f = parseDate(d.filing_date), o = parseDate(d.official_date);
+    if (!isNaN(f) && !isNaN(o) && o >= f) days.push((o - f) / 86400000);
+  }
+  days.sort((a, b) => a - b);
+  const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
+  const examiners = new Set(list.map((d) => (d.examiner_name || '').trim()).filter(Boolean)).size;
+  const artUnits = new Set(list.map((d) => (d.group_art_unit || '').trim()).filter(Boolean)).size;
+  const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
+  el.innerHTML = `<div class="kpi-strip">
+    ${card(list.length, 'Total Determinations')}
+    ${card(pct(ordered) + '%', 'Ordered', ordered + ' of ' + tot)}
+    ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
+    ${card(medPend != null ? medPend : '—', 'Median Pendency', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
+    ${card(examiners, 'Examiners')}
+    ${card(artUnits, 'Art Units')}
+  </div>`;
+}
+
 function statsHtml(label, items) {
   const total = items.length;
   const ordered = items.filter((d) => /ordered/i.test(d.determination_type || '')).length;
@@ -377,8 +419,8 @@ function renderTable() {
         'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry below).';
     }
 
-    // Statistics: overall, monthly grant-rate trend, by group art unit, by examiner, pendency.
-    document.getElementById('stats').innerHTML = statsHtml('Overall', list);
+    // Statistics: KPI strip, monthly grant-rate trend, by group art unit, by examiner, pendency.
+    buildKpi(list);
     document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(list);
     buildExaminerSection(list);
     buildTrend(list);

@@ -16,6 +16,7 @@ import {
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
+  recordPreorder, PREORDER_CUTOFF,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { sendReexamDigest } from '../../lib/email.js';
@@ -27,6 +28,7 @@ const CONCURRENCY = 5;
 const WINDOW_MONTHS = 6;      // enumerate reexams filed within this window
 const PRUNE_MONTHS = 9;       // drop reexams older than this
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
+const PREORDER_CODE = 'RX.PRO.PO'; // patent-owner pre-order SNQ submission
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);
@@ -58,10 +60,17 @@ async function enumerate() {
   return added;
 }
 
-async function scanOne(appNum) {
+async function scanOne(appNum, filingDate) {
   const docs = await fetchDocuments(appNum);
-  const detDocs = docs.filter((d) => DET_CODES[d.documentCode]);
 
+  // Patent-owner pre-order SNQ submissions (for reexams filed on/after cutoff).
+  if (filingDate && filingDate >= PREORDER_CUTOFF) {
+    for (const d of docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE)) {
+      await recordPreorder({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, officialDate: d.officialDate, filingDate });
+    }
+  }
+
+  const detDocs = docs.filter((d) => DET_CODES[d.documentCode]);
   if (!detDocs.length) {
     await markReexamScanned(appNum, false);
     return 0;
@@ -113,9 +122,9 @@ export default async function handler(req, res) {
     let newDeterminations = 0;
     const errors = [];
     for (let i = 0; i < batch.length; i += CONCURRENCY) {
-      const slice = batch.slice(i, i + CONCURRENCY).map(async (appNum) => {
-        try { newDeterminations += await scanOne(appNum); }
-        catch (e) { errors.push({ application: appNum, error: String(e.message || e) }); }
+      const slice = batch.slice(i, i + CONCURRENCY).map(async (row) => {
+        try { newDeterminations += await scanOne(row.application_number, row.filing_date); }
+        catch (e) { errors.push({ application: row.application_number, error: String(e.message || e) }); }
       });
       await Promise.all(slice);
     }

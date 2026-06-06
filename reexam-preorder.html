@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patent Owner Pre-Order SNQ Submissions — USPTO Reexam</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px 60px; }
+    .back-link { display: inline-block; margin-bottom: 18px; color: #1a3a6b; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+    .back-link:hover { text-decoration: underline; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 24px; }
+    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr; } }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+    td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
+    .ext:hover { text-decoration: underline; }
+    .state { text-align: center; padding: 40px 20px; color: #718096; }
+    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
+    footer a { color: #1a3a6b; text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <a class="back-link" href="/reexam">← Back to Reexam Determinations</a>
+
+  <div class="card">
+    <h2>Ex Parte Reexamination — Patent Owner Pre-Order SNQ Submissions</h2>
+    <div class="sub">Ex parte reexaminations filed on or after April 5, 2026 in which the patent owner filed a pre-order submission (document code RX.PRO.PO), before the office's determination on the substantial new question of patentability.</div>
+    <div id="stat"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="list-heading">Submissions</h2>
+    <div id="body"><div class="state">Loading…</div></div>
+  </div>
+
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+
+(async () => {
+  const body = document.getElementById('body');
+  try {
+    const res = await fetch('/api/reexam-preorder');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const subs = data.submissions || [];
+    const withPreorder = new Set(subs.map((s) => s.application_number)).size;
+    const total = data.totalFiled;
+
+    // Coverage statistic
+    const pct = (total && total > 0) ? (withPreorder / total * 100).toFixed(1) + '%' : '—';
+    document.getElementById('stat').innerHTML = `<div class="kpi-strip">
+      <div class="kpi"><div class="num">${total != null ? total : '—'}</div><div class="lbl">Reexams Filed Since Apr 5, 2026</div></div>
+      <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div></div>
+      <div class="kpi"><div class="num">${pct}</div><div class="lbl">Share With Pre-Order</div></div>
+    </div>`;
+
+    document.getElementById('list-heading').textContent = `Submissions (Total: ${withPreorder})`;
+
+    if (!subs.length) {
+      body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';
+      return;
+    }
+    const rows = subs.map((s) => {
+      const num = s.application_number || '';
+      const docId = s.document_identifier || '';
+      let pdf = '<span class="ext">—</span>';
+      if (docId) {
+        const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+        pdf = `<a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View PDF ↗</a>
+               <a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
+      }
+      return `<tr>
+        <td>
+          <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
+          <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
+        </td>
+        <td>${fmtDate(s.filing_date)}</td>
+        <td>${fmtDate(s.official_date)}</td>
+        <td style="white-space:nowrap">${pdf}</td>
+      </tr>`;
+    }).join('');
+    body.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Control No.</th><th>Reexam Filed</th><th>Submission Date</th><th>Pre-Order PDF</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  } catch (e) {
+    body.innerHTML = '<div class="state">Could not load submissions (' + esc(e.message) + ').</div>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -103,7 +103,7 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
       <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div></div>
       <div class="kpi"><div class="num">${pct}</div><div class="lbl">Percentage With Pre-Order Submission</div></div>
       <div class="kpi"><div class="num">${withPetition}</div><div class="lbl">With Requestor Petition</div></div>
-      <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Dismissal Rate for Requestor Petitions</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions</div>` : ''}</div>
+      <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions</div>` : ''}</div>
     </div>`;
 
     document.getElementById('list-heading').textContent = `Pre-Order SNQ Submissions (Total: ${withPreorder})`;

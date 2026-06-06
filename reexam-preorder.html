@@ -70,7 +70,7 @@
   </div>
 
   <div class="card">
-    <h2 id="list-heading">Submissions</h2>
+    <h2 id="list-heading">Pre-Order SNQ Submissions</h2>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 
@@ -106,7 +106,7 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
       <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions</div>` : ''}</div>
     </div>`;
 
-    document.getElementById('list-heading').textContent = `Submissions (Total: ${withPreorder})`;
+    document.getElementById('list-heading').textContent = `Pre-Order SNQ Submissions (Total: ${withPreorder})`;
 
     if (!subs.length) {
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';

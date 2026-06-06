@@ -67,7 +67,7 @@
   <a class="back-link" href="/uspto-search">← Back to search</a>
   <div class="card">
     <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
-    <div class="sub">Orders granting (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
+    <div class="sub">Determinations ordering (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
     <div id="asof" class="sub" style="font-weight:bold"></div>
   </div>
 
@@ -349,7 +349,7 @@ function renderTable() {
       const earliest = new Date(Math.min(...times));
       const opts = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' };
       document.getElementById('asof').textContent =
-        'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry).';
+        'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry below).';
     }
 
     // Statistics: overall, monthly grant-rate trend, by group art unit, by examiner, pendency.

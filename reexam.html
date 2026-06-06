@@ -166,11 +166,13 @@ function buildExaminerSection(list) {
     const e = map.get(n);
     if (/denied/i.test(d.determination_type || '')) e.denied++; else e.ordered++;
   }
-  const ranked = [...map.entries()]
+  // Top 10 examiners by denial rate (ties broken by higher volume, then name).
+  const byDenial = [...map.entries()]
     .map(([n, e]) => ({ n, ordered: e.ordered, denied: e.denied, total: e.ordered + e.denied }))
-    .sort((a, b) => b.total - a.total || a.n.localeCompare(b.n));
-  const lbRows = ranked.map((r, i) =>
-    `<tr><td>${i + 1}</td><td>${esc(r.n)}</td><td>${r.ordered}</td><td>${r.denied}</td><td>${r.total}</td><td>${(r.ordered / r.total * 100).toFixed(1)}%</td></tr>`).join('');
+    .sort((a, b) => (b.denied / b.total) - (a.denied / a.total) || b.total - a.total || a.n.localeCompare(b.n))
+    .slice(0, 10);
+  const dRows = byDenial.map((r, i) =>
+    `<tr><td>${i + 1}</td><td>${esc(r.n)}</td><td>${r.ordered}</td><td>${r.denied}</td><td>${r.total}</td><td>${(r.denied / r.total * 100).toFixed(1)}%</td></tr>`).join('');
 
   el.innerHTML = `<div class="stats-title">By Examiner</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -178,10 +180,10 @@ function buildExaminerSection(list) {
       <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px">${options}</select>
     </div>
     <div id="examiner-stats"></div>
-    <div class="stats-title" style="margin-top:14px">Examiner Leaderboard (by volume)</div>
+    <div class="stats-title" style="margin-top:14px">Examiners - Highest Denial Rates</div>
     <div class="table-wrap" style="margin-bottom:18px"><table>
-      <thead><tr><th>#</th><th>Examiner</th><th>Ordered</th><th>Denied</th><th>Total</th><th>Grant Rate</th></tr></thead>
-      <tbody>${lbRows}</tbody></table></div>`;
+      <thead><tr><th>#</th><th>Examiner</th><th>Ordered</th><th>Denied</th><th>Total</th><th>Denial Rate</th></tr></thead>
+      <tbody>${dRows}</tbody></table></div>`;
 
   document.getElementById('examiner-select').addEventListener('change', (e) => {
     const name = e.target.value;

@@ -43,7 +43,8 @@
     }
     .chart-wrap svg .pt { cursor: pointer; }
     /* KPI summary strip */
-    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+    @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr 1fr; } }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; text-align: center; }
     .kpi .num { font-size: 1.55rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -148,9 +149,9 @@ function buildKpi(list) {
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
-    ${card(last30, 'Determinations (Last 30 Days)')}
     ${card(pct(ordered) + '%', 'Ordered', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
+    ${card(last30, 'Determinations (Last 30 Days)')}
     ${card(gr90, 'Grant Rate (Last 90 Days)', last90.length ? o90 + ' of ' + last90.length + ' ordered' : 'no data')}
     ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
   </div>`;

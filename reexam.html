@@ -138,16 +138,12 @@ function buildKpi(list) {
   }
   days.sort((a, b) => a - b);
   const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
-  const examiners = new Set(list.map((d) => (d.examiner_name || '').trim()).filter(Boolean)).size;
-  const artUnits = new Set(list.map((d) => (d.group_art_unit || '').trim()).filter(Boolean)).size;
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
     ${card(pct(ordered) + '%', 'Ordered', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
-    ${card(medPend != null ? medPend : '—', 'Median Pendency', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
-    ${card(examiners, 'Examiners')}
-    ${card(artUnits, 'Art Units')}
+    ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
   </div>`;
 }
 

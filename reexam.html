@@ -72,13 +72,11 @@
   </div>
 
   <div class="card" style="margin-top:24px">
-    <h2>Statistics</h2>
+    <h2>Statistics from Dec. 22, 2025 Through Present</h2>
     <div id="stats"></div>
-    <div id="stats30"></div>
-    <div id="stats60"></div>
+    <div id="stats-trend"></div>
     <div id="stats-au"></div>
     <div id="stats-examiner"></div>
-    <div id="stats-trend"></div>
     <div id="stats-pendency"></div>
   </div>
 
@@ -353,12 +351,8 @@ function renderTable() {
         'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry).';
     }
 
-    // Statistics: overall (all collected), last 30/60 days, and by group art unit.
-    document.getElementById('stats').innerHTML = statsHtml('Overall (all collected)', list);
-    document.getElementById('stats30').innerHTML =
-      statsHtml('Last 30 days', list.filter((d) => withinDays(d.official_date, 30)));
-    document.getElementById('stats60').innerHTML =
-      statsHtml('Last 60 days', list.filter((d) => withinDays(d.official_date, 60)));
+    // Statistics: overall, monthly grant-rate trend, by group art unit, by examiner, pendency.
+    document.getElementById('stats').innerHTML = statsHtml('Overall', list);
     document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(list);
     buildExaminerSection(list);
     buildTrend(list);

@@ -138,11 +138,20 @@ function buildKpi(list) {
   }
   days.sort((a, b) => a - b);
   const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
+
+  // Recent windows.
+  const last30 = list.filter((d) => withinDays(d.official_date, 30)).length;
+  const last90 = list.filter((d) => withinDays(d.official_date, 90));
+  const o90 = last90.filter((d) => /ordered/i.test(d.determination_type || '')).length;
+  const gr90 = last90.length ? (o90 / last90.length * 100).toFixed(1) + '%' : '—';
+
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
+    ${card(last30, 'Determinations (Last 30 Days)')}
     ${card(pct(ordered) + '%', 'Ordered', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
+    ${card(gr90, 'Grant Rate (Last 90 Days)', last90.length ? o90 + ' of ' + last90.length + ' ordered' : 'no data')}
     ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
   </div>`;
 }

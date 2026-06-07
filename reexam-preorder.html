@@ -46,6 +46,16 @@
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
+    /* Document viewer modal */
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: #15305a; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 24px; }
+    .modal-box { background: #fff; border-radius: 10px; width: 100%; max-width: 1000px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+    .modal-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #1a3a6b; color: #fff; }
+    .modal-bar .title { font-weight: 600; font-size: 0.95rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .modal-bar a, .modal-bar button { color: #fff; background: rgba(255,255,255,0.15); border: none; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-decoration: none; padding: 5px 12px; border-radius: 5px; }
+    .modal-bar a:hover, .modal-bar button:hover { background: rgba(255,255,255,0.28); }
+    .modal-box iframe { flex: 1; width: 100%; border: none; background: #525659; }
   </style>
 </head>
 <body>
@@ -83,9 +93,41 @@
   <footer><a href="/privacy">Privacy Policy</a></footer>
 </div>
 
+<div class="modal-overlay" id="viewer-modal" onclick="if(event.target===this)closeDocViewer()">
+  <div class="modal-box">
+    <div class="modal-bar">
+      <span class="title" id="viewer-title">Document</span>
+      <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
+      <a id="viewer-download" href="#" download>Download ⤓</a>
+      <button onclick="closeDocViewer()">Close ✕</button>
+    </div>
+    <iframe id="viewer-frame" title="Document viewer"></iframe>
+  </div>
+</div>
+
 <script>
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+
+function openDocViewer(appNum, documentId, format, label) {
+  const base = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}`;
+  const viewUrl = base + '&disposition=inline';
+  const dlUrl = base + '&disposition=attachment';
+  document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
+  document.getElementById('viewer-frame').src = viewUrl;
+  document.getElementById('viewer-newtab').href = viewUrl;
+  document.getElementById('viewer-download').href = dlUrl;
+  document.getElementById('viewer-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeDocViewer() {
+  document.getElementById('viewer-modal').style.display = 'none';
+  document.getElementById('viewer-frame').src = 'about:blank';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
+});
 
 (async () => {
   const body = document.getElementById('body');
@@ -118,30 +160,31 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }
-    const docLinks = (num, docId) => {
+    const docLinks = (num, docId, label) => {
       if (!docId) return '';
       const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-      return `<div class="doclinks"><a class="link" href="${base}&disposition=inline" target="_blank" rel="noopener">View ↗</a>`
+      return `<div class="doclinks">`
+        + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${(label || 'Document').replace(/'/g, '')}')">View</button>`
         + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
     };
     const dash = '<span class="ext">—</span>';
 
     const rows = subs.map((s) => {
       const num = s.application_number || '';
-      const preCell = `${fmtDate(s.official_date)}${docLinks(num, s.document_identifier)}`;
-      const petCell = s.petition_doc_id ? `${fmtDate(s.petition_date)}${docLinks(num, s.petition_doc_id)}` : dash;
+      const preCell = `${fmtDate(s.official_date)}${docLinks(num, s.document_identifier, 'Pre-Order Submission')}`;
+      const petCell = s.petition_doc_id ? `${fmtDate(s.petition_date)}${docLinks(num, s.petition_doc_id, 'Requestor Petition')}` : dash;
       let decCell = dash;
       if (s.decision_doc_id) {
         const o = s.decision_outcome || 'other';
         const lbl = o === 'granted' ? 'Granted' : (o === 'dismissed' ? 'Dismissed' : 'Decided');
-        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id)}`;
+        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id, 'Petition Decision')}`;
       }
       let detCell = dash;
       if (s.determination_type) {
         const denied = /denied/i.test(s.determination_type);
         const cls = denied ? 'dismissed' : 'granted';
         const lbl = denied ? 'Denied' : 'Ordered';
-        detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id)}`;
+        detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id, 'Reexam Determination')}`;
       }
       return `<tr>
         <td>

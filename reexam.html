@@ -15,6 +15,9 @@
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px 60px; }
     .back-link { display: inline-block; margin-bottom: 18px; color: #1a3a6b; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .reexam-cta { display: inline-block; background: #1a3a6b; color: #fff; text-decoration: none; font-weight: 700; font-size: 1rem; padding: 12px 20px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+    .reexam-cta:hover { background: #15305a; }
     .back-link:hover { text-decoration: underline; }
     .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 6px; }
@@ -78,12 +81,14 @@
 </header>
 
 <div class="container">
-  <a class="back-link" href="/uspto-search">← Back to search</a>
+  <div class="cta-row">
+    <a href="/uspto-search" class="reexam-cta">Application Search and Tracking - Click Here</a>
+    <a href="/reexam-preorder" class="reexam-cta">Pre-Order SNQ Submissions - Click Here</a>
+  </div>
   <div class="card">
     <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
     <div class="sub">Determinations ordering (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
     <div id="asof" class="sub" style="font-weight:bold"></div>
-    <a href="/reexam-preorder" class="link" style="display:inline-block;margin-top:6px;font-weight:600;color:#1a3a6b;text-decoration:none">→ Patent Owner Pre-Order SNQ Submissions</a>
   </div>
 
   <div class="card" style="margin-top:24px">

@@ -15,6 +15,9 @@
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1000px; margin: 0 auto; padding: 24px 16px 60px; }
     .back-link { display: inline-block; margin-bottom: 18px; color: #1a3a6b; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    .reexam-cta { display: inline-block; background: #1a3a6b; color: #fff; text-decoration: none; font-weight: 700; font-size: 1rem; padding: 12px 20px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+    .reexam-cta:hover { background: #15305a; }
     .back-link:hover { text-decoration: underline; }
     .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 24px; }
@@ -61,7 +64,10 @@
 </header>
 
 <div class="container">
-  <a class="back-link" href="/reexam">← Back to Reexam Determinations</a>
+  <div class="cta-row">
+    <a href="/uspto-search" class="reexam-cta">Application Search and Tracking - Click Here</a>
+    <a href="/reexam" class="reexam-cta">Ex Parte Reexam Determinations - Click Here</a>
+  </div>
 
   <div class="card">
     <h2>Ex Parte Reexamination — Patent Owner Pre-Order SNQ Submissions</h2>

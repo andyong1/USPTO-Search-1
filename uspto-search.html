@@ -980,7 +980,15 @@ function errorHTML(msg) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') run();
+  if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA') return;
+  // Enter inside the "Add a Tracked Proceeding" inputs adds a tracked proceeding;
+  // anywhere else (e.g. the Search Parameters frame) runs a search.
+  if (e.target.tagName === 'INPUT' && e.target.closest && e.target.closest('#track-card')) {
+    e.preventDefault();
+    addWatch();
+    return;
+  }
+  run();
 });
 
 // ── Tracked proceedings + new filings ──────────────────────────────

@@ -118,7 +118,7 @@
     <h2>Subscribe to Daily Email Alerts</h2>
     <div class="sub">Get a once-daily email (8:00&nbsp;AM Pacific) listing every ex parte reexamination determination issued the previous day. Nothing is sent on days with no new determinations, and every email has a one-click unsubscribe link.</div>
     <div class="subscribe-row">
-      <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" />
+      <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter'){event.preventDefault();subscribeReexam();}" />
       <button class="btn-primary" id="sub-btn" onclick="subscribeReexam()">Subscribe</button>
     </div>
     <div id="sub-status" class="subscribe-status"></div>

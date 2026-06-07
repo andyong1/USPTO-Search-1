@@ -136,6 +136,13 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
         const lbl = o === 'granted' ? 'Granted' : (o === 'dismissed' ? 'Dismissed' : 'Decided');
         decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id)}`;
       }
+      let detCell = dash;
+      if (s.determination_type) {
+        const denied = /denied/i.test(s.determination_type);
+        const cls = denied ? 'dismissed' : 'granted';
+        const lbl = denied ? 'Denied' : 'Ordered';
+        detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id)}`;
+      }
       return `<tr>
         <td>
           <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
@@ -144,10 +151,11 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
         <td>${preCell}</td>
         <td>${petCell}</td>
         <td>${decCell}</td>
+        <td>${detCell}</td>
       </tr>`;
     }).join('');
     body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Pre-Order Submission</th><th>Requestor Petition</th><th>Petition Decision</th></tr></thead>
+      <thead><tr><th>Control No.</th><th>Pre-Order Submission</th><th>Requestor Petition</th><th>Petition Decision</th><th>Determination</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load submissions (' + esc(e.message) + ').</div>';

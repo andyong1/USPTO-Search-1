@@ -36,7 +36,7 @@ const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 :
 
 // ── Daily subscriber email helpers (8:00 AM Pacific) ──
 const SUB_TZ = 'America/Los_Angeles';
-const SUB_SEND_HOUR = 8; // first scan run at/after this PT hour sends the digest
+const SUB_SEND_HOUR = 8; // only the scan run during this PT hour sends the digest
 const ymdInTZ = (d, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 const hourInTZ = (d, tz) => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(d));
 function previousDay(ymd) { const [y, m, d] = String(ymd).split('-').map(Number); const a = new Date(Date.UTC(y, m - 1, d)); a.setUTCDate(a.getUTCDate() - 1); return a.toISOString().slice(0, 10); }
@@ -48,8 +48,9 @@ function baseUrl(req) {
 }
 
 // Send the once-daily subscriber digest of determinations issued the previous PT
-// day, on the first scan run at/after 8 AM PT each day. Skips entirely when no
-// determinations issued. ?forceSubEmail=1 (with date optional) bypasses the gate.
+// day. Only the scan run that lands in the 8 AM PT hour sends it (so the hourly
+// scan does not email every run); other hours are skipped. Skips entirely when
+// no determinations issued. ?forceSubEmail=1 (with date optional) bypasses the gate.
 async function maybeSendSubscriberDigest(req) {
   const force = req.query && req.query.forceSubEmail === '1';
   const now = new Date();
@@ -57,7 +58,7 @@ async function maybeSendSubscriberDigest(req) {
   const targetDate = (req.query && req.query.date) ? String(req.query.date) : previousDay(todayPT);
 
   if (!force) {
-    if (hourInTZ(now, SUB_TZ) < SUB_SEND_HOUR) return { skipped: 'before send hour' };
+    if (hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
     const lastSent = await getSubDigestDate();
     if (lastSent === targetDate) return { skipped: 'already handled today' };
   }

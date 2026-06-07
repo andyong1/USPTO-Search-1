@@ -17,9 +17,10 @@ import {
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
+  listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
-import { sendReexamDigest } from '../../lib/email.js';
+import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 
 export const config = { maxDuration: 60 };
 
@@ -32,6 +33,54 @@ const PREORDER_CODE = 'RX.PRO.PO'; // patent-owner pre-order SNQ submission
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);
+
+// ── Daily subscriber email helpers (8:00 AM Pacific) ──
+const SUB_TZ = 'America/Los_Angeles';
+const SUB_SEND_HOUR = 8; // first scan run at/after this PT hour sends the digest
+const ymdInTZ = (d, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+const hourInTZ = (d, tz) => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(d));
+function previousDay(ymd) { const [y, m, d] = String(ymd).split('-').map(Number); const a = new Date(Date.UTC(y, m - 1, d)); a.setUTCDate(a.getUTCDate() - 1); return a.toISOString().slice(0, 10); }
+function prettyDate(ymd) { const [y, m, d] = String(ymd).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' }); }
+function baseUrl(req) {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
+  return host ? `https://${host}` : '';
+}
+
+// Send the once-daily subscriber digest of determinations issued the previous PT
+// day, on the first scan run at/after 8 AM PT each day. Skips entirely when no
+// determinations issued. ?forceSubEmail=1 (with date optional) bypasses the gate.
+async function maybeSendSubscriberDigest(req) {
+  const force = req.query && req.query.forceSubEmail === '1';
+  const now = new Date();
+  const todayPT = ymdInTZ(now, SUB_TZ);
+  const targetDate = (req.query && req.query.date) ? String(req.query.date) : previousDay(todayPT);
+
+  if (!force) {
+    if (hourInTZ(now, SUB_TZ) < SUB_SEND_HOUR) return { skipped: 'before send hour' };
+    const lastSent = await getSubDigestDate();
+    if (lastSent === targetDate) return { skipped: 'already handled today' };
+  }
+
+  const determinations = await listDeterminationsByOfficialDate(targetDate);
+  // Mark the day handled even when empty, so we check at most once per day.
+  if (!force) await setSubDigestDate(targetDate);
+
+  if (!determinations.length) return { date: targetDate, determinations: 0, sent: 0 };
+
+  const subscribers = await listReexamSubscribers();
+  const base = baseUrl(req);
+  const dateLabel = prettyDate(targetDate);
+  let sent = 0; const errors = [];
+  for (const s of subscribers) {
+    const r = await sendReexamSubscriberDigest(s.email, determinations, {
+      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`,
+    });
+    if (r && r.sent) sent++;
+    else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
+  }
+  return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
+}
 
 async function enumerate() {
   const from = isoMonthsAgo(WINDOW_MONTHS);
@@ -161,6 +210,11 @@ export default async function handler(req, res) {
       await setReexamDigestSent();
     }
 
+    // 3b) Public subscriber digest (8:00 AM PT, only on days with determinations).
+    let subscriberDigest = { skipped: true };
+    try { subscriberDigest = await maybeSendSubscriberDigest(req); }
+    catch (e) { subscriberDigest = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -172,6 +226,7 @@ export default async function handler(req, res) {
       backfilled,
       counts, // { total, remaining, determined }
       digest,
+      subscriberDigest,
       errors,
     });
   } catch (err) {

@@ -206,7 +206,7 @@ async function testReexamEmail() {
   if (!SUB_EMAIL_RE.test(email)) { status.classList.add('err'); status.textContent = 'Enter an email above, then click “Send test email.”'; return; }
   const old = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
   try {
-    const res = await fetch('/api/reexam-test-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+    const res = await fetch('/api/reexam-subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, action: 'test' }) });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) { status.classList.add('ok'); status.textContent = 'Test email sent to ' + email + '. Check your inbox (and spam folder).'; }
     else { status.classList.add('err'); status.textContent = data.error || 'Could not send test email.'; }

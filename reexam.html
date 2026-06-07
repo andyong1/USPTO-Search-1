@@ -120,7 +120,6 @@
     <div class="subscribe-row">
       <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" />
       <button class="btn-primary" id="sub-btn" onclick="subscribeReexam()">Subscribe</button>
-      <button class="btn-secondary" id="test-btn" onclick="testReexamEmail()">Send test email</button>
     </div>
     <div id="sub-status" class="subscribe-status"></div>
   </div>
@@ -197,23 +196,6 @@ async function subscribeReexam() {
   } catch (e) { status.classList.add('err'); status.textContent = 'Network error. Please try again.'; }
   finally { btn.disabled = false; btn.textContent = old; }
 }
-async function testReexamEmail() {
-  const input = document.getElementById('sub-email');
-  const status = document.getElementById('sub-status');
-  const btn = document.getElementById('test-btn');
-  const email = (input.value || '').trim();
-  status.className = 'subscribe-status';
-  if (!SUB_EMAIL_RE.test(email)) { status.classList.add('err'); status.textContent = 'Enter an email above, then click “Send test email.”'; return; }
-  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
-  try {
-    const res = await fetch('/api/reexam-subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, action: 'test' }) });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) { status.classList.add('ok'); status.textContent = 'Test email sent to ' + email + '. Check your inbox (and spam folder).'; }
-    else { status.classList.add('err'); status.textContent = data.error || 'Could not send test email.'; }
-  } catch (e) { status.classList.add('err'); status.textContent = 'Network error. Please try again.'; }
-  finally { btn.disabled = false; btn.textContent = old; }
-}
-
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

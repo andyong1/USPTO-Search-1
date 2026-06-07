@@ -155,7 +155,7 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
       </tr>`;
     }).join('');
     body.innerHTML = `<div class="table-wrap"><table>
-      <thead><tr><th>Control No.</th><th>Pre-Order Submission</th><th>Requestor Petition</th><th>Petition Decision</th><th>Determination</th></tr></thead>
+      <thead><tr><th>Control No.</th><th>Pre-Order Submission</th><th>Requestor Petition</th><th>Petition Decision</th><th>Reexam Determination</th></tr></thead>
       <tbody>${rows}</tbody></table></div>`;
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load submissions (' + esc(e.message) + ').</div>';

@@ -1,9 +1,13 @@
 // Daily reexam-determination alert subscriptions (single endpoint to stay within
 // the Hobby plan's serverless-function limit).
 //
-//   POST /api/reexam-subscribe            { email }                 → subscribe
-//   POST /api/reexam-subscribe            { email, action:"test" }  → send test email
-//   GET  /api/reexam-subscribe?token=...                            → unsubscribe (HTML page)
+//   POST /api/reexam-subscribe   { email }                          → subscribe
+//   POST /api/reexam-subscribe   { email, action:"test" }           → send test email
+//   GET  /api/reexam-subscribe?token=...                            → unsubscribe CONFIRM page
+//   POST /api/reexam-subscribe   action=unsubscribe & token=...     → perform unsubscribe
+//
+// Unsubscribe is a two-step GET→POST flow on purpose: email security scanners
+// pre-fetch link URLs (GET), so destructive removal must not happen on GET.
 import {
   addReexamSubscriber, removeReexamSubscriberByToken, getReexamSubscriber,
   listRecentDeterminations,
@@ -22,36 +26,48 @@ function unsubscribeUrl(req, token) {
   return `${baseUrl(req)}/api/reexam-subscribe?token=${encodeURIComponent(token)}`;
 }
 
-function page(title, message) {
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function page(title, inner) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${title}</title>
+<title>${esc(title)}</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; display: flex; min-height: 100vh; align-items: center; justify-content: center; margin: 0; padding: 24px; }
   .box { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 32px 28px; max-width: 460px; text-align: center; }
   h1 { font-size: 1.25rem; color: #1a3a6b; margin: 0 0 10px; }
   p { font-size: 0.95rem; line-height: 1.5; margin: 0 0 18px; }
-  a { display: inline-block; background: #1a3a6b; color: #fff; text-decoration: none; font-weight: 600; padding: 10px 18px; border-radius: 8px; }
-  a:hover { background: #15305a; }
+  .btn { display: inline-block; background: #1a3a6b; color: #fff; border: none; cursor: pointer; text-decoration: none; font-weight: 600; font-size: 0.95rem; padding: 10px 18px; border-radius: 8px; }
+  .btn:hover { background: #15305a; }
+  .btn.muted { background: #e2e8f0; color: #1a3a6b; margin-left: 8px; }
+  .btn.muted:hover { background: #cbd5e0; }
 </style></head><body>
-  <div class="box"><h1>${title}</h1><p>${message}</p>
-    <a href="/reexam">Back to Reexam Determinations</a></div>
+  <div class="box"><h1>${esc(title)}</h1>${inner}</div>
 </body></html>`;
 }
 
+const backBtn = `<a class="btn muted" href="/reexam">Back to Reexam Determinations</a>`;
+
 export default async function handler(req, res) {
-  // ── Unsubscribe (GET, works directly from an email link) ──
+  // ── Unsubscribe — GET shows a confirmation page (no state change), so email
+  // link-scanners that pre-fetch the URL don't unsubscribe people. The actual
+  // removal happens only when the user submits the form (POST). ──
   if (req.method === 'GET') {
     const token = String((req.query && req.query.token) || '').trim();
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    try {
-      if (!token) { res.status(400).send(page('Invalid link', 'This unsubscribe link is missing its token.')); return; }
-      const email = await removeReexamSubscriberByToken(token);
-      if (email) res.status(200).send(page('Unsubscribed', `<strong>${email}</strong> has been removed from the daily reexamination determination alerts. You will not receive any further emails.`));
-      else res.status(200).send(page('Already unsubscribed', 'This address is not on the list (it may have already been removed).'));
-    } catch {
-      res.status(500).send(page('Something went wrong', 'We could not process your unsubscribe request. Please try again later.'));
+    if (!token) {
+      res.status(400).send(page('Invalid link', `<p>This unsubscribe link is missing its token.</p>${backBtn}`));
+      return;
     }
+    res.status(200).send(page('Unsubscribe',
+      `<p>Click below to stop receiving daily ex parte reexamination determination alerts.</p>
+       <form method="POST" action="/api/reexam-subscribe" style="margin:0">
+         <input type="hidden" name="action" value="unsubscribe" />
+         <input type="hidden" name="token" value="${esc(token)}" />
+         <button class="btn" type="submit">Unsubscribe</button>${backBtn}
+       </form>`));
     return;
   }
 
@@ -62,8 +78,32 @@ export default async function handler(req, res) {
 
   try {
     let body = req.body;
-    if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+    if (typeof body === 'string') {
+      // Could be JSON (fetch) or x-www-form-urlencoded (the unsubscribe form).
+      try { body = JSON.parse(body); }
+      catch { body = Object.fromEntries(new URLSearchParams(body)); }
+    }
     body = body || {};
+
+    // ── Confirmed unsubscribe (form submit → HTML page) ──
+    if (body.action === 'unsubscribe') {
+      const token = String(body.token || '').trim();
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      try {
+        const email = token ? await removeReexamSubscriberByToken(token) : null;
+        if (email) {
+          res.status(200).send(page('Unsubscribed',
+            `<p>You have been unsubscribed. <strong>${esc(email)}</strong> will not receive any further daily reexamination determination alerts.</p>${backBtn}`));
+        } else {
+          res.status(200).send(page('Already unsubscribed',
+            `<p>This address is not on the list (it may have already been removed).</p>${backBtn}`));
+        }
+      } catch {
+        res.status(500).send(page('Something went wrong',
+          `<p>We could not process your unsubscribe request. Please try again later.</p>${backBtn}`));
+      }
+      return;
+    }
 
     const email = String(body.email || '').trim();
     if (!EMAIL_RE.test(email)) {

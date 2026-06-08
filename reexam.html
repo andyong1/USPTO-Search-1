@@ -40,6 +40,7 @@
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
     .ordered { background: #c6f6d5; color: #276749; }
     .denied { background: #fed7d7; color: #c53030; }
+    .badge.concluded { background: #e2e8f0; color: #2d3748; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     th.sortable { cursor: pointer; user-select: none; }
@@ -481,7 +482,7 @@ function filteredSorted() {
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
   let items = allDeterminations;
   if (q) {
-    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.determination_type]
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.determination_type, d.outcome_summary]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const { key, dir } = tableSort;
@@ -495,9 +496,10 @@ function filteredSorted() {
   });
 }
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit'];
+  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit', 'Reexam Outcome'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit]);
+  const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit,
+    d.outcome_summary || ((d.cert_doc_id || d.nirc_doc_id) ? 'Concluded' : '')]);
   const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -526,6 +528,16 @@ function renderTable() {
       pdf = `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','Determination')">View</button>`
           + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a>`;
     }
+    let outcome = '<span class="ext">—</span>';
+    const cdoc = d.cert_doc_id || d.nirc_doc_id;
+    if (cdoc) {
+      const clabel = d.cert_doc_id ? 'Certificate' : 'NIRC';
+      const cbase = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(cdoc)}&format=PDF`;
+      outcome = `<span class="badge concluded">Concluded</span>`
+        + (d.outcome_summary ? `<div style="margin-top:4px">${esc(d.outcome_summary)}</div>` : '')
+        + `<div style="margin-top:4px"><button class="btn-view" onclick="openDocViewer('${num}','${cdoc}','PDF','${clabel}')">View ${clabel}</button>`
+        + `<a class="ext" href="${cbase}&disposition=attachment" download>Download ⤓</a></div>`;
+    }
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
@@ -536,6 +548,7 @@ function renderTable() {
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td style="white-space:nowrap">${pdf}</td>
+      <td>${outcome}</td>
     </tr>`;
   }).join('');
 
@@ -547,6 +560,7 @@ function renderTable() {
       <th class="sortable" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
       <th class="sortable" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th>Determination PDF</th>
+      <th>Reexam Outcome</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

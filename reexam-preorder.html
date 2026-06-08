@@ -145,7 +145,7 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
 let _subs = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Pre-Order Submission Date', 'Requestor Petition Date', 'Petition Decision Date', 'Petition Decision', 'Reexam Determination', 'Determination Date'];
+  const header = ['Control No.', 'Pre-Order Submission Date', 'Requestor Petition Date', 'Petition Decision Date', 'Petition Decision', 'Reexam Determination', 'Determination Date', 'Reexam Outcome'];
   const rows = _subs.map((s) => [
     s.application_number,
     fmtDate(s.official_date),
@@ -154,6 +154,7 @@ function exportCsv() {
     s.decision_outcome || '',
     s.determination_type || '',
     s.determination_type ? fmtDate(s.det_date) : '',
+    s.outcome_summary || ((s.cert_doc_id || s.nirc_doc_id) ? 'Concluded' : ''),
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -270,6 +271,12 @@ document.addEventListener('keydown', (e) => {
         const cls = denied ? 'dismissed' : 'granted';
         const lbl = denied ? 'Denied' : 'Ordered';
         detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id, 'Reexam Determination')}`;
+      }
+      const cdoc = s.cert_doc_id || s.nirc_doc_id;
+      if (cdoc) {
+        const clabel = s.cert_doc_id ? 'Certificate' : 'NIRC';
+        const concl = `<div style="margin-top:6px"><span class="badge other">Concluded</span> ${s.outcome_summary ? esc(s.outcome_summary) : ''}${docLinks(num, cdoc, clabel)}</div>`;
+        detCell = (detCell === dash) ? concl : detCell + concl;
       }
       return `<tr>
         <td>

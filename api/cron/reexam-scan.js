@@ -18,9 +18,11 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
+  getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
+import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
 
 export const config = { maxDuration: 60 };
 
@@ -81,6 +83,54 @@ async function maybeSendSubscriberDigest(req) {
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
   return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
+}
+
+// Detect NIRC / reexamination certificate documents for ordered reexams, so we
+// can flag concluded proceedings. Capped per run; rolling (re-checks weekly).
+async function detectConclusionsStep(maxApps, deadline) {
+  const rows = await getDeterminationsToCheckConclusion(maxApps);
+  let found = 0;
+  const errors = [];
+  for (const r of rows) {
+    if (Date.now() > deadline) break;
+    const app = r.application_number;
+    try {
+      const docs = await fetchDocuments(app);
+      let nirc = null, cert = null;
+      for (const d of docs) {
+        const code = (d.documentCode || '').toUpperCase();
+        if (code === 'RXNIRC' && !nirc) nirc = d;
+        if (code === 'RXCERT' && !cert) cert = d;
+      }
+      await recordConclusionDocs(app, {
+        nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
+        certDocId: cert && cert.documentIdentifier, certDate: cert && cert.officialDate,
+      });
+      if (nirc || cert) found++;
+    } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
+  }
+  return { checked: rows.length, concluded: found, errors };
+}
+
+// Parse the claim outcome from the certificate/NIRC PDF text. Heavier (downloads
+// + parses a PDF), so a small cap per run.
+async function parseConclusionsStep(maxDocs, deadline) {
+  const rows = await getConclusionsToParse(maxDocs);
+  let parsed = 0;
+  const errors = [];
+  for (const r of rows) {
+    if (Date.now() > deadline) break;
+    const docId = r.cert_doc_id || r.nirc_doc_id;
+    if (!docId) continue;
+    let buffer;
+    try { ({ buffer } = await fetchDocumentBytes(r.application_number, docId, 'PDF')); }
+    catch (e) { errors.push({ application: r.application_number, error: String(e.message || e) }); continue; } // retry next run
+    const text = await extractPdfText(buffer);
+    const outcome = text ? parseReexamOutcome(text) : null;
+    await setConclusionOutcome(r.application_number, outcome); // marks parsed=true
+    parsed++;
+  }
+  return { parsed, errors };
 }
 
 async function enumerate() {
@@ -216,6 +266,15 @@ export default async function handler(req, res) {
     try { subscriberDigest = await maybeSendSubscriberDigest(req); }
     catch (e) { subscriberDigest = { error: String(e.message || e) }; }
 
+    // 3c) Detect NIRC/certificate (conclusion) for ordered reexams, then parse the
+    // claim outcome from a couple of those PDFs. Both rolling and capped per run.
+    let conclusions = { skipped: true };
+    try {
+      const detect = await detectConclusionsStep(5, Date.now() + 8000);
+      const parse = await parseConclusionsStep(1, Date.now() + 12000);
+      conclusions = { detect, parse };
+    } catch (e) { conclusions = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -228,6 +287,7 @@ export default async function handler(req, res) {
       counts, // { total, remaining, determined }
       digest,
       subscriberDigest,
+      conclusions,
       errors,
     });
   } catch (err) {

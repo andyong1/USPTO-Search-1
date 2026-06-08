@@ -8,6 +8,8 @@
 //                       browsers would otherwise download).
 // disposition=attachment (default) → force a download.
 
+export const config = { maxDuration: 60 };
+
 const DL_BASE = 'https://api.uspto.gov/api/v1/download/applications';
 
 const EXT = { PDF: 'pdf', XML: 'xml', 'MS WORD': 'docx', DOCX: 'docx', DOC: 'docx' };

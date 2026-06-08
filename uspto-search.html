@@ -1569,49 +1569,32 @@ function documentsTable(bag, fallbackApp) {
 // ── In-page document viewer ────────────────────────────────────────
 let _viewerLastFocus = null;
 let _viewerReq = 0;
-let _viewerBlobUrl = null;
-async function openDocViewer(appNum, documentId, format, label) {
+function openDocViewer(appNum, documentId, format, label) {
   const viewUrl = docUrl(appNum, documentId, format, 'inline');       // render in iframe
   const dlUrl   = docUrl(appNum, documentId, format, 'attachment');   // force download
-  const modal = document.getElementById('viewer-modal');
   const frame = document.getElementById('viewer-frame');
   const loading = document.getElementById('viewer-loading');
-  const errorBox = document.getElementById('viewer-error');
+  document.getElementById('viewer-error').style.display = 'none';
   document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
   document.getElementById('viewer-newtab').href = viewUrl;
   document.getElementById('viewer-download').href = dlUrl;
-  errorBox.style.display = 'none';
   loading.style.display = 'flex';
+  const reqId = ++_viewerReq;
+  frame.onload = () => { if (reqId === _viewerReq) loading.style.display = 'none'; };
+  frame.src = viewUrl;
+  // Fallback: browsers don't always fire load for PDFs, so clear the spinner.
+  setTimeout(() => { if (reqId === _viewerReq) loading.style.display = 'none'; }, 3000);
   _viewerLastFocus = document.activeElement;
-  modal.style.display = 'flex';
+  document.getElementById('viewer-modal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   document.getElementById('viewer-close').focus();
-  if (_viewerBlobUrl) { URL.revokeObjectURL(_viewerBlobUrl); _viewerBlobUrl = null; }
-  frame.removeAttribute('src');
-  const reqId = ++_viewerReq;
-  try {
-    const resp = await fetch(viewUrl);
-    if (reqId !== _viewerReq) return;
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const blob = await resp.blob();
-    if (reqId !== _viewerReq) return;
-    _viewerBlobUrl = URL.createObjectURL(blob);
-    frame.onload = () => { if (reqId === _viewerReq) loading.style.display = 'none'; };
-    frame.src = _viewerBlobUrl;
-    setTimeout(() => { if (reqId === _viewerReq) loading.style.display = 'none'; }, 1500);
-  } catch (e) {
-    if (reqId !== _viewerReq) return;
-    loading.style.display = 'none';
-    errorBox.style.display = 'flex';
-  }
 }
 
 function closeDocViewer() {
   document.getElementById('viewer-modal').style.display = 'none';
-  document.getElementById('viewer-frame').removeAttribute('src');
+  document.getElementById('viewer-frame').src = 'about:blank';
   document.body.style.overflow = '';
   _viewerReq++;
-  if (_viewerBlobUrl) { URL.revokeObjectURL(_viewerBlobUrl); _viewerBlobUrl = null; }
   if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
 }
 

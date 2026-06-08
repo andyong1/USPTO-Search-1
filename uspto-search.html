@@ -1570,24 +1570,8 @@ function documentsTable(bag, fallbackApp) {
 let _viewerLastFocus = null;
 let _viewerReq = 0;
 function openDocViewer(appNum, documentId, format, label) {
-  const viewUrl = docUrl(appNum, documentId, format, 'inline');       // render in iframe
-  const dlUrl   = docUrl(appNum, documentId, format, 'attachment');   // force download
-  const frame = document.getElementById('viewer-frame');
-  const loading = document.getElementById('viewer-loading');
-  document.getElementById('viewer-error').style.display = 'none';
-  document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
-  document.getElementById('viewer-newtab').href = viewUrl;
-  document.getElementById('viewer-download').href = dlUrl;
-  loading.style.display = 'flex';
-  const reqId = ++_viewerReq;
-  frame.onload = () => { if (reqId === _viewerReq) loading.style.display = 'none'; };
-  frame.src = viewUrl;
-  // Fallback: browsers don't always fire load for PDFs, so clear the spinner.
-  setTimeout(() => { if (reqId === _viewerReq) loading.style.display = 'none'; }, 3000);
-  _viewerLastFocus = document.activeElement;
-  document.getElementById('viewer-modal').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-  document.getElementById('viewer-close').focus();
+  // Open the document inline in a new browser tab.
+  window.open(docUrl(appNum, documentId, format, 'inline'), '_blank', 'noopener');
 }
 
 function closeDocViewer() {

@@ -21,7 +21,6 @@ uspto-search/
 │   ├── document.js             # GET   → streams a document PDF/XML/DOCX
 │   ├── watchlist.js            # GET/POST/DELETE tracked proceedings + findings
 │   ├── reexam.js               # GET   → recent reexam determinations
-│   ├── test-email.js           # POST  → send a test digest email
 │   └── cron/
 │       ├── check-filings.js    # tracked-application filings scan
 │       └── reexam-scan.js      # reexam determinations scan

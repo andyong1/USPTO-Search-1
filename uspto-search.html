@@ -286,13 +286,10 @@
     <div class="results-header" style="margin-bottom:10px">
       <h2 style="border:none;padding:0;margin:0">New Filings (daily check) <span id="new-count"></span></h2>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-secondary" id="test-email-btn" style="padding:6px 14px;font-size:0.8rem" onclick="sendTestEmail()">
-          <span id="test-email-text">Send test email</span>
-          <div class="spinner" id="test-email-spinner" style="border-top-color:#4a5568;border-color:rgba(74,85,104,0.3)"></div>
-        </button>
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="ackFindings()">Mark all as seen</button>
       </div>
     </div>
+    <p class="hint" style="margin:0 0 10px"><strong>Note:</strong> Documents with tomorrow's date will not be accessible until tomorrow.</p>
     <div id="findings-list"></div>
   </div>
   </aside>
@@ -1209,29 +1206,6 @@ async function ackOne(appNum, documentId) {
 // Escape a value for safe use inside a single-quoted inline onclick string.
 function jsq(s) {
   return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
-async function sendTestEmail() {
-  const btn = document.getElementById('test-email-btn');
-  document.getElementById('test-email-spinner').style.display = 'block';
-  document.getElementById('test-email-text').textContent = 'Sending…';
-  btn.disabled = true;
-  try {
-    const res = await fetch('/api/test-email', { method: 'POST' });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      alert('Test email sent to ' + (data.to || 'your configured address') + '.\nCheck your inbox (and spam).');
-    } else {
-      alert('Could not send test email:\n' + (data.reason || ('HTTP ' + res.status)) +
-        '\n\nMake sure RESEND_API_KEY, DIGEST_FROM and DIGEST_TO are set, then redeploy.');
-    }
-  } catch (e) {
-    alert('Request failed: ' + e.message + '\n\n(Is the app deployed? The /api routes only run on the server.)');
-  } finally {
-    document.getElementById('test-email-spinner').style.display = 'none';
-    document.getElementById('test-email-text').textContent = 'Send test email';
-    btn.disabled = false;
-  }
 }
 
 function trackLoading(on) {

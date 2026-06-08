@@ -137,6 +137,8 @@
     .results-count strong { color: #2d3748; }
 
     .result-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .result-table-wrap.sticky-head { overflow: auto; max-height: 70vh; }
+    .result-table-wrap.sticky-head th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 #cbd5e0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th {
       background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600;
@@ -1061,7 +1063,7 @@ function renderWatched(list) {
     </tr>`;
   }).join('');
 
-  el.innerHTML = `<div class="result-table-wrap"><table>
+  el.innerHTML = `<div class="result-table-wrap sticky-head"><table>
     <thead><tr>
       <th style="cursor:pointer" onclick="sortWatched('application_number')" title="Sort by application number">Application${arrow('application_number')}</th>
       <th style="cursor:pointer" onclick="sortWatched('label')" title="Sort by label">Label${arrow('label')}</th>

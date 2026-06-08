@@ -164,8 +164,9 @@ function exportCsv() {
 }
 
 let _viewerLastFocus = null;
-let _viewerTimer = null;
-function openDocViewer(appNum, documentId, format, label) {
+let _viewerReq = 0;
+let _viewerBlobUrl = null;
+async function openDocViewer(appNum, documentId, format, label) {
   const base = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}`;
   const viewUrl = base + '&disposition=inline';
   const dlUrl = base + '&disposition=attachment';
@@ -178,22 +179,35 @@ function openDocViewer(appNum, documentId, format, label) {
   document.getElementById('viewer-download').href = dlUrl;
   errorBox.style.display = 'none';
   loading.style.display = 'flex';
-  clearTimeout(_viewerTimer);
-  _viewerTimer = setTimeout(() => {
-    if (loading.style.display !== 'none') { loading.style.display = 'none'; errorBox.style.display = 'flex'; }
-  }, 12000);
-  frame.onload = () => { clearTimeout(_viewerTimer); loading.style.display = 'none'; };
-  frame.src = viewUrl;
   _viewerLastFocus = document.activeElement;
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
   document.getElementById('viewer-close').focus();
+  if (_viewerBlobUrl) { URL.revokeObjectURL(_viewerBlobUrl); _viewerBlobUrl = null; }
+  frame.removeAttribute('src');
+  const reqId = ++_viewerReq;
+  try {
+    const resp = await fetch(viewUrl);
+    if (reqId !== _viewerReq) return;
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const blob = await resp.blob();
+    if (reqId !== _viewerReq) return;
+    _viewerBlobUrl = URL.createObjectURL(blob);
+    frame.onload = () => { if (reqId === _viewerReq) loading.style.display = 'none'; };
+    frame.src = _viewerBlobUrl;
+    setTimeout(() => { if (reqId === _viewerReq) loading.style.display = 'none'; }, 1500);
+  } catch (e) {
+    if (reqId !== _viewerReq) return;
+    loading.style.display = 'none';
+    errorBox.style.display = 'flex';
+  }
 }
 function closeDocViewer() {
   document.getElementById('viewer-modal').style.display = 'none';
-  document.getElementById('viewer-frame').src = 'about:blank';
+  document.getElementById('viewer-frame').removeAttribute('src');
   document.body.style.overflow = '';
-  clearTimeout(_viewerTimer);
+  _viewerReq++;
+  if (_viewerBlobUrl) { URL.revokeObjectURL(_viewerBlobUrl); _viewerBlobUrl = null; }
   if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
 }
 document.addEventListener('keydown', (e) => {

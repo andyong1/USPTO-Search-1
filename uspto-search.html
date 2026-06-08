@@ -1343,7 +1343,58 @@ function renderSectionInto(panel, tab, data) {
       : '<span class="hint">No documents in this section.</span>';
     return;
   }
+  if (tab.id === 'continuity') { panel.innerHTML = continuityHtml(data); return; }
   panel.innerHTML = genericSectionHtml(data);
+}
+
+// Continuity: one table combining parent- and child-continuity entries, with the
+// same columns USPTO Patent Center uses.
+function continuityHtml(data) {
+  const rec = unwrapRecord(data);
+  const cd = rec.continuityData || rec;
+  const parents = cd.parentContinuityBag || rec.parentContinuityBag || [];
+  const children = cd.childContinuityBag || rec.childContinuityBag || [];
+
+  const pick = (o, keys) => { for (const k of keys) { if (o && o[k] != null && o[k] !== '') return o[k]; } return ''; };
+  const aia = (v) => (v === true || v === 'true' || v === 'Yes') ? 'Yes'
+    : (v === false || v === 'false' || v === 'No') ? 'No' : '-';
+  const appCell = (n) => n
+    ? `<a class="app-link" href="#" onclick="openInAppLookup('${jsq(String(n))}');return false;" title="Look up this application">${esc(String(n))}</a>`
+    : '—';
+  const patCell = (p) => p ? `${esc(String(p))} &middot; ${googlePatentsLink(p)}` : '--';
+
+  const rowFrom = (e, kind) => {
+    const appN = pick(e, ['childApplicationNumberText', 'applicationNumberText']);
+    const desc = pick(e, ['claimParentageTypeCodeDescriptionText', 'claimParentageDescriptionText', 'claimParentageTypeCode']);
+    const parentN = pick(e, ['parentApplicationNumberText', 'claimParentApplicationNumberText']);
+    const date = kind === 'parent'
+      ? pick(e, ['parentApplicationFilingDate', 'filingDate', 'parentApplicationFilingOrParentFilingDate'])
+      : pick(e, ['childApplicationFilingDate', 'filingDate']);
+    const status = kind === 'parent'
+      ? pick(e, ['parentApplicationStatusDescriptionText', 'applicationStatusDescriptionText'])
+      : pick(e, ['childApplicationStatusDescriptionText', 'applicationStatusDescriptionText']);
+    const patent = kind === 'parent'
+      ? pick(e, ['parentPatentNumber', 'patentNumber'])
+      : pick(e, ['childPatentNumber', 'patentNumber']);
+    const aiaV = pick(e, ['firstInventorToFileIndicator', 'aiaIndicator']);
+    return `<tr>
+      <td>${appCell(appN)}</td>
+      <td>${esc(String(desc || '—'))}</td>
+      <td>${appCell(parentN)}</td>
+      <td style="white-space:nowrap">${date ? esc(fmtDate(date)) : '—'}</td>
+      <td>${esc(String(status || '—'))}</td>
+      <td style="white-space:nowrap">${patCell(patent)}</td>
+      <td>${aia(aiaV)}</td>
+    </tr>`;
+  };
+
+  const rows = [...parents.map((e) => rowFrom(e, 'parent')), ...children.map((e) => rowFrom(e, 'child'))];
+  if (!rows.length) return '<span class="hint">No continuity data on record.</span>';
+  return `<div class="result-table-wrap"><table>
+    <thead><tr>
+      <th>Application #</th><th>Description</th><th>Parent application #</th>
+      <th>Filing or 371 (c) date</th><th>Status</th><th>Patent #</th><th>AIA</th>
+    </tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 
 // Overview: key bibliographic fields + parties + attorney/agent of record.

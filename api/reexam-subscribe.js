@@ -16,6 +16,25 @@ import { sendReexamSubscriberDigest } from '../lib/email.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Light in-memory per-IP rate limit for subscribe/test (best-effort: persists
+// only within a warm serverless instance, which is enough to blunt scripted abuse).
+const RL_WINDOW_MS = 60 * 1000;
+const RL_MAX = 5; // subscribe/test attempts per IP per window
+const rlHits = new Map();
+function rateLimited(req) {
+  const fwd = req.headers['x-forwarded-for'] || '';
+  const ip = (Array.isArray(fwd) ? fwd[0] : String(fwd)).split(',')[0].trim()
+    || req.headers['x-real-ip'] || 'unknown';
+  const now = Date.now();
+  const arr = (rlHits.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS);
+  arr.push(now);
+  rlHits.set(ip, arr);
+  if (rlHits.size > 5000) { // crude memory cap
+    for (const [k, v] of rlHits) { if (!v.length || now - v[v.length - 1] > RL_WINDOW_MS) rlHits.delete(k); }
+  }
+  return arr.length > RL_MAX;
+}
+
 function baseUrl(req) {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
   const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
@@ -85,9 +104,13 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    // ── Confirmed unsubscribe (form submit → HTML page) ──
-    if (body.action === 'unsubscribe') {
-      const token = String(body.token || '').trim();
+    // ── Confirmed unsubscribe — from the form submit, or an RFC 8058 one-click
+    // POST (body "List-Unsubscribe=One-Click", token in the query string). ──
+    const oneClick = body['List-Unsubscribe'] === 'One-Click';
+    const qToken = req.query && req.query.token;
+    const qAction = req.query && req.query.action;
+    if (body.action === 'unsubscribe' || oneClick || qAction === 'unsubscribe') {
+      const token = String(body.token || qToken || '').trim();
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       try {
         const email = token ? await removeReexamSubscriberByToken(token) : null;
@@ -102,6 +125,12 @@ export default async function handler(req, res) {
         res.status(500).send(page('Something went wrong',
           `<p>We could not process your unsubscribe request. Please try again later.</p>${backBtn}`));
       }
+      return;
+    }
+
+    // Rate-limit subscribe/test (unsubscribe above is intentionally never limited).
+    if (rateLimited(req)) {
+      res.status(429).json({ ok: false, error: 'Too many requests. Please wait a minute and try again.' });
       return;
     }
 

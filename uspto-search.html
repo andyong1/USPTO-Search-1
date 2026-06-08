@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>USPTO Patent File Wrapper Search</title>
+  <meta name="description" content="Search and track USPTO patent application file wrappers, view and download documents, and monitor proceedings for new filings — a free tool using the USPTO Open Data Portal." />
+  <meta property="og:title" content="USPTO Patent File Wrapper Search" />
+  <meta property="og:description" content="Search USPTO patent applications, view/download file-wrapper documents, and track proceedings for new filings." />
+  <meta property="og:type" content="website" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -230,7 +234,16 @@
       font-size: 0.82rem; font-weight: 600; text-decoration: none; padding: 5px 12px; border-radius: 5px;
     }
     .modal-bar a:hover, .modal-bar button:hover { background: rgba(255,255,255,0.28); }
-    .modal-box iframe { flex: 1; width: 100%; border: none; background: #525659; }
+    .modal-content { position: relative; flex: 1; display: flex; }
+    .modal-content iframe { flex: 1; width: 100%; border: none; background: #525659; }
+    .viewer-status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: #f7fafc; color: #4a5568; font-size: 0.9rem; text-align: center; padding: 24px; }
+    .viewer-status .spin { width: 28px; height: 28px; border: 3px solid #cbd5e0; border-top-color: #1a3a6b; border-radius: 50%; animation: viewspin 0.8s linear infinite; }
+    @keyframes viewspin { to { transform: rotate(360deg); } }
+    /* Unified top nav */
+    .site-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 16px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+    .site-nav a:hover { background: #cbd5e0; }
+    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
   </style>
 </head>
 <body>
@@ -251,10 +264,11 @@
 <div class="container">
 
   <!-- PROMINENT NAV BUTTONS -->
-  <div class="cta-row">
-    <a href="/reexam" class="reexam-cta">Ex Parte Reexam Determinations - Click Here</a>
-    <a href="/reexam-preorder" class="reexam-cta">Pre-Order SNQ Submissions - Click Here</a>
-  </div>
+  <nav class="site-nav">
+    <a href="/uspto-search" class="active" aria-current="page">Application Search &amp; Tracking</a>
+    <a href="/reexam">Reexam Determinations</a>
+    <a href="/reexam-preorder">Pre-Order SNQ</a>
+  </nav>
 
  <div class="layout">
 
@@ -433,15 +447,19 @@
 </div>
 
 <!-- DOCUMENT VIEWER MODAL -->
-<div class="modal-overlay" id="viewer-modal" onclick="if(event.target===this)closeDocViewer()">
+<div class="modal-overlay" id="viewer-modal" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onclick="if(event.target===this)closeDocViewer()">
   <div class="modal-box">
     <div class="modal-bar">
       <span class="title" id="viewer-title">Document</span>
       <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
       <a id="viewer-download" href="#" download>Download ⤓</a>
-      <button onclick="closeDocViewer()">Close ✕</button>
+      <button id="viewer-close" onclick="closeDocViewer()">Close ✕</button>
     </div>
-    <iframe id="viewer-frame" title="Document viewer"></iframe>
+    <div class="modal-content">
+      <div class="viewer-status" id="viewer-loading"><div class="spin"></div><span>Loading document…</span></div>
+      <div class="viewer-status" id="viewer-error">This document couldn't be displayed. It may not be available yet — documents dated today or later aren't accessible until the next day. Use “Open in new tab” or “Download” above.</div>
+      <iframe id="viewer-frame" title="Document viewer"></iframe>
+    </div>
   </div>
 </div>
 
@@ -1498,25 +1516,51 @@ function documentsTable(bag, fallbackApp) {
 }
 
 // ── In-page document viewer ────────────────────────────────────────
+let _viewerLastFocus = null;
+let _viewerTimer = null;
 function openDocViewer(appNum, documentId, format, label) {
   const viewUrl = docUrl(appNum, documentId, format, 'inline');       // render in iframe
   const dlUrl   = docUrl(appNum, documentId, format, 'attachment');   // force download
+  const modal = document.getElementById('viewer-modal');
+  const frame = document.getElementById('viewer-frame');
+  const loading = document.getElementById('viewer-loading');
+  const errorBox = document.getElementById('viewer-error');
   document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
-  document.getElementById('viewer-frame').src = viewUrl;
   document.getElementById('viewer-newtab').href = viewUrl;
   document.getElementById('viewer-download').href = dlUrl;
-  document.getElementById('viewer-modal').style.display = 'flex';
+  errorBox.style.display = 'none';
+  loading.style.display = 'flex';
+  clearTimeout(_viewerTimer);
+  _viewerTimer = setTimeout(() => {
+    if (loading.style.display !== 'none') { loading.style.display = 'none'; errorBox.style.display = 'flex'; }
+  }, 12000);
+  frame.onload = () => { clearTimeout(_viewerTimer); loading.style.display = 'none'; };
+  frame.src = viewUrl;
+  _viewerLastFocus = document.activeElement;
+  modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  document.getElementById('viewer-close').focus();
 }
 
 function closeDocViewer() {
   document.getElementById('viewer-modal').style.display = 'none';
   document.getElementById('viewer-frame').src = 'about:blank';
   document.body.style.overflow = '';
+  clearTimeout(_viewerTimer);
+  if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
+  const modal = document.getElementById('viewer-modal');
+  if (modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { closeDocViewer(); return; }
+  if (e.key === 'Tab') {
+    const f = modal.querySelectorAll('a[href], button');
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
 });
 
 // Restore view from the URL (shared links) and set the initial history entry.

@@ -1,7 +1,7 @@
 // Returns patent-owner pre-order SNQ submissions and the total count of ex parte
 // reexams filed since the cutoff (for the coverage statistic).
 //   GET /api/reexam-preorder  →  { submissions: [...], totalFiled, cutoff }
-import { listPreorder, PREORDER_CUTOFF } from '../lib/db.js';
+import { listPreorder, preorderEffectStats, PREORDER_CUTOFF } from '../lib/db.js';
 import { searchApplications } from '../lib/uspto.js';
 
 export default async function handler(req, res) {
@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    const submissions = await listPreorder();
+    const [submissions, effect] = await Promise.all([listPreorder(), preorderEffectStats()]);
 
     // Live total of ex parte reexams filed on/after the cutoff.
     let totalFiled = null;
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       totalFiled = data.count ?? data.totalNumFound ?? null;
     } catch { /* leave null */ }
 
-    res.status(200).json({ submissions, totalFiled, cutoff: PREORDER_CUTOFF });
+    res.status(200).json({ submissions, effect, totalFiled, cutoff: PREORDER_CUTOFF });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load pre-order submissions.', detail: String(err.message || err) });
   }

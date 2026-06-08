@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Reexam Determinations — USPTO Patent File Wrapper Search</title>
+  <meta name="description" content="Daily-updated tracker of USPTO ex parte reexamination determinations (orders and denials), with statistics by art unit and examiner, and free email alerts." />
+  <meta property="og:title" content="Ex Parte Reexamination Determinations — USPTO" />
+  <meta property="og:description" content="Orders and denials of ex parte reexamination, updated daily, with statistics and free daily email alerts." />
+  <meta property="og:type" content="website" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -74,7 +78,19 @@
     .modal-bar .title { font-weight: 600; font-size: 0.95rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .modal-bar a, .modal-bar button { color: #fff; background: rgba(255,255,255,0.15); border: none; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-decoration: none; padding: 5px 12px; border-radius: 5px; }
     .modal-bar a:hover, .modal-bar button:hover { background: rgba(255,255,255,0.28); }
-    .modal-box iframe { flex: 1; width: 100%; border: none; background: #525659; }
+    .modal-content { position: relative; flex: 1; display: flex; }
+    .modal-content iframe { flex: 1; width: 100%; border: none; background: #525659; }
+    .viewer-status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: #f7fafc; color: #4a5568; font-size: 0.9rem; text-align: center; padding: 24px; }
+    .viewer-status .spin { width: 28px; height: 28px; border: 3px solid #cbd5e0; border-top-color: #1a3a6b; border-radius: 50%; animation: viewspin 0.8s linear infinite; }
+    @keyframes viewspin { to { transform: rotate(360deg); } }
+    /* Unified top nav */
+    .site-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 16px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+    .site-nav a:hover { background: #cbd5e0; }
+    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+    .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: #cbd5e0; }
+    .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; }
     /* Subscribe form */
     .subscribe-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
     .subscribe-row input[type=email] { flex: 1; min-width: 220px; padding: 10px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.95rem; }
@@ -104,10 +120,11 @@
 </header>
 
 <div class="container">
-  <div class="cta-row">
-    <a href="/uspto-search" class="reexam-cta">Application Search and Tracking - Click Here</a>
-    <a href="/reexam-preorder" class="reexam-cta">Pre-Order SNQ Submissions - Click Here</a>
-  </div>
+  <nav class="site-nav">
+    <a href="/uspto-search">Application Search &amp; Tracking</a>
+    <a href="/reexam" class="active" aria-current="page">Reexam Determinations</a>
+    <a href="/reexam-preorder">Pre-Order SNQ</a>
+  </nav>
   <div class="card">
     <h2 id="reexam-heading">Ex Parte Reexamination Determinations</h2>
     <div class="sub">Determinations ordering (RXREXO) or denying (RXREXD) ex parte reexamination, detected automatically each day.</div>
@@ -118,10 +135,11 @@
     <h2>Subscribe to Daily Email Alerts</h2>
     <div class="sub">Get a once-daily email (8:00&nbsp;AM Pacific) listing every ex parte reexamination determination issued the previous day. Nothing is sent on days with no new determinations, and every email has a one-click unsubscribe link.</div>
     <div class="subscribe-row">
-      <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" onkeydown="if(event.key==='Enter'){event.preventDefault();subscribeReexam();}" />
+      <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address for daily alerts" onkeydown="if(event.key==='Enter'){event.preventDefault();subscribeReexam();}" />
       <button class="btn-primary" id="sub-btn" onclick="subscribeReexam()">Subscribe</button>
     </div>
-    <div id="sub-status" class="subscribe-status"></div>
+    <div id="sub-status" class="subscribe-status" role="status" aria-live="polite"></div>
+    <div class="sub" style="margin:8px 0 0">We use your email only to send these alerts — see our <a href="/privacy" style="color:#1a3a6b">Privacy Policy</a>. Unsubscribe anytime via the link in every email.</div>
   </div>
 
   <div class="card" style="margin-top:24px">
@@ -136,8 +154,12 @@
   </div>
 
   <div class="card" style="margin-top:24px">
-    <h2>Detailed Listing of Reexamination Determinations</h2>
-    <div id="body"><div class="state">Loading…</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Detailed Listing of Reexamination Determinations</h2>
+      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
+    </div>
+    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
+    <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
   <footer style="text-align:center;padding:24px 16px 8px;color:#718096;font-size:0.8rem">
@@ -145,37 +167,67 @@
   </footer>
 </div>
 
-<div class="modal-overlay" id="viewer-modal" onclick="if(event.target===this)closeDocViewer()">
+<div class="modal-overlay" id="viewer-modal" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onclick="if(event.target===this)closeDocViewer()">
   <div class="modal-box">
     <div class="modal-bar">
       <span class="title" id="viewer-title">Document</span>
       <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
       <a id="viewer-download" href="#" download>Download ⤓</a>
-      <button onclick="closeDocViewer()">Close ✕</button>
+      <button id="viewer-close" onclick="closeDocViewer()">Close ✕</button>
     </div>
-    <iframe id="viewer-frame" title="Document viewer"></iframe>
+    <div class="modal-content">
+      <div class="viewer-status" id="viewer-loading"><div class="spin"></div><span>Loading document…</span></div>
+      <div class="viewer-status" id="viewer-error">This document couldn't be displayed. It may not be available yet — documents dated today or later aren't accessible until the next day. Use “Open in new tab” or “Download” above.</div>
+      <iframe id="viewer-frame" title="Document viewer"></iframe>
+    </div>
   </div>
 </div>
 
 <script>
+let _viewerLastFocus = null;
+let _viewerTimer = null;
 function openDocViewer(appNum, documentId, format, label) {
   const base = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}`;
   const viewUrl = base + '&disposition=inline';
   const dlUrl = base + '&disposition=attachment';
+  const modal = document.getElementById('viewer-modal');
+  const frame = document.getElementById('viewer-frame');
+  const loading = document.getElementById('viewer-loading');
+  const errorBox = document.getElementById('viewer-error');
   document.getElementById('viewer-title').textContent = `${appNum} · ${label} (${format})`;
-  document.getElementById('viewer-frame').src = viewUrl;
   document.getElementById('viewer-newtab').href = viewUrl;
   document.getElementById('viewer-download').href = dlUrl;
-  document.getElementById('viewer-modal').style.display = 'flex';
+  errorBox.style.display = 'none';
+  loading.style.display = 'flex';
+  clearTimeout(_viewerTimer);
+  _viewerTimer = setTimeout(() => {
+    if (loading.style.display !== 'none') { loading.style.display = 'none'; errorBox.style.display = 'flex'; }
+  }, 12000);
+  frame.onload = () => { clearTimeout(_viewerTimer); loading.style.display = 'none'; };
+  frame.src = viewUrl;
+  _viewerLastFocus = document.activeElement;
+  modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  document.getElementById('viewer-close').focus();
 }
 function closeDocViewer() {
   document.getElementById('viewer-modal').style.display = 'none';
   document.getElementById('viewer-frame').src = 'about:blank';
   document.body.style.overflow = '';
+  clearTimeout(_viewerTimer);
+  if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('viewer-modal').style.display === 'flex') closeDocViewer();
+  const modal = document.getElementById('viewer-modal');
+  if (modal.style.display !== 'flex') return;
+  if (e.key === 'Escape') { closeDocViewer(); return; }
+  if (e.key === 'Tab') {
+    const f = modal.querySelectorAll('a[href], button');
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
 });
 
 // ── Daily email subscription ───────────────────────────────────────
@@ -444,18 +496,44 @@ function sortReexam(key) {
   renderTable();
 }
 
-function renderTable() {
-  const body = document.getElementById('body');
+function filteredSorted() {
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
+  let items = allDeterminations;
+  if (q) {
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.determination_type]
+      .some((v) => String(v || '').toLowerCase().includes(q)));
+  }
   const { key, dir } = tableSort;
   const sign = dir === 'asc' ? 1 : -1;
-  const items = [...allDeterminations].sort((a, b) => {
+  return [...items].sort((a, b) => {
     if (key === 'official_date') {
       const av = parseDate(a.official_date), bv = parseDate(b.official_date);
       return sign * ((isNaN(av) ? -Infinity : av) - (isNaN(bv) ? -Infinity : bv));
     }
     return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true, sensitivity: 'base' });
   });
+}
+function exportCsv() {
+  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit'];
+  const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit]);
+  const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'reexam-determinations.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function renderTable() {
+  const body = document.getElementById('body');
+  const items = filteredSorted();
   const arrow = (k) => (tableSort.key === k ? (tableSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+
+  if (!items.length) {
+    body.innerHTML = '<div class="state">No determinations match your filter.</div>';
+    return;
+  }
 
   const rows = items.map((d) => {
     const num = d.application_number || '';
@@ -522,6 +600,8 @@ function renderTable() {
     buildPendency(list);
 
     allDeterminations = list;
+    document.getElementById('csv-btn').style.display = '';
+    document.getElementById('table-filter').style.display = '';
     renderTable();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';

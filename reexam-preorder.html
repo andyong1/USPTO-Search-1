@@ -48,6 +48,7 @@
     .badge.dismissed { background: #fed7d7; color: #c53030; }
     .badge.other { background: #e2e8f0; color: #4a5568; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
+    .archived-tag { display: inline-block; margin-left: 8px; font-size: 0.68rem; font-weight: 600; color: #276749; background: #c6f6d5; padding: 1px 7px; border-radius: 8px; vertical-align: middle; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
     .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 16px; }
@@ -186,6 +187,24 @@ function openDocViewer(appNum, documentId, format, label) {
   document.body.style.overflow = 'hidden';
   document.getElementById('viewer-close').focus();
 }
+// Same viewer, but pointed at an explicit URL (e.g., a locally-archived copy).
+function openUrlViewer(url, title) {
+  const frame = document.getElementById('viewer-frame');
+  const loading = document.getElementById('viewer-loading');
+  document.getElementById('viewer-error').style.display = 'none';
+  document.getElementById('viewer-title').textContent = title;
+  document.getElementById('viewer-newtab').href = url;
+  document.getElementById('viewer-download').href = url;
+  loading.style.display = 'flex';
+  const reqId = ++_viewerReq;
+  frame.onload = () => { if (reqId === _viewerReq) loading.style.display = 'none'; };
+  frame.src = url;
+  setTimeout(() => { if (reqId === _viewerReq) loading.style.display = 'none'; }, 3000);
+  _viewerLastFocus = document.activeElement;
+  document.getElementById('viewer-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  document.getElementById('viewer-close').focus();
+}
 function closeDocViewer() {
   document.getElementById('viewer-modal').style.display = 'none';
   document.getElementById('viewer-frame').src = 'about:blank';
@@ -253,31 +272,39 @@ document.addEventListener('keydown', (e) => {
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }
-    const docLinks = (num, docId, label) => {
+    const docLinks = (num, docId, label, archivedUrl) => {
+      const lbl = (label || 'Document').replace(/'/g, '');
+      if (archivedUrl) {
+        // Prefer the locally-archived copy (persists even if USPTO removes it).
+        return `<div class="doclinks">`
+          + `<button class="btn-view" onclick="openUrlViewer('${archivedUrl}','${num} · ${lbl} (archived copy)')">View</button>`
+          + `<a class="ext" href="${archivedUrl}" download>Download ⤓</a>`
+          + `<span class="archived-tag" title="A copy is stored on this site">archived</span></div>`;
+      }
       if (!docId) return '';
       const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
       return `<div class="doclinks">`
-        + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${(label || 'Document').replace(/'/g, '')}')">View</button>`
+        + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View</button>`
         + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
     };
     const dash = '<span class="ext">—</span>';
 
     const rows = subs.map((s) => {
       const num = s.application_number || '';
-      const preCell = `${fmtDate(s.official_date)}${docLinks(num, s.document_identifier, 'Pre-Order Submission')}`;
-      const petCell = s.petition_doc_id ? `${fmtDate(s.petition_date)}${docLinks(num, s.petition_doc_id, 'Requestor Petition')}` : dash;
+      const preCell = `${fmtDate(s.official_date)}${docLinks(num, s.document_identifier, 'Pre-Order Submission', s.preorder_blob_url)}`;
+      const petCell = s.petition_doc_id ? `${fmtDate(s.petition_date)}${docLinks(num, s.petition_doc_id, 'Requestor Petition', s.petition_blob_url)}` : dash;
       let decCell = dash;
       if (s.decision_doc_id) {
         const o = s.decision_outcome || 'other';
         const lbl = o === 'granted' ? 'Granted' : (o === 'dismissed' ? 'Dismissed' : 'Decided');
-        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id, 'Petition Decision')}`;
+        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id, 'Petition Decision', s.decision_blob_url)}`;
       }
       let detCell = dash;
       if (s.determination_type) {
         const denied = /denied/i.test(s.determination_type);
         const cls = denied ? 'dismissed' : 'granted';
         const lbl = denied ? 'Denied' : 'Ordered';
-        detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id, 'Reexam Determination')}`;
+        detCell = `<span class="badge ${cls}">${lbl}</span> ${fmtDate(s.det_date)}${docLinks(num, s.det_doc_id, 'Reexam Determination', s.determination_blob_url)}`;
       }
       return `<tr>
         <td>

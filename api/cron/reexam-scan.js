@@ -18,11 +18,9 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
-  getPreorderArchiveCandidates, updatePreorderBlob,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
-import { archiveDocument, blobEnabled } from '../../lib/blob.js';
 
 export const config = { maxDuration: 60 };
 
@@ -83,32 +81,6 @@ async function maybeSendSubscriberDigest(req) {
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
   return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
-}
-
-// Archive pre-order documents (submission, petition, decision, determination) to
-// Vercel Blob so copies survive even if USPTO removes them. Capped per run.
-async function archivePreorderStep(maxDocs, deadline) {
-  if (!blobEnabled()) return { skipped: 'BLOB_READ_WRITE_TOKEN not set' };
-  const rows = await getPreorderArchiveCandidates(25);
-  let archived = 0;
-  const errors = [];
-  for (const r of rows) {
-    const jobs = [
-      ['preorder_blob_url', r.document_identifier, r.preorder_blob_url],
-      ['petition_blob_url', r.petition_doc_id, r.petition_blob_url],
-      ['decision_blob_url', r.decision_doc_id, r.decision_blob_url],
-      ['determination_blob_url', r.det_doc_id, r.determination_blob_url],
-    ];
-    for (const [col, docId, existing] of jobs) {
-      if (archived >= maxDocs || Date.now() > deadline) return { archived, errors, capped: true };
-      if (existing || !docId) continue;
-      try {
-        const url = await archiveDocument(r.application_number, docId, 'PDF');
-        if (url) { await updatePreorderBlob(r.application_number, col, url); archived++; }
-      } catch (e) { errors.push({ application: r.application_number, col, error: String(e.message || e) }); }
-    }
-  }
-  return { archived, errors };
 }
 
 async function enumerate() {
@@ -244,11 +216,6 @@ export default async function handler(req, res) {
     try { subscriberDigest = await maybeSendSubscriberDigest(req); }
     catch (e) { subscriberDigest = { error: String(e.message || e) }; }
 
-    // 3c) Archive a few pre-order PDFs to Blob (rolling; catches up over runs).
-    let archive = { skipped: true };
-    try { archive = await archivePreorderStep(4, Date.now() + 15000); }
-    catch (e) { archive = { error: String(e.message || e) }; }
-
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -261,7 +228,6 @@ export default async function handler(req, res) {
       counts, // { total, remaining, determined }
       digest,
       subscriberDigest,
-      archive,
       errors,
     });
   } catch (err) {

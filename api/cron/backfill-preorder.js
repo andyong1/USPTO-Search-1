@@ -6,10 +6,9 @@
 import {
   getReexamsForPreorderBackfill, markPreorderChecked, recordPreorder,
   updatePreorderPetition, countReexamsForPreorderBackfill, resetPreorderChecked, PREORDER_CUTOFF,
-  getPreorderArchiveCandidates, updatePreorderBlob, upsertReexams, recordDetermination,
+  upsertReexams, recordDetermination,
 } from '../../lib/db.js';
 import { fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
-import { archiveDocument, blobEnabled } from '../../lib/blob.js';
 
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
@@ -30,8 +29,8 @@ export default async function handler(req, res) {
 
   try {
     // ?app=<control no> — pull one specific reexam directly (no dependence on the
-    // rolling scan/enumeration), record its pre-order submission/petition/decision/
-    // determination, add it to the watch list, and archive its PDFs.
+    // rolling scan/enumeration): record its pre-order submission/petition/decision/
+    // determination and add it to the watch list.
     if (req.query && req.query.app) {
       const appNum = String(req.query.app).replace(/[^0-9A-Za-z]/g, '');
       const PREORDER_CODE = 'RX.PRO.PO';
@@ -102,34 +101,8 @@ export default async function handler(req, res) {
       }));
     }
 
-    // Archive pre-order PDFs to Blob with any remaining time budget.
-    let archived = 0;
-    const archiveErrors = [];
-    if (blobEnabled()) {
-      const cands = await getPreorderArchiveCandidates(60);
-      outer: for (const r of cands) {
-        const jobs = [
-          ['preorder_blob_url', r.document_identifier, r.preorder_blob_url],
-          ['petition_blob_url', r.petition_doc_id, r.petition_blob_url],
-          ['decision_blob_url', r.decision_doc_id, r.decision_blob_url],
-          ['determination_blob_url', r.det_doc_id, r.determination_blob_url],
-        ];
-        for (const [col, docId, existing] of jobs) {
-          if (Date.now() > deadline) break outer;
-          if (existing || !docId) continue;
-          try {
-            const url = await archiveDocument(r.application_number, docId, 'PDF');
-            if (url) { await updatePreorderBlob(r.application_number, col, url); archived++; }
-          } catch (e) { archiveErrors.push({ application: r.application_number, col, error: String(e.message || e) }); }
-        }
-      }
-    }
-
     const remaining = await countReexamsForPreorderBackfill();
-    res.status(200).json({
-      ok: true, cutoff: PREORDER_CUTOFF, reset, processed, found, remaining, done: remaining === 0,
-      blob: blobEnabled() ? { archived, errors: archiveErrors } : 'BLOB_READ_WRITE_TOKEN not set',
-    });
+    res.status(200).json({ ok: true, cutoff: PREORDER_CUTOFF, reset, processed, found, remaining, done: remaining === 0 });
   } catch (err) {
     res.status(500).json({ error: 'Pre-order backfill failed.', detail: String(err.message || err) });
   }

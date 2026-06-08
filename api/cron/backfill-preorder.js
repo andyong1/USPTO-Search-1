@@ -6,10 +6,12 @@
 import {
   getReexamsForPreorderBackfill, markPreorderChecked, recordPreorder,
   updatePreorderPetition, countReexamsForPreorderBackfill, resetPreorderChecked, PREORDER_CUTOFF,
-  getPreorderArchiveCandidates, updatePreorderBlob,
+  getPreorderArchiveCandidates, updatePreorderBlob, upsertReexams, recordDetermination,
 } from '../../lib/db.js';
-import { fetchDocuments, analyzePetition } from '../../lib/uspto.js';
+import { fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { archiveDocument, blobEnabled } from '../../lib/blob.js';
+
+const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
 export const config = { maxDuration: 60 };
 
@@ -27,6 +29,45 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?app=<control no> — pull one specific reexam directly (no dependence on the
+    // rolling scan/enumeration), record its pre-order submission/petition/decision/
+    // determination, add it to the watch list, and archive its PDFs.
+    if (req.query && req.query.app) {
+      const appNum = String(req.query.app).replace(/[^0-9A-Za-z]/g, '');
+      const PREORDER_CODE = 'RX.PRO.PO';
+      const meta = await fetchMetaData(appNum);
+      const filingDate = meta.filingDate || null;
+      const docs = await fetchDocuments(appNum);
+      const preDocs = docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE);
+
+      if (filingDate) await upsertReexams([{ applicationNumber: appNum, filingDate }]);
+
+      let found = 0;
+      for (const d of preDocs) {
+        const isNew = await recordPreorder({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, officialDate: d.officialDate, filingDate });
+        if (isNew) found++;
+      }
+      if (preDocs.length) {
+        const { petition, decision } = analyzePetition(docs, preDocs[0].officialDate);
+        await updatePreorderPetition(appNum, petition, decision);
+      }
+      // Record any determination too (feeds the Determination column).
+      for (const d of docs) {
+        if (DET_CODES[d.documentCode]) {
+          await recordDetermination({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, code: d.documentCode, type: DET_CODES[d.documentCode], officialDate: d.officialDate, groupArtUnit: meta.groupArtUnit, examiner: meta.examiner });
+        }
+      }
+
+      res.status(200).json({
+        ok: true, app: appNum, filingDate, cutoff: PREORDER_CUTOFF,
+        preorderDocsFound: preDocs.length, newlyRecorded: found,
+        willAppear: !!(filingDate && filingDate >= PREORDER_CUTOFF && preDocs.length),
+        note: !preDocs.length ? 'No RX.PRO.PO pre-order document found on this application yet.'
+          : (filingDate && filingDate < PREORDER_CUTOFF) ? 'Filing date is before the Apr 5, 2026 cutoff, so it will not be listed.' : undefined,
+      });
+      return;
+    }
+
     // ?reset=1 re-checks all post-cutoff reexams (e.g., to pick up granted decisions).
     let reset = 0;
     if (req.query && req.query.reset === '1') reset = await resetPreorderChecked();

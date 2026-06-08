@@ -1071,17 +1071,22 @@ function renderFindings(list) {
     const dls = formats.map(fmt => docLink(f.application_number, f.document_identifier, fmt)).join('');
     const appJs = jsq(f.application_number);
     const idJs  = jsq(f.document_identifier);
+    const viewFmt = formats.find(x => /pdf/i.test(x)) || formats[0] || '';
+    const codeJs = jsq(f.document_code || 'Document');
+    const viewBtn = (f.document_identifier && viewFmt)
+      ? `<button class="btn-view" onclick="openDocViewer('${appJs}','${idJs}','${jsq(viewFmt)}','${codeJs}')">View</button>`
+      : '';
     return `<tr class="finding-new">
-      <td><a class="app-link" href="https://patentcenter.uspto.gov/applications/${esc(f.application_number)}" target="_blank" rel="noopener">${esc(f.application_number)}</a>${f.label ? '<br><span class="hint">' + esc(f.label) + '</span>' : ''}</td>
+      <td><a class="app-link" href="#" onclick="openInAppLookup('${appJs}');return false;" title="View full record in this app">${esc(f.application_number)}</a>${f.label ? '<br><span class="hint">' + esc(f.label) + '</span>' : ''}</td>
       <td>${esc(f.document_code || '')}<br><span class="hint">${esc(f.description || '')}</span></td>
       <td>${fmtDate(f.official_date)}</td>
       <td>${esc(f.direction || '')}</td>
-      <td>${dls || '<span class="hint">—</span>'}</td>
+      <td style="white-space:nowrap">${viewBtn}${dls || (viewBtn ? '' : '<span class="hint">—</span>')}</td>
       <td><button class="dl-link" style="cursor:pointer" onclick="ackOne('${appJs}','${idJs}')">✓ Seen</button></td>
     </tr>`;
   }).join('');
   el.innerHTML = `<div class="result-table-wrap"><table>
-    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>Download</th><th>Action</th></tr></thead>
+    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>View / Download</th><th>Action</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

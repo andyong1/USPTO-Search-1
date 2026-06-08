@@ -8,20 +8,26 @@
 //                       browsers would otherwise download).
 // disposition=attachment (default) → force a download.
 //
-// USPTO's download gateway intermittently returns 504s, so each request is given a
-// bounded timeout and retried once. On final failure an inline request gets a small
-// readable HTML page (so the viewer/new-tab shows a message, not raw JSON).
+// The upstream body is STREAMED straight to the client (not buffered), so large
+// PDFs start rendering immediately instead of waiting for the whole file. The
+// timeout covers only the initial response; once bytes are flowing they stream
+// freely (bounded by maxDuration). USPTO occasionally 504s, so a failed initial
+// request is retried once, and an inline failure returns a readable HTML notice.
+
+import { Readable } from 'node:stream';
 
 export const config = { maxDuration: 60 };
 
 const DL_BASE = 'https://api.uspto.gov/api/v1/download/applications';
 const ATTEMPTS = 2;
-const ATTEMPT_TIMEOUT_MS = 24000;
+const CONNECT_TIMEOUT_MS = 25000;
 
 const EXT = { PDF: 'pdf', XML: 'xml', 'MS WORD': 'docx', DOCX: 'docx', DOC: 'docx' };
 const CTYPE = { pdf: 'application/pdf', xml: 'application/xml', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
 
-async function fetchWithTimeout(url, opts, ms) {
+// Resolves once the response HEADERS arrive (fetch resolves before the body is
+// read), then the abort timer is cleared so streaming the body isn't cut short.
+async function fetchHeaders(url, opts, ms) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
@@ -31,7 +37,7 @@ async function fetchWithTimeout(url, opts, ms) {
 function errorPageHtml(status) {
   const timedOut = status === 504 || status === 408 || status === 0;
   const msg = timedOut
-    ? 'The USPTO document service timed out while retrieving this file. This is usually temporary — please try again in a few minutes.'
+    ? 'The USPTO document service timed out while retrieving this file. This is usually temporary — please try again in a moment.'
     : `The USPTO document service returned an error (HTTP ${status}) for this file. Please try again later.`;
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -67,37 +73,51 @@ export default async function handler(req, res) {
   let lastStatus = 0;
   let lastDetail = '';
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    let upstream;
     try {
-      const upstream = await fetchWithTimeout(url, { headers: { 'X-API-KEY': apiKey } }, ATTEMPT_TIMEOUT_MS);
-      if (upstream.ok) {
-        const buf = Buffer.from(await upstream.arrayBuffer());
-        if (inline) {
-          // Force the true content-type so the browser renders it instead of downloading.
-          // (USPTO frequently labels downloads as application/octet-stream.)
-          const upstreamType = upstream.headers.get('content-type') || '';
-          const isGeneric = !upstreamType || /octet-stream|force-download|application\/download/i.test(upstreamType);
-          res.setHeader('Content-Type', (isGeneric ? CTYPE[ext] : upstreamType) || CTYPE[ext] || 'application/octet-stream');
-          res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-        } else {
-          res.setHeader('Content-Type', upstream.headers.get('content-type') || CTYPE[ext] || 'application/octet-stream');
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        }
-        res.status(200).send(buf);
-        return;
-      }
+      upstream = await fetchHeaders(url, { headers: { 'X-API-KEY': apiKey } }, CONNECT_TIMEOUT_MS);
+    } catch (err) {
+      lastStatus = 504; // aborted / network error
+      lastDetail = String(err.message || err);
+      continue; // retry
+    }
+
+    if (!upstream.ok) {
       lastStatus = upstream.status;
       lastDetail = (await upstream.text().catch(() => '')).slice(0, 200);
       if (upstream.status < 500 && upstream.status !== 408) break; // 4xx won't change on retry
-    } catch (err) {
-      lastStatus = 504; // aborted/timed out
-      lastDetail = String(err.message || err);
+      continue; // retry 5xx/408
     }
+
+    // Success — set headers and stream the body straight through.
+    if (inline) {
+      const upstreamType = upstream.headers.get('content-type') || '';
+      const isGeneric = !upstreamType || /octet-stream|force-download|application\/download/i.test(upstreamType);
+      res.setHeader('Content-Type', (isGeneric ? CTYPE[ext] : upstreamType) || CTYPE[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    } else {
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || CTYPE[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    }
+    const len = upstream.headers.get('content-length');
+    if (len) res.setHeader('Content-Length', len);
+    res.statusCode = 200;
+
+    if (!upstream.body) { // no streamable body — fall back to buffering
+      res.end(Buffer.from(await upstream.arrayBuffer()));
+      return;
+    }
+    const nodeStream = Readable.fromWeb(upstream.body);
+    nodeStream.on('error', () => { try { res.end(); } catch { /* already closed */ } });
+    nodeStream.pipe(res);
+    return;
   }
 
-  // All attempts failed.
+  // All attempts failed before any bytes were sent.
   if (inline) {
-    res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(errorPageHtml(lastStatus));
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.end(errorPageHtml(lastStatus));
   } else {
     res.status(502).json({ error: `Download failed: HTTP ${lastStatus}`, detail: lastDetail });
   }

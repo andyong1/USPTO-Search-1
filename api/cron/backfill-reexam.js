@@ -53,13 +53,13 @@ export default async function handler(req, res) {
     }
 
     // ?determinations=1 — recapture ALL ex parte reexam determinations. Enumerates
-    // 90* reexams filed on/after ?from (default 2025-08-01, comfortably covering
-    // determinations issued from Dec 22 2025 onward), re-pools them, and scans for
+    // 90* reexams filed on/after ?from (default 2024-08-01, comfortably covering
+    // determinations issued from Jan 1 2025 onward), re-pools them, and scans for
     // RXREXO/RXREXD. Resumable — run until done is true.
-    //   first call: ?determinations=1&from=2025-08-01  (enumerates + re-pools)
+    //   first call: ?determinations=1&from=2024-08-01  (enumerates + re-pools)
     //   subsequent: ?determinations=1                  (keeps scanning the pool)
     if (req.query && req.query.determinations === '1') {
-      const from = String(req.query.from || '2025-08-01');
+      const from = String(req.query.from || '2024-08-01');
       const deadline = Date.now() + TIME_BUDGET_MS;
       let enumerated = 0;
 

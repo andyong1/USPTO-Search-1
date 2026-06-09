@@ -35,7 +35,8 @@ export const config = { maxDuration: 60 };
 const SCAN_BATCH = 25;        // reexams scanned per run
 const CONCURRENCY = 5;
 const WINDOW_MONTHS = 6;      // enumerate reexams filed within this window
-const PRUNE_MONTHS = 9;       // drop reexams older than this
+const PRUNE_MONTHS = 24;      // drop reexams older than this (wide enough to keep
+                             // the Jan 2025+ determination set in the watch table)
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
 

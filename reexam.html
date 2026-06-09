@@ -146,7 +146,7 @@
   </div>
 
   <div class="card" style="margin-top:24px">
-    <h2>Statistics from Dec. 22, 2025 Through Present</h2>
+    <h2>Statistics from Jan. 1, 2025 Through Present</h2>
     <div id="stats-kpi"></div>
     <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
     <div class="stats-grid">
@@ -415,7 +415,7 @@ function grantRateLineSvg(data) {
 function buildTrend(list) {
   const el = document.getElementById('stats-trend');
   // Start the graph at January 2026 (Dec 2025 has only a single entry).
-  const data = monthlyData(list).filter((m) => m.month >= '2026-01');
+  const data = monthlyData(list).filter((m) => m.month >= '2025-01');
   if (!data.length) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="stats-title">Monthly Grant Rate (% of determinations ordered)</div>
     <div class="chart-wrap">${grantRateLineSvg(data)}<div class="chart-tip"></div></div>`;
@@ -572,8 +572,8 @@ function renderTable() {
     const res = await fetch('/api/reexam');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    // Only include determinations issued on or after December 22, 2025.
-    const COLLECT_CUTOFF = Date.UTC(2025, 11, 22);
+    // Only include determinations issued on or after January 1, 2025.
+    const COLLECT_CUTOFF = Date.UTC(2025, 0, 1);
     const list = (data.determinations || []).filter((d) => {
       const t = parseDate(d.official_date);
       return !isNaN(t) && t >= COLLECT_CUTOFF;

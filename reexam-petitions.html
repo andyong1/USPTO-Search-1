@@ -28,8 +28,10 @@
     .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
     .explainer p { margin: 0; }
     .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .kpi-strip.two { grid-template-columns: repeat(2, 1fr); }
+    .kpi-strip.three { grid-template-columns: repeat(3, 1fr); }
     .kpi-strip.four { grid-template-columns: repeat(4, 1fr); }
-    @media (max-width: 700px) { .kpi-strip, .kpi-strip.four { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 700px) { .kpi-strip, .kpi-strip.three, .kpi-strip.four { grid-template-columns: repeat(2, 1fr); } }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 20px 0 8px; }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
@@ -196,13 +198,17 @@ function render() {
     const dismissing = _rows.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
     const decided = granting + dismissing;
     const grantRate = decided > 0 ? Math.round(granting / decided * 100) + '%' : '—';
-    document.getElementById('stat').innerHTML = `<div class="kpi-strip">
-      <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
-      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
-      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
-      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
-      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
-    </div>`;
+    document.getElementById('stat').innerHTML = `
+      <div class="kpi-strip two">
+        <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
+        <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
+      </div>
+      <div class="stats-title">Petition Decisions</div>
+      <div class="kpi-strip three">
+        <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
+        <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
+        <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
+      </div>`;
 
     // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
     const toPet = _rows.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);

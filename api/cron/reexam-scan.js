@@ -19,12 +19,14 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
-  getOrderedReexamsToCheckPetitions, getPetitionDecisionsToParse,
+  getOrderedReexamsToCheckPetitions,
+  getDecisionsToStartOcr, setDecisionOcrProcessing, getDecisionsOcrProcessing, setDecisionOcrDone, setDecisionOcrFailed,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
-import { detectPostOrderPetitionForApp, parsePetitionDecision } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { ocrConfigured, startDecisionOcr, collectDecisionOcr } from '../../lib/ocr.js';
 
 export const config = { maxDuration: 60 };
 
@@ -285,11 +287,24 @@ export default async function handler(req, res) {
       const pDeadline = Date.now() + 10000;
       let detected = 0;
       for (const a of apps) { if (Date.now() > pDeadline) break; try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
-      // Flag petition decisions that include a 325(d) analysis (a couple per run).
-      let decisions325d = 0;
-      const decs = await getPetitionDecisionsToParse(2);
-      for (const r of decs) { if (Date.now() > pDeadline + 8000) break; try { if (await parsePetitionDecision(r)) decisions325d++; } catch { /* retry next run */ } }
-      petitions = { scanned: apps.length, detected, decisionsParsed: decs.length, decisions325d };
+      // OCR petition decisions (AWS Textract): start a couple new jobs, collect a
+      // couple finished ones, and flag 325(d) + store a searchable PDF.
+      let ocrStarted = 0, ocrDone = 0;
+      if (ocrConfigured()) {
+        const toStart = await getDecisionsToStartOcr(2);
+        for (const r of toStart) { if (Date.now() > pDeadline + 8000) break; try { const job = await startDecisionOcr(r.application_number, r.decision_doc_id); if (job) { await setDecisionOcrProcessing(r.application_number, job); ocrStarted++; } } catch { /* retry next run */ } }
+        const processing = await getDecisionsOcrProcessing(2);
+        for (const r of processing) {
+          if (Date.now() > pDeadline + 16000) break;
+          try {
+            const res = await collectDecisionOcr(r.application_number, r.decision_doc_id, r.decision_ocr_job);
+            if (res.pending) continue;
+            if (res.failed) { await setDecisionOcrFailed(r.application_number); continue; }
+            await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++;
+          } catch { /* retry next run */ }
+        }
+      }
+      petitions = { scanned: apps.length, detected, ocrStarted, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.

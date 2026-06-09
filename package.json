@@ -8,7 +8,11 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.658.0",
+    "@aws-sdk/client-textract": "^3.658.0",
+    "@vercel/blob": "^0.27.0",
     "@vercel/postgres": "^0.10.0",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1"
   }
 }

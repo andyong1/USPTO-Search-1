@@ -6,11 +6,11 @@
 
 import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
-  getOrderedReexamsToCheckPetitions, resetPetitionScan,
+  getOrderedReexamsToCheckPetitions, resetPetitionScan, getPetitionDecisionsToParse,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
-import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, parsePetitionDecision } from '../../lib/petitions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -114,8 +114,20 @@ export default async function handler(req, res) {
           catch { /* leave unscanned; retried next call */ }
         }
       }
+      // Parse petition decisions for a 325(d) analysis (within remaining budget).
+      let decisionsParsed = 0, decisions325d = 0;
+      const decs = await getPetitionDecisionsToParse(100);
+      for (const r of decs) {
+        if (Date.now() > deadline) break;
+        try { if (await parsePetitionDecision(r)) decisions325d++; decisionsParsed++; }
+        catch { /* retry next call */ }
+      }
       const remainingScan = (await getOrderedReexamsToCheckPetitions(100000)).length;
-      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, remainingScan, done: remainingScan === 0 });
+      const remainingDecisions = (await getPetitionDecisionsToParse(100000)).length;
+      res.status(200).json({
+        ok: true, mode: 'petitions', scanned, detected, decisionsParsed, decisions325d,
+        remainingScan, remainingDecisions, done: remainingScan === 0 && remainingDecisions === 0,
+      });
       return;
     }
 

@@ -19,12 +19,12 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
-  getOrderedReexamsToCheckPetitions,
+  getOrderedReexamsToCheckPetitions, getPetitionDecisionsToParse,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
-import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, parsePetitionDecision } from '../../lib/petitions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -285,7 +285,11 @@ export default async function handler(req, res) {
       const pDeadline = Date.now() + 10000;
       let detected = 0;
       for (const a of apps) { if (Date.now() > pDeadline) break; try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
-      petitions = { scanned: apps.length, detected };
+      // Flag petition decisions that include a 325(d) analysis (a couple per run).
+      let decisions325d = 0;
+      const decs = await getPetitionDecisionsToParse(2);
+      for (const r of decs) { if (Date.now() > pDeadline + 8000) break; try { if (await parsePetitionDecision(r)) decisions325d++; } catch { /* retry next run */ } }
+      petitions = { scanned: apps.length, detected, decisionsParsed: decs.length, decisions325d };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.

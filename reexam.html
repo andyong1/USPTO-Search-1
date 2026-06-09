@@ -124,7 +124,7 @@
   <nav class="site-nav">
     <a href="/uspto-search">Application Search &amp; Tracking</a>
     <a href="/reexam" class="active" aria-current="page">Reexam Determinations</a>
-    <a href="/reexam-preorder">Pre-Order SNQ</a>
+    <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
     <a href="/reexam-petitions">Post-Order Petitions</a>
   </nav>
   <div class="card">
@@ -571,7 +571,12 @@ function renderTable() {
     const res = await fetch('/api/reexam');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const list = data.determinations || [];
+    // Only include determinations issued on or after December 22, 2025.
+    const COLLECT_CUTOFF = Date.UTC(2025, 11, 22);
+    const list = (data.determinations || []).filter((d) => {
+      const t = parseDate(d.official_date);
+      return !isNaN(t) && t >= COLLECT_CUTOFF;
+    });
     const heading = document.getElementById('reexam-heading');
     if (heading) heading.textContent = `Ex Parte Reexamination Determinations (Total: ${list.length})`;
     if (!list.length) {

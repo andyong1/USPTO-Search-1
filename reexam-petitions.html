@@ -28,7 +28,9 @@
     .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
     .explainer p { margin: 0; }
     .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-    @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi-strip.four { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 700px) { .kpi-strip, .kpi-strip.four { grid-template-columns: repeat(2, 1fr); } }
+    .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 20px 0 8px; }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -88,6 +90,7 @@
       <p>After a reexamination is ordered (a substantial new question of patentability was found), patent owners recently have been petitioning the Patent Office to reconsider that grant or terminate the proceeding pursuant to 35 U.S.C. § 325(d). This page tracks such motions and the Office's decisions. Where a proceeding has multiple PET.OP documents (the petition plus exhibits), the shortest is treated as the petition itself. The requester opposition (RXOPPPET or RXPET.) and the Office's petition decision are shown where on file.</p>
     </div>
     <div id="stat"></div>
+    <div id="timing"></div>
   </div>
 
   <div class="card">
@@ -105,6 +108,10 @@
 <script>
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
+function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
+function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
 function openDocViewer(appNum, documentId, format, label) {
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
   window.open(url, '_blank', 'noopener');
@@ -196,6 +203,18 @@ function render() {
       <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
       <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
     </div>`;
+
+    // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
+    const toPet = _rows.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);
+    const toDec = _rows.map((p) => p.decision_doc_id ? daysBetween(p.petition_date, p.decision_date) : null).filter((d) => d != null);
+    const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+    document.getElementById('timing').innerHTML = `<div class="stats-title">Petition Timing</div><div class="kpi-strip four">
+      ${tcard(avg(toPet), 'Avg Days: Reexam Ordered → Petition', toPet.length)}
+      ${tcard(median(toPet), 'Median Days: Reexam Ordered → Petition', toPet.length)}
+      ${tcard(avg(toDec), 'Avg Days: Petition → Decision', toDec.length)}
+      ${tcard(median(toDec), 'Median Days: Petition → Decision', toDec.length)}
+    </div>`;
+
     document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
     if (!total) {
       body.innerHTML = '<div class="state">No post-order patent owner petitions recorded yet. The daily scan lists them here as they are filed.</div>';

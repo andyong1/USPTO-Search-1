@@ -1,5 +1,5 @@
 // Returns recently detected reexamination determinations for the /reexam page,
-// or — with ?petitions=1 — post-grant patent-owner petitions for /reexam-petitions.
+// or — with ?petitions=1 — post-grant patent owner petitions for /reexam-petitions.
 //   GET /api/reexam              →  { determinations: [...] }
 //   GET /api/reexam?petitions=1  →  { petitions: [...] }
 import { listRecentDeterminations, listPostOrderPetitions } from '../lib/db.js';

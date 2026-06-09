@@ -33,7 +33,7 @@ const CONCURRENCY = 5;
 const WINDOW_MONTHS = 6;      // enumerate reexams filed within this window
 const PRUNE_MONTHS = 9;       // drop reexams older than this
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
-const PREORDER_CODE = 'RX.PRO.PO'; // patent-owner pre-order SNQ submission
+const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);
@@ -165,7 +165,7 @@ async function enumerate() {
 async function scanOne(appNum, filingDate) {
   const docs = await fetchDocuments(appNum);
 
-  // Patent-owner pre-order SNQ submissions (for reexams filed on/after cutoff),
+  // Patent owner pre-order SNQ submissions (for reexams filed on/after cutoff),
   // plus any requestor petition within 20 days and its decision.
   if (filingDate && filingDate >= PREORDER_CUTOFF) {
     const preDocs = docs.filter((x) => (x.documentCode || '').toUpperCase() === PREORDER_CODE);
@@ -277,7 +277,7 @@ export default async function handler(req, res) {
       conclusions = { detect, parse };
     } catch (e) { conclusions = { error: String(e.message || e) }; }
 
-    // 3d) Detect post-order patent-owner petitions (PET.OP) + opposition/decision
+    // 3d) Detect post-order patent owner petitions (PET.OP) + opposition/decision
     // on ordered reexams. Rolling and capped per run.
     let petitions = { skipped: true };
     try {

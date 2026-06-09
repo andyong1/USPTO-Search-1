@@ -1,4 +1,4 @@
-// Returns patent-owner pre-order SNQ submissions and the total count of ex parte
+// Returns patent owner pre-order SNQ submissions and the total count of ex parte
 // reexams filed since the cutoff (for the coverage statistic).
 //   GET /api/reexam-preorder  →  { submissions: [...], totalFiled, cutoff }
 import { listPreorder, preorderEffectStats, PREORDER_CUTOFF } from '../lib/db.js';

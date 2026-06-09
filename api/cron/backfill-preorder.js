@@ -1,4 +1,4 @@
-// On-demand scan for patent-owner pre-order SNQ submissions (RX.PRO.PO) across
+// On-demand scan for patent owner pre-order SNQ submissions (RX.PRO.PO) across
 // ex parte reexams filed on/after the cutoff — including ones already determined.
 // Trigger manually: GET /api/cron/backfill-preorder?key=<CRON_SECRET>
 // Processes as many as it can within a time budget; run until done is true.

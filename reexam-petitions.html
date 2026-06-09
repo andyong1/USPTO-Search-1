@@ -158,10 +158,7 @@ function render() {
       const cls = o === 'granted' ? 'granted' : (o === 'dismissed' || o === 'denied' ? 'dismissed' : 'other');
       const lbl = o ? (o.charAt(0).toUpperCase() + o.slice(1)) : 'Decided';
       const flag325 = p.decision_325d ? ' <span class="badge s325" title="Decision includes a 35 U.S.C. 325(d) analysis">§325(d)</span>' : '';
-      const searchable = p.decision_pdf_blob_url
-        ? `<div class="doclinks"><a class="ext" href="${p.decision_pdf_blob_url}" target="_blank" rel="noopener">Searchable PDF (OCR) ↗</a></div>`
-        : '';
-      decCell = `<span class="badge ${cls}">${esc(lbl)}</span>${flag325} ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}${searchable}`;
+      decCell = `<span class="badge ${cls}">${esc(lbl)}</span>${flag325} ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
     }
     return `<tr>
       <td>

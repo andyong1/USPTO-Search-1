@@ -8,7 +8,7 @@ import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
-  getOrderedReexamsToCheckActions, countActionsToCheck,
+  getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
@@ -35,6 +35,8 @@ export default async function handler(req, res) {
     // ?actions=1 — backfill office-action timing (first non-final / final action
     // dates) for ordered reexams since the cutoff. Resumable; run until done.
     if (req.query && req.query.actions === '1') {
+      // ?reset=1 clears existing rows so everything re-scans (e.g., to backfill doc ids).
+      if (req.query.reset === '1') await resetReexamActions();
       const deadline = Date.now() + TIME_BUDGET_MS;
       let checked = 0;
       while (Date.now() < deadline) {

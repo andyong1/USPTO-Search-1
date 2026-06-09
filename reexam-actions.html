@@ -41,6 +41,9 @@
     .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
     .days { color: #718096; font-size: 0.8rem; }
+    .doclinks { margin-top: 3px; font-size: 0.8rem; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: #15305a; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
     .btn-csv:hover { background: #cbd5e0; }
@@ -98,6 +101,18 @@ function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/
 function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
 function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
+function openDocViewer(appNum, documentId, format, label) {
+  const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
+  window.open(url, '_blank', 'noopener');
+}
+function docLinks(num, docId, label) {
+  if (!docId) return '';
+  const lbl = (label || 'Document').replace(/'/g, '');
+  const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+  return `<div class="doclinks">`
+    + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View</button>`
+    + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
+}
 
 let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -127,7 +142,9 @@ function render() {
   const body = document.getElementById('body');
   const items = filtered();
   if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
-  const cell = (date, n) => date ? `${fmtDate(date)} <span class="days">(${n} days)</span>` : '<span class="ext">—</span>';
+  const cell = (num, date, n, docId, label) => date
+    ? `${fmtDate(date)} <span class="days">(${n} days)</span>${docLinks(num, docId, label)}`
+    : '<span class="ext">—</span>';
   const rows = items.map((p) => {
     const num = p.application_number || '';
     return `<tr>
@@ -136,8 +153,8 @@ function render() {
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
-      <td>${cell(p.nonf_date, daysBetween(p.order_date, p.nonf_date))}</td>
-      <td>${cell(p.finl_date, daysBetween(p.order_date, p.finl_date))}</td>
+      <td>${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
+      <td>${cell(num, p.finl_date, daysBetween(p.order_date, p.finl_date), p.finl_doc_id, 'Final Office Action')}</td>
       <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
     </tr>`;

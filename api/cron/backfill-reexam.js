@@ -41,13 +41,15 @@ export default async function handler(req, res) {
         }
       }
       const toParse = await getPetitionsToParse(60);
+      const parseErrors = [];
       for (const r of toParse) {
         if (Date.now() > deadline) break;
-        try { await parseOnePetition(r); parsed++; } catch { /* retry next call */ }
+        try { await parseOnePetition(r); parsed++; }
+        catch (e) { parseErrors.push({ app: r.application_number, error: String(e.message || e) }); }
       }
       const remainingScan = (await getOrderedReexamsToCheckPetitions(100000)).length;
       const remainingParse = (await getPetitionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, parsed, remainingScan, remainingParse, done: remainingScan === 0 && remainingParse === 0 });
+      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, parsed, remainingScan, remainingParse, done: remainingScan === 0 && remainingParse === 0, parseErrors: parseErrors.slice(0, 5) });
       return;
     }
 

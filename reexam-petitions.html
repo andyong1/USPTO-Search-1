@@ -157,8 +157,7 @@ function render() {
       const o = p.decision_outcome || 'other';
       const cls = o === 'granted' ? 'granted' : (o === 'dismissed' || o === 'denied' ? 'dismissed' : 'other');
       const lbl = o ? (o.charAt(0).toUpperCase() + o.slice(1)) : 'Decided';
-      const flag325 = p.decision_325d ? ' <span class="badge s325" title="Decision includes a 35 U.S.C. 325(d) analysis">§325(d)</span>' : '';
-      decCell = `<span class="badge ${cls}">${esc(lbl)}</span>${flag325} ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
+      decCell = `<span class="badge ${cls}">${esc(lbl)}</span> ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
     }
     return `<tr>
       <td>
@@ -172,7 +171,7 @@ function render() {
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision</th></tr></thead>
+    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision Citing § 325(d)</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -187,13 +186,14 @@ function render() {
     const withOpp = _rows.filter((p) => p.opposition_doc_id).length;
     const granting = _rows.filter((p) => p.decision_outcome === 'granted').length;
     const dismissing = _rows.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
-    const dec325 = _rows.filter((p) => p.decision_325d === true).length;
+    const decided = granting + dismissing;
+    const grantRate = decided > 0 ? Math.round(granting / decided * 100) + '%' : '—';
     document.getElementById('stat').innerHTML = `<div class="kpi-strip">
       <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
       <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
-      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition</div></div>
-      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition</div></div>
-      <div class="kpi"><div class="num">${dec325}</div><div class="lbl">Decisions Citing § 325(d)</div></div>
+      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
+      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
+      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
     </div>`;
     document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
     if (!total) {

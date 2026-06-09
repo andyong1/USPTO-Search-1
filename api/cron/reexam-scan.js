@@ -20,13 +20,13 @@ import {
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
   getOrderedReexamsToCheckPetitions,
-  getDecisionsToStartOcr, setDecisionOcrProcessing, getDecisionsOcrProcessing, setDecisionOcrDone, setDecisionOcrFailed,
+  getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
-import { ocrConfigured, startDecisionOcr, collectDecisionOcr } from '../../lib/ocr.js';
+import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 
 export const config = { maxDuration: 60 };
 
@@ -287,24 +287,18 @@ export default async function handler(req, res) {
       const pDeadline = Date.now() + 10000;
       let detected = 0;
       for (const a of apps) { if (Date.now() > pDeadline) break; try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
-      // OCR petition decisions (AWS Textract): start a couple new jobs, collect a
-      // couple finished ones, and flag 325(d) + store a searchable PDF.
-      let ocrStarted = 0, ocrDone = 0;
+      // OCR one petition decision (OCR.space) per run: flag 325(d) + store a
+      // searchable PDF in Blob.
+      let ocrDone = 0;
       if (ocrConfigured()) {
-        const toStart = await getDecisionsToStartOcr(2);
-        for (const r of toStart) { if (Date.now() > pDeadline + 8000) break; try { const job = await startDecisionOcr(r.application_number, r.decision_doc_id); if (job) { await setDecisionOcrProcessing(r.application_number, job); ocrStarted++; } } catch { /* retry next run */ } }
-        const processing = await getDecisionsOcrProcessing(2);
-        for (const r of processing) {
-          if (Date.now() > pDeadline + 16000) break;
-          try {
-            const res = await collectDecisionOcr(r.application_number, r.decision_doc_id, r.decision_ocr_job);
-            if (res.pending) continue;
-            if (res.failed) { await setDecisionOcrFailed(r.application_number); continue; }
-            await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++;
-          } catch { /* retry next run */ }
+        const todo = await getDecisionsToStartOcr(1);
+        for (const r of todo) {
+          if (Date.now() > pDeadline + 25000) break;
+          try { const res = await ocrDecision(r.application_number, r.decision_doc_id); await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++; }
+          catch { await setDecisionOcrFailed(r.application_number); }
         }
       }
-      petitions = { scanned: apps.length, detected, ocrStarted, ocrDone };
+      petitions = { scanned: apps.length, detected, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.

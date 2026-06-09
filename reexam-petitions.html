@@ -27,8 +27,8 @@
     .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
     .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
     .explainer p { margin: 0; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr; } }
+    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 600px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -182,11 +182,13 @@ function render() {
     _rows = data.petitions || [];
     const total = _rows.length;
     const withOpp = _rows.filter((p) => p.opposition_doc_id).length;
-    const withDec = _rows.filter((p) => p.decision_doc_id).length;
+    const granting = _rows.filter((p) => p.decision_outcome === 'granted').length;
+    const dismissing = _rows.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
     document.getElementById('stat').innerHTML = `<div class="kpi-strip">
       <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
       <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
-      <div class="kpi"><div class="num">${withDec}</div><div class="lbl">With Petition Decision</div></div>
+      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition</div></div>
+      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition</div></div>
     </div>`;
     document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
     if (!total) {

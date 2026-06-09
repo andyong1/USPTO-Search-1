@@ -42,6 +42,8 @@
     .ext:hover { text-decoration: underline; }
     .days { color: #718096; font-size: 0.8rem; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 18px 0 8px; }
+    .dist-row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .dist-col { flex: 1; min-width: 320px; }
     .dist-wrap { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 420px; }
     .dist-wrap th { position: static; box-shadow: none; }
     .avg-actions { margin-top: 14px; font-size: 0.95rem; color: #2d3748; }
@@ -134,25 +136,30 @@ function statCards(rows) {
 function buildDistribution(rows) {
   const el = document.getElementById('dist');
   const nonfDays = rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
+  const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
   const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
-  if (!nonfDays.length && !counts.length) { el.innerHTML = ''; return; }
-  let table = '';
-  if (nonfDays.length) {
+  if (!nonfDays.length && !finlDays.length && !counts.length) { el.innerHTML = ''; return; }
+  const bucketTable = (title, label, days) => {
+    if (!days.length) return '';
     const buckets = [['< 90 days', 0], ['90–180 days', 0], ['181–270 days', 0], ['> 270 days', 0]];
-    for (const d of nonfDays) { if (d < 90) buckets[0][1]++; else if (d <= 180) buckets[1][1]++; else if (d <= 270) buckets[2][1]++; else buckets[3][1]++; }
-    const pct = (n) => (n / nonfDays.length * 100).toFixed(1);
+    for (const d of days) { if (d < 90) buckets[0][1]++; else if (d <= 180) buckets[1][1]++; else if (d <= 270) buckets[2][1]++; else buckets[3][1]++; }
+    const pct = (n) => (n / days.length * 100).toFixed(1);
     const brows = buckets.map(([lab, c]) => `<tr><td>${lab}</td><td>${c}</td><td>${pct(c)}%</td></tr>`).join('');
-    table = `<div class="stats-title">Time to First Office Action — Distribution (n = ${nonfDays.length})</div>
+    return `<div class="dist-col"><div class="stats-title">${title} (n = ${days.length})</div>
       <div class="dist-wrap"><table>
-        <thead><tr><th>Time to first action</th><th>Count</th><th>%</th></tr></thead>
-        <tbody>${brows}</tbody></table></div>`;
-  }
+        <thead><tr><th>${label}</th><th>Count</th><th>%</th></tr></thead>
+        <tbody>${brows}</tbody></table></div></div>`;
+  };
+  const tables = `<div class="dist-row">`
+    + bucketTable('Time to First Office Action — Distribution', 'Time to first action', nonfDays)
+    + bucketTable('Time to Final Office Action — Distribution', 'Time to final action', finlDays)
+    + `</div>`;
   let avg = '';
   if (counts.length) {
     const a = (counts.reduce((s, x) => s + x, 0) / counts.length).toFixed(1);
     avg = `<div class="avg-actions">Average office actions per reexam (among reexams with at least one action): <strong>${a}</strong> <span class="days">(n = ${counts.length})</span></div>`;
   }
-  el.innerHTML = table + avg;
+  el.innerHTML = tables + avg;
 }
 
 // Populate the "By Examiner" dropdown (examiners with at least one office action)

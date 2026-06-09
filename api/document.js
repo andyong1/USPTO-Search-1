@@ -101,6 +101,9 @@ export default async function handler(req, res) {
     }
     const len = upstream.headers.get('content-length');
     if (len) res.setHeader('Content-Length', len);
+    // Documents are immutable, so cache aggressively in the browser and Vercel's
+    // edge CDN — repeat views return instantly without re-hitting USPTO.
+    res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
     res.statusCode = 200;
 
     if (!upstream.body) { // no streamable body — fall back to buffering
@@ -113,7 +116,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  // All attempts failed before any bytes were sent.
+  // All attempts failed before any bytes were sent. Never cache a failure so a
+  // later retry can succeed.
+  res.setHeader('Cache-Control', 'no-store');
   if (inline) {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

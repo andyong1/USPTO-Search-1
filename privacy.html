@@ -47,13 +47,15 @@
   <a class="back-link" href="/uspto-search" onclick="if(history.length>1){history.back();return false;}">← Back to last page</a>
   <div class="card">
     <h2>Privacy Policy</h2>
-    <div class="effective">Effective date: June 7, 2026</div>
+    <div class="effective">Effective date: June 9, 2026</div>
 
     <p>This is a free, non-commercial tool for searching publicly available U.S. patent
-    and reexamination data from the USPTO Open Data Portal, for monitoring specific
-    applications, and for receiving optional email alerts about ex parte reexamination
-    determinations. It displays <strong>no advertising</strong> and is not operated for profit.
-    This policy explains what limited information the site handles.</p>
+    and ex parte reexamination data from the USPTO Open Data Portal, for monitoring specific
+    applications, for viewing and downloading file-wrapper documents, and for browsing
+    reexamination analytics (determinations, pre-order SNQ submissions, post-order patent owner
+    petitions, and office-action timing). It also offers optional email alerts about
+    reexamination determinations. It displays <strong>no advertising</strong> and is not operated
+    for profit. This policy explains what limited information the site handles.</p>
 
     <h3>1. No accounts, no tracking</h3>
     <ul>
@@ -83,19 +85,24 @@
     the one-click unsubscribe link included in every alert email (which deletes your email address
     from the list).</p>
 
-    <h3>3. Searches</h3>
-    <p>When you run a search or look up an application, your query is sent to the USPTO Open Data
-    Portal API to return results. The site does not retain a history of your individual searches.
-    Patent information displayed by the site is <strong>public record</strong> maintained by the USPTO.</p>
+    <h3>3. Searches, documents, and public records</h3>
+    <p>When you run a search, look up an application, or open or download a document, the request is
+    passed through the site to the USPTO Open Data Portal to return the result. The site does not
+    retain a history of your individual searches or document views. All patent, reexamination, and
+    document information shown or served by the site — including the reexamination determinations,
+    pre-order SNQ, post-order petitions, and office-action-timing pages — is <strong>public
+    record</strong> maintained by the USPTO.</p>
 
     <h3>4. Service providers</h3>
     <p>The site relies on a few third-party services to function. Your use of the site is also
     subject to their respective privacy practices:</p>
     <ul>
-      <li><strong>USPTO Open Data Portal</strong> (<code>data.uspto.gov</code>) — source of all patent data; search requests are sent here.</li>
+      <li><strong>USPTO Open Data Portal</strong> (<code>data.uspto.gov</code>) — source of all patent and reexamination data and documents.</li>
       <li><strong>Vercel</strong> — website hosting. As the host, Vercel may automatically log standard technical request data (such as IP address, timestamp, and browser information) for security and operations, per Vercel's own privacy policy.</li>
-      <li><strong>Neon / Vercel Postgres</strong> — database that stores the Tracked Proceedings data described above.</li>
+      <li><strong>Neon / Vercel Postgres</strong> — database storing the Tracked Proceedings and reexamination-alert subscription data described above, plus indexes of public reexamination records.</li>
+      <li><strong>Vercel Blob</strong> — file storage used to keep copies of certain <strong>public</strong> reexamination documents (e.g., text-searchable versions of Office of Petitions decisions).</li>
       <li><strong>Resend</strong> — email delivery service used to send the tracked-proceeding and reexamination alert emails to the addresses you provide.</li>
+      <li><strong>OCR.space</strong> — optical-character-recognition service used to extract text from scanned <strong>public</strong> reexamination documents (e.g., Office of Petitions decisions) so they can be analyzed. Only public USPTO documents are sent; no visitor or subscriber information is sent to this service.</li>
     </ul>
     <p>We do not control, and are not responsible for, the independent data practices of these providers.</p>
 

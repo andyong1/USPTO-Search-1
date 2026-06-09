@@ -82,6 +82,16 @@
     <div id="stat"></div>
   </div>
 
+  <div class="card" id="examiner-card" style="display:none">
+    <h2>By Examiner</h2>
+    <div class="sub">Select an examiner to see their office-action timing. Only examiners with at least one recorded office action are listed.</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:#4a5568">Examiner:</label>
+      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
+    </div>
+    <div id="examiner-stat"></div>
+  </div>
+
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <h2 id="list-heading" style="margin:0">Proceedings</h2>
@@ -101,6 +111,37 @@ function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/
 function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
 function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
+
+// KPI cards (avg/median grant->first action, grant->final action) for a set of rows.
+function statCards(rows) {
+  const nonfDays = rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
+  const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
+  const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  return `<div class="kpi-strip">
+    ${card(avg(nonfDays), 'Avg Days: Grant → First Office Action', nonfDays.length)}
+    ${card(median(nonfDays), 'Median Days: Grant → First Office Action', nonfDays.length)}
+    ${card(avg(finlDays), 'Avg Days: Grant → Final Office Action', finlDays.length)}
+    ${card(median(finlDays), 'Median Days: Grant → Final Office Action', finlDays.length)}
+  </div>`;
+}
+
+// Populate the "By Examiner" dropdown (examiners with at least one office action)
+// and show that examiner's KPI cards on selection.
+function buildExaminerSection() {
+  const names = [...new Set(_rows.filter((p) => p.nonf_date || p.finl_date)
+    .map((p) => (p.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!names.length) return;
+  const sel = document.getElementById('examiner-select');
+  sel.innerHTML = ['<option value="">Select an examiner…</option>']
+    .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
+  document.getElementById('examiner-card').style.display = '';
+  sel.addEventListener('change', (e) => {
+    const name = e.target.value;
+    const target = document.getElementById('examiner-stat');
+    if (!name) { target.innerHTML = ''; return; }
+    target.innerHTML = statCards(_rows.filter((p) => (p.examiner_name || '').trim() === name));
+  });
+}
 function openDocViewer(appNum, documentId, format, label) {
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
   window.open(url, '_blank', 'noopener');
@@ -171,20 +212,13 @@ function render() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.actions || [];
-    const nonfDays = _rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
-    const finlDays = _rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
-    const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
-    document.getElementById('stat').innerHTML = `<div class="kpi-strip">
-      ${card(avg(nonfDays), 'Avg Days: Grant → First Office Action', nonfDays.length)}
-      ${card(median(nonfDays), 'Median Days: Grant → First Office Action', nonfDays.length)}
-      ${card(avg(finlDays), 'Avg Days: Grant → Final Office Action', finlDays.length)}
-      ${card(median(finlDays), 'Median Days: Grant → Final Office Action', finlDays.length)}
-    </div>`;
+    document.getElementById('stat').innerHTML = statCards(_rows);
     document.getElementById('list-heading').textContent = `Proceedings (Total: ${_rows.length})`;
     if (!_rows.length) {
       body.innerHTML = '<div class="state">No ordered reexaminations recorded yet. The daily scan fills this in as office actions issue.</div>';
       return;
     }
+    buildExaminerSection();
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
     render();

@@ -21,12 +21,14 @@ import {
   getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
+  getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
+import { detectActionsForApp } from '../../lib/actions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -301,6 +303,16 @@ export default async function handler(req, res) {
       petitions = { scanned: apps.length, detected, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
+    // 3e) Office-action timing: find first non-final / final action dates for a
+    // few ordered reexams per run (rolling, re-checks until a final action issues).
+    let actions = { skipped: true };
+    try {
+      const aApps = await getOrderedReexamsToCheckActions(5);
+      const aDeadline = Date.now() + 8000;
+      for (const a of aApps) { if (Date.now() > aDeadline) break; try { await detectActionsForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
+      actions = { checked: aApps.length };
+    } catch (e) { actions = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -315,6 +327,7 @@ export default async function handler(req, res) {
       subscriberDigest,
       conclusions,
       petitions,
+      actions,
       errors,
     });
   } catch (err) {

@@ -2,7 +2,7 @@
 // or — with ?petitions=1 — post-grant patent owner petitions for /reexam-petitions.
 //   GET /api/reexam              →  { determinations: [...] }
 //   GET /api/reexam?petitions=1  →  { petitions: [...] }
-import { listRecentDeterminations, listPostOrderPetitions } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions } from '../lib/db.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -13,6 +13,11 @@ export default async function handler(req, res) {
     if (req.query && req.query.petitions) {
       const petitions = await listPostOrderPetitions();
       res.status(200).json({ petitions });
+      return;
+    }
+    if (req.query && req.query.actions) {
+      const actions = await listReexamActions();
+      res.status(200).json({ actions });
       return;
     }
     const determinations = await listRecentDeterminations(); // no limit

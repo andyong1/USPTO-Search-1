@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Post-Order Patent Owner Petitions — USPTO Reexam</title>
-  <meta name="description" content="Patent owner petitions (document code PET.OP) filed after an ex parte reexamination was ordered, with any requester opposition and Office petition decision." />
-  <meta property="og:title" content="Post-Order Patent Owner Petitions — USPTO Reexam" />
-  <meta property="og:description" content="Petitions to the Office of Petitions filed after a reexam grant, with opposition and decision." />
+  <title>Reexam Office Action Timing — USPTO Reexam</title>
+  <meta name="description" content="Average and median time from grant of ex parte reexamination to the first non-final office action and to the final office action, for reexams ordered on or after December 22, 2025." />
+  <meta property="og:title" content="Reexam Office Action Timing — USPTO Reexam" />
+  <meta property="og:description" content="Time from reexam grant to first non-final and final office actions." />
   <meta property="og:type" content="website" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
@@ -25,13 +25,12 @@
     .card + .card { margin-top: 24px; }
     .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
     .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
-    .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
-    .explainer p { margin: 0; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .kpi .sub2 { font-size: 0.72rem; color: #a0aec0; margin-top: 2px; }
     .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
@@ -41,15 +40,8 @@
     a.link:hover { text-decoration: underline; }
     .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
+    .days { color: #718096; font-size: 0.8rem; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
-    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
-    .badge.granted { background: #c6f6d5; color: #276749; }
-    .badge.dismissed { background: #fed7d7; color: #c53030; }
-    .badge.other { background: #e2e8f0; color: #4a5568; }
-    .badge.s325 { background: #bee3f8; color: #2c5282; }
-    .doclinks { margin-top: 3px; font-size: 0.8rem; }
-    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
-    .btn-view:hover { background: #15305a; }
     .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
     .btn-csv:hover { background: #cbd5e0; }
     .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
@@ -77,25 +69,22 @@
     <a href="/uspto-search">Application Search &amp; Tracking</a>
     <a href="/reexam">Reexam Determinations</a>
     <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
-    <a href="/reexam-petitions" class="active" aria-current="page">Post-Order Petitions</a>
-    <a href="/reexam-actions">Office Action Timing</a>
+    <a href="/reexam-petitions">Post-Order Petitions</a>
+    <a href="/reexam-actions" class="active" aria-current="page">Office Action Timing</a>
   </nav>
 
   <div class="card">
-    <h2>Post-Order Patent Owner Petitions</h2>
-    <div class="sub">Patent owner petitions to the Office of Petitions (document code PET.OP or RXPET.) filed after ex parte reexamination was ordered — e.g., requests to reconsider the grant or terminate the proceeding — with any requester opposition and the Office's decision. <strong>Petitions are collected for reexamination proceedings ordered on or after December 22, 2025.</strong></div>
-    <div class="explainer">
-      <p>After a reexamination is ordered (a substantial new question of patentability was found), patent owners recently have been petitioning the Patent Office to reconsider that grant or terminate the proceeding pursuant to 35 U.S.C. § 325(d). This page tracks such motions and the Office's decisions. Where a proceeding has multiple PET.OP documents (the petition plus exhibits), the shortest is treated as the petition itself. The requester opposition (RXOPPPET or RXPET.) and the Office's petition decision are shown where on file.</p>
-    </div>
+    <h2>Reexamination Office Action Timing</h2>
+    <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits (RXR.NF) and (2) the final office action (RXR.F). <strong>Measured for reexaminations ordered on or after December 22, 2025.</strong></div>
     <div id="stat"></div>
   </div>
 
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <h2 id="list-heading" style="margin:0">Petitions</h2>
+      <h2 id="list-heading" style="margin:0">Proceedings</h2>
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
-    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" style="display:none" aria-label="Filter petitions" />
+    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, or art unit…" oninput="render()" style="display:none" aria-label="Filter proceedings" />
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
@@ -105,107 +94,85 @@
 <script>
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
-function openDocViewer(appNum, documentId, format, label) {
-  const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
-  window.open(url, '_blank', 'noopener');
-}
-const docLinks = (num, docId, label) => {
-  if (!docId) return '';
-  const lbl = (label || 'Document').replace(/'/g, '');
-  const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-  return `<div class="doclinks">`
-    + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View</button>`
-    + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
-};
-const dash = '<span class="ext">—</span>';
+function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
+function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
+function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
 
 let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)'];
+  const header = ['Control No.', 'Reexam Ordered', 'First Office Action', 'Days to First Action', 'Final Office Action', 'Days to Final Action', 'Examiner', 'Group Art Unit'];
   const rows = filtered().map((p) => [
     p.application_number, fmtDate(p.order_date),
-    p.petition_doc_id ? fmtDate(p.petition_date) : '',
-    p.opposition_doc_id ? fmtDate(p.opposition_date) : '',
-    p.decision_outcome || (p.decision_doc_id ? 'Decided' : ''),
-    p.decision_doc_id ? fmtDate(p.decision_date) : '',
-    p.decision_doc_id ? (p.decision_325d ? 'Yes' : 'No') : '',
+    p.nonf_date ? fmtDate(p.nonf_date) : '', daysBetween(p.order_date, p.nonf_date) ?? '',
+    p.finl_date ? fmtDate(p.finl_date) : '', daysBetween(p.order_date, p.finl_date) ?? '',
+    p.examiner_name || '', p.group_art_unit || '',
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'post-order-petitions.csv';
+  const a = document.createElement('a'); a.href = url; a.download = 'reexam-office-action-timing.csv';
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   if (!q) return _rows;
-  return _rows.filter((p) => String(p.application_number || '').toLowerCase().includes(q));
+  return _rows.filter((p) => [p.application_number, p.examiner_name, p.group_art_unit]
+    .some((v) => String(v || '').toLowerCase().includes(q)));
 }
 
 function render() {
   const body = document.getElementById('body');
   const items = filtered();
-  if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; return; }
+  if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  const cell = (date, n) => date ? `${fmtDate(date)} <span class="days">(${n} days)</span>` : '<span class="ext">—</span>';
   const rows = items.map((p) => {
     const num = p.application_number || '';
-    const petCell = p.petition_doc_id ? `${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
-    const oppCell = p.opposition_doc_id ? `${fmtDate(p.opposition_date)}${docLinks(num, p.opposition_doc_id, 'Requestor Opposition')}` : dash;
-    let decCell = dash;
-    if (p.decision_doc_id) {
-      const o = p.decision_outcome || 'other';
-      const cls = o === 'granted' ? 'granted' : (o === 'dismissed' || o === 'denied' ? 'dismissed' : 'other');
-      const lbl = o ? (o.charAt(0).toUpperCase() + o.slice(1)) : 'Decided';
-      decCell = `<span class="badge ${cls}">${esc(lbl)}</span> ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
-    }
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
-      <td>${petCell}</td>
-      <td>${oppCell}</td>
-      <td>${decCell}</td>
+      <td>${cell(p.nonf_date, daysBetween(p.order_date, p.nonf_date))}</td>
+      <td>${cell(p.finl_date, daysBetween(p.order_date, p.finl_date))}</td>
+      <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
+      <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision Citing § 325(d)</th></tr></thead>
+    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>First Office Action (RXR.NF)</th><th>Final Office Action (RXR.F)</th><th>Examiner</th><th>Group Art Unit</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
 (async () => {
   const body = document.getElementById('body');
   try {
-    const res = await fetch('/api/reexam?petitions=1');
+    const res = await fetch('/api/reexam?actions=1');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    _rows = data.petitions || [];
-    const total = _rows.length;
-    const withOpp = _rows.filter((p) => p.opposition_doc_id).length;
-    const granting = _rows.filter((p) => p.decision_outcome === 'granted').length;
-    const dismissing = _rows.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
-    const decided = granting + dismissing;
-    const grantRate = decided > 0 ? Math.round(granting / decided * 100) + '%' : '—';
+    _rows = data.actions || [];
+    const nonfDays = _rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
+    const finlDays = _rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
+    const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
     document.getElementById('stat').innerHTML = `<div class="kpi-strip">
-      <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
-      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
-      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
-      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
-      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
+      ${card(avg(nonfDays), 'Avg Days: Grant → First Office Action', nonfDays.length)}
+      ${card(median(nonfDays), 'Median Days: Grant → First Office Action', nonfDays.length)}
+      ${card(avg(finlDays), 'Avg Days: Grant → Final Office Action', finlDays.length)}
+      ${card(median(finlDays), 'Median Days: Grant → Final Office Action', finlDays.length)}
     </div>`;
-    document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
-    if (!total) {
-      body.innerHTML = '<div class="state">No post-order patent owner petitions recorded yet. The daily scan lists them here as they are filed.</div>';
+    document.getElementById('list-heading').textContent = `Proceedings (Total: ${_rows.length})`;
+    if (!_rows.length) {
+      body.innerHTML = '<div class="state">No ordered reexaminations recorded yet. The daily scan fills this in as office actions issue.</div>';
       return;
     }
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
     render();
   } catch (e) {
-    body.innerHTML = '<div class="state">Could not load petitions (' + esc(e.message) + ').</div>';
+    body.innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
   }
 })();
 </script>

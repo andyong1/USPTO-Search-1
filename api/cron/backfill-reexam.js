@@ -8,11 +8,13 @@ import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
+  getOrderedReexamsToCheckActions, countActionsToCheck,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
+import { detectActionsForApp } from '../../lib/actions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -30,6 +32,24 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?actions=1 — backfill office-action timing (first non-final / final action
+    // dates) for ordered reexams since the cutoff. Resumable; run until done.
+    if (req.query && req.query.actions === '1') {
+      const deadline = Date.now() + TIME_BUDGET_MS;
+      let checked = 0;
+      while (Date.now() < deadline) {
+        const apps = await getOrderedReexamsToCheckActions(CONCURRENCY);
+        if (!apps.length) break;
+        await Promise.all(apps.map(async (a) => {
+          try { await detectActionsForApp(a.application_number, a.order_date); checked++; }
+          catch { /* leave for a later call */ }
+        }));
+      }
+      const remaining = await countActionsToCheck();
+      res.status(200).json({ ok: true, mode: 'actions', checked, remaining, done: remaining === 0 });
+      return;
+    }
+
     // ?determinations=1 — recapture ALL ex parte reexam determinations. Enumerates
     // 90* reexams filed on/after ?from (default 2025-08-01, comfortably covering
     // determinations issued from Dec 22 2025 onward), re-pools them, and scans for

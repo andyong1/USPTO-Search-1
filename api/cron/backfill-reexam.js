@@ -121,14 +121,14 @@ export default async function handler(req, res) {
       let ocrDone = 0, ocrFailed = 0;
       if (ocrConfigured()) {
         if (req.query.ocrretry === '1') await resetFailedDecisionOcr();
-        while (Date.now() < deadline) {
-          const todo = await getDecisionsToStartOcr(3);
+        // One decision at a time; stop starting a new one unless ~30s of budget
+        // remains, so a slow multi-page OCR can't push us past the 60s limit.
+        while (Date.now() < deadline - 30000) {
+          const todo = await getDecisionsToStartOcr(1);
           if (!todo.length) break;
-          for (const r of todo) {
-            if (Date.now() > deadline) break;
-            try { const res = await ocrDecision(r.application_number, r.decision_doc_id); await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++; }
-            catch { await setDecisionOcrFailed(r.application_number); ocrFailed++; }
-          }
+          const r = todo[0];
+          try { const res = await ocrDecision(r.application_number, r.decision_doc_id); await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++; }
+          catch { await setDecisionOcrFailed(r.application_number); ocrFailed++; }
         }
       }
       const remainingScan = (await getOrderedReexamsToCheckPetitions(100000)).length;

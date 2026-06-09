@@ -6,10 +6,10 @@
 
 import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
-  getOrderedReexamsToCheckPetitions, getPetitionsToParse,
+  getOrderedReexamsToCheckPetitions, resetPetitionScan,
 } from '../../lib/db.js';
 import { fetchMetaData } from '../../lib/uspto.js';
-import { detectPetitionsForApp, parseOnePetition } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -26,30 +26,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ?petitions=1 — backfill post-grant PET.OP petitions across all ordered
-    // reexams, then 325(d)-parse the ones found. Run until done is true.
+    // ?petitions=1 — backfill post-order petitions (petition + opposition +
+    // decision) across all ordered reexams. Run until done is true.
     if (req.query && req.query.petitions === '1') {
+      // ?reset=1 clears the 7-day scan cooldown so every ordered reexam is re-checked.
+      if (req.query.reset === '1') await resetPetitionScan();
       const deadline = Date.now() + TIME_BUDGET_MS;
-      let scanned = 0, detected = 0, parsed = 0;
+      let scanned = 0, detected = 0;
       while (Date.now() < deadline) {
         const apps = await getOrderedReexamsToCheckPetitions(CONCURRENCY);
         if (!apps.length) break;
         for (const a of apps) {
           if (Date.now() > deadline) break;
-          try { detected += await detectPetitionsForApp(a.application_number, a.order_date); scanned++; }
+          try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); scanned++; }
           catch { /* leave unscanned; retried next call */ }
         }
       }
-      const toParse = await getPetitionsToParse(60);
-      const parseErrors = [];
-      for (const r of toParse) {
-        if (Date.now() > deadline) break;
-        try { await parseOnePetition(r); parsed++; }
-        catch (e) { parseErrors.push({ app: r.application_number, error: String(e.message || e) }); }
-      }
       const remainingScan = (await getOrderedReexamsToCheckPetitions(100000)).length;
-      const remainingParse = (await getPetitionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, parsed, remainingScan, remainingParse, done: remainingScan === 0 && remainingParse === 0, parseErrors: parseErrors.slice(0, 5) });
+      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, remainingScan, done: remainingScan === 0 });
       return;
     }
 

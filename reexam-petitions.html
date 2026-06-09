@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Post-Grant Patent-Owner Petitions — USPTO Reexam</title>
-  <meta name="description" content="Post-grant patent-owner petitions (document code PET.OP) filed after an ex parte reexamination was ordered, flagged where they invoke 35 U.S.C. 325(d)." />
-  <meta property="og:title" content="Post-Grant Patent-Owner Petitions — USPTO Reexam" />
-  <meta property="og:description" content="Petitions to the Office of Petitions filed after a reexam grant, with a 325(d) flag." />
+  <title>Post-Order Patent-Owner Petitions — USPTO Reexam</title>
+  <meta name="description" content="Patent-owner petitions (document code PET.OP) filed after an ex parte reexamination was ordered, with any requester opposition and Office petition decision." />
+  <meta property="og:title" content="Post-Order Patent-Owner Petitions — USPTO Reexam" />
+  <meta property="og:description" content="Petitions to the Office of Petitions filed after a reexam grant, with opposition and decision." />
   <meta property="og:type" content="website" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
@@ -43,9 +43,9 @@
     .ext:hover { text-decoration: underline; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
-    .badge.yes { background: #c6f6d5; color: #276749; }
-    .badge.no { background: #e2e8f0; color: #4a5568; }
-    .badge.pending { background: #feebc8; color: #9c4221; }
+    .badge.granted { background: #c6f6d5; color: #276749; }
+    .badge.dismissed { background: #fed7d7; color: #c53030; }
+    .badge.other { background: #e2e8f0; color: #4a5568; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
     .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
     .btn-view:hover { background: #15305a; }
@@ -76,14 +76,14 @@
     <a href="/uspto-search">Application Search &amp; Tracking</a>
     <a href="/reexam">Reexam Determinations</a>
     <a href="/reexam-preorder">Pre-Order SNQ</a>
-    <a href="/reexam-petitions" class="active" aria-current="page">Post-Grant Petitions</a>
+    <a href="/reexam-petitions" class="active" aria-current="page">Post-Order Petitions</a>
   </nav>
 
   <div class="card">
-    <h2>Post-Grant Patent-Owner Petitions</h2>
-    <div class="sub">Patent-owner petitions to the Office of Petitions (document code PET.OP) filed <em>after</em> ex parte reexamination was ordered — e.g., requests to reconsider the grant or terminate the proceeding under 35 U.S.C. § 325(d).</div>
+    <h2>Post-Order Patent-Owner Petitions</h2>
+    <div class="sub">Patent-owner petitions to the Office of Petitions (document code PET.OP) filed <em>after</em> ex parte reexamination was ordered — e.g., requests to reconsider the grant or terminate the proceeding — with any requester opposition and the Office's decision.</div>
     <div class="explainer">
-      <p><strong>About this list.</strong> Once a reexamination is ordered (a substantial new question of patentability was found), a patent owner may petition the Office of Petitions to reconsider that grant or terminate the proceeding, often arguing the prior art was already considered under § 325(d). The USPTO codes all such petitions generically as <strong>PET.OP</strong> ("Petition for review by the Office of Petitions"), so this page lists every post-grant PET.OP and adds a <span class="badge yes">§325(d)</span> badge where the petition's text invokes § 325(d). The § 325(d) flag is detected by reading the petition PDF and is best-effort; verify against the document itself.</p>
+      <p><strong>About this list.</strong> After a reexamination is ordered (a substantial new question of patentability was found), a patent owner may petition the Office of Petitions to reconsider that grant or terminate the proceeding. Where a proceeding has multiple PET.OP documents (the petition plus exhibits), the shortest is treated as the petition itself. The requester opposition (RXPET.) and the Office's petition decision are shown where on file.</p>
     </div>
     <div id="stat"></div>
   </div>
@@ -93,7 +93,7 @@
       <h2 id="list-heading" style="margin:0">Petitions</h2>
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
-    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, or art unit…" oninput="render()" style="display:none" aria-label="Filter petitions" />
+    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" style="display:none" aria-label="Filter petitions" />
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
@@ -107,66 +107,69 @@ function openDocViewer(appNum, documentId, format, label) {
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
   window.open(url, '_blank', 'noopener');
 }
+const docLinks = (num, docId, label) => {
+  if (!docId) return '';
+  const lbl = (label || 'Document').replace(/'/g, '');
+  const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+  return `<div class="doclinks">`
+    + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View</button>`
+    + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
+};
+const dash = '<span class="ext">—</span>';
 
 let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Reexam Ordered', 'Petition Filed', '325(d)', 'Examiner', 'Group Art Unit'];
+  const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date'];
   const rows = filtered().map((p) => [
-    p.application_number, fmtDate(p.order_date), fmtDate(p.petition_date),
-    p.is_325d === true ? 'Yes' : (p.parsed ? 'No' : 'Pending'),
-    p.examiner_name || '', p.group_art_unit || '',
+    p.application_number, fmtDate(p.order_date),
+    p.petition_doc_id ? fmtDate(p.petition_date) : '',
+    p.opposition_doc_id ? fmtDate(p.opposition_date) : '',
+    p.decision_outcome || (p.decision_doc_id ? 'Decided' : ''),
+    p.decision_doc_id ? fmtDate(p.decision_date) : '',
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'post-grant-petitions.csv';
+  a.href = url; a.download = 'post-order-petitions.csv';
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   if (!q) return _rows;
-  return _rows.filter((p) => [p.application_number, p.examiner_name, p.group_art_unit]
-    .some((v) => String(v || '').toLowerCase().includes(q)));
-}
-
-function badge325d(p) {
-  if (p.is_325d === true) return '<span class="badge yes">§325(d)</span>';
-  if (p.parsed) return '<span class="badge no">Not §325(d)</span>';
-  return '<span class="badge pending">Checking…</span>';
+  return _rows.filter((p) => String(p.application_number || '').toLowerCase().includes(q));
 }
 
 function render() {
   const body = document.getElementById('body');
   const items = filtered();
-  if (!items.length) {
-    body.innerHTML = '<div class="state">No matching petitions.</div>';
-    return;
-  }
+  if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; return; }
   const rows = items.map((p) => {
     const num = p.application_number || '';
-    const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(p.document_identifier)}&format=PDF`;
-    const pdf = p.document_identifier
-      ? `<div class="doclinks"><button class="btn-view" onclick="openDocViewer('${num}','${p.document_identifier}','PDF','Patent Owner Petition')">View</button>`
-        + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`
-      : '<span class="ext">—</span>';
+    const petCell = p.petition_doc_id ? `${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
+    const oppCell = p.opposition_doc_id ? `${fmtDate(p.opposition_date)}${docLinks(num, p.opposition_doc_id, 'Requestor Opposition')}` : dash;
+    let decCell = dash;
+    if (p.decision_doc_id) {
+      const o = p.decision_outcome || 'other';
+      const cls = o === 'granted' ? 'granted' : (o === 'dismissed' || o === 'denied' ? 'dismissed' : 'other');
+      const lbl = o ? (o.charAt(0).toUpperCase() + o.slice(1)) : 'Decided';
+      decCell = `<span class="badge ${cls}">${esc(lbl)}</span> ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
+    }
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
-      <td>${fmtDate(p.petition_date)}</td>
-      <td>${badge325d(p)}</td>
-      <td>${pdf}</td>
-      <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
-      <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
+      <td>${petCell}</td>
+      <td>${oppCell}</td>
+      <td>${decCell}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Petition Filed</th><th>§325(d)</th><th>Petition PDF</th><th>Examiner</th><th>Group Art Unit</th></tr></thead>
+    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -178,16 +181,16 @@ function render() {
     const data = await res.json();
     _rows = data.petitions || [];
     const total = _rows.length;
-    const with325 = _rows.filter((p) => p.is_325d === true).length;
-    const pending = _rows.filter((p) => !p.parsed).length;
+    const withOpp = _rows.filter((p) => p.opposition_doc_id).length;
+    const withDec = _rows.filter((p) => p.decision_doc_id).length;
     document.getElementById('stat').innerHTML = `<div class="kpi-strip">
-      <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions (PET.OP)</div></div>
-      <div class="kpi"><div class="num">${with325}</div><div class="lbl">Flagged § 325(d)</div></div>
-      <div class="kpi"><div class="num">${pending}</div><div class="lbl">Awaiting Text Check</div></div>
+      <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
+      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
+      <div class="kpi"><div class="num">${withDec}</div><div class="lbl">With Petition Decision</div></div>
     </div>`;
     document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
     if (!total) {
-      body.innerHTML = '<div class="state">No post-grant patent-owner petitions recorded yet. The daily scan lists them here as they are filed.</div>';
+      body.innerHTML = '<div class="state">No post-order patent-owner petitions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }
     document.getElementById('csv-btn').style.display = '';

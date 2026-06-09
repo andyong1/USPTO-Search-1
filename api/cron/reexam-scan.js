@@ -19,10 +19,12 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
+  getOrderedReexamsToCheckPetitions, getPetitionsToParse,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
+import { detectPetitionsForApp, parseOnePetition } from '../../lib/petitions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -275,6 +277,20 @@ export default async function handler(req, res) {
       conclusions = { detect, parse };
     } catch (e) { conclusions = { error: String(e.message || e) }; }
 
+    // 3d) Detect post-grant patent-owner petitions (PET.OP) on ordered reexams and
+    // flag 325(d) from the PDF. Rolling and capped per run.
+    let petitions = { skipped: true };
+    try {
+      const apps = await getOrderedReexamsToCheckPetitions(3);
+      const pDeadline = Date.now() + 8000;
+      let detected = 0;
+      for (const a of apps) { if (Date.now() > pDeadline) break; try { detected += await detectPetitionsForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
+      const toParse = await getPetitionsToParse(1);
+      let parsed = 0;
+      for (const r of toParse) { try { await parseOnePetition(r); parsed++; } catch { /* retry next run */ } }
+      petitions = { scanned: apps.length, detected, parsed };
+    } catch (e) { petitions = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -288,6 +304,7 @@ export default async function handler(req, res) {
       digest,
       subscriberDigest,
       conclusions,
+      petitions,
       errors,
     });
   } catch (err) {

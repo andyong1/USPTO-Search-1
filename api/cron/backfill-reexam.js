@@ -4,8 +4,12 @@
 // Processes as many as it can within a time budget, then returns how many remain.
 // If "done" is false, call it again until done is true.
 
-import { getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta } from '../../lib/db.js';
+import {
+  getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
+  getOrderedReexamsToCheckPetitions, getPetitionsToParse,
+} from '../../lib/db.js';
 import { fetchMetaData } from '../../lib/uspto.js';
+import { detectPetitionsForApp, parseOnePetition } from '../../lib/petitions.js';
 
 export const config = { maxDuration: 60 };
 
@@ -22,6 +26,31 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?petitions=1 — backfill post-grant PET.OP petitions across all ordered
+    // reexams, then 325(d)-parse the ones found. Run until done is true.
+    if (req.query && req.query.petitions === '1') {
+      const deadline = Date.now() + TIME_BUDGET_MS;
+      let scanned = 0, detected = 0, parsed = 0;
+      while (Date.now() < deadline) {
+        const apps = await getOrderedReexamsToCheckPetitions(CONCURRENCY);
+        if (!apps.length) break;
+        for (const a of apps) {
+          if (Date.now() > deadline) break;
+          try { detected += await detectPetitionsForApp(a.application_number, a.order_date); scanned++; }
+          catch { /* leave unscanned; retried next call */ }
+        }
+      }
+      const toParse = await getPetitionsToParse(60);
+      for (const r of toParse) {
+        if (Date.now() > deadline) break;
+        try { await parseOnePetition(r); parsed++; } catch { /* retry next call */ }
+      }
+      const remainingScan = (await getOrderedReexamsToCheckPetitions(100000)).length;
+      const remainingParse = (await getPetitionsToParse(100000)).length;
+      res.status(200).json({ ok: true, mode: 'petitions', scanned, detected, parsed, remainingScan, remainingParse, done: remainingScan === 0 && remainingParse === 0 });
+      return;
+    }
+
     // ?reset=1 re-pools rows that previously ended up blank, so they get retried.
     let reset = 0;
     if (req.query && req.query.reset === '1') reset = await resetEmptyDeterminationMeta();

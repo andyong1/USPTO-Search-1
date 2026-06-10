@@ -1685,7 +1685,7 @@ function sortedDocBag() {
 }
 
 function documentsTable(bag, fallbackApp) {
-  _docState = { bag: bag || [], fallbackApp: fallbackApp || '', dir: (_docState && _docState.dir) || 'asc' };
+  _docState = { bag: bag || [], fallbackApp: fallbackApp || '', dir: (_docState && _docState.dir) || 'desc' };
   return `<div id="doc-table-host">${docTableInner()}</div>`;
 }
 

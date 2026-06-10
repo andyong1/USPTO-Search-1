@@ -25,7 +25,7 @@
     .card + .card { margin-top: 24px; }
     .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
     .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
@@ -46,7 +46,6 @@
     .dist-col { flex: 1; min-width: 320px; }
     .dist-wrap { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 420px; }
     .dist-wrap th { position: static; box-shadow: none; }
-    .avg-actions { margin-top: 14px; font-size: 0.95rem; color: #2d3748; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
     .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
     .btn-view:hover { background: #15305a; }
@@ -124,12 +123,15 @@ function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) =>
 function statCards(rows) {
   const nonfDays = rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
   const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
+  const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
+  const avgActions = counts.length ? (counts.reduce((s, x) => s + x, 0) / counts.length).toFixed(1) : null;
   const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
   return `<div class="kpi-strip">
     ${card(avg(nonfDays), 'Avg Days: Grant → First Office Action', nonfDays.length)}
     ${card(median(nonfDays), 'Median Days: Grant → First Office Action', nonfDays.length)}
     ${card(avg(finlDays), 'Avg Days: Grant → Final Office Action', finlDays.length)}
     ${card(median(finlDays), 'Median Days: Grant → Final Office Action', finlDays.length)}
+    ${card(avgActions, 'Avg Office Actions per Reexam', counts.length)}
   </div>`;
 }
 
@@ -155,12 +157,7 @@ function buildDistribution(rows) {
     + bucketTable('Time to First Office Action — Distribution', 'Time to first action', nonfDays)
     + bucketTable('Time to Final Office Action — Distribution', 'Time to final action', finlDays)
     + `</div>`;
-  let avg = '';
-  if (counts.length) {
-    const a = (counts.reduce((s, x) => s + x, 0) / counts.length).toFixed(1);
-    avg = `<div class="avg-actions">Average office actions per reexam (among reexams with at least one action): <strong>${a}</strong> <span class="days">(n = ${counts.length})</span></div>`;
-  }
-  el.innerHTML = tables + avg;
+  el.innerHTML = tables;
 }
 
 // Populate the "By Examiner" dropdown (examiners with at least one office action)

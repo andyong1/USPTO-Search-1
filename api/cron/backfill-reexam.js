@@ -9,6 +9,7 @@ import {
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
+  getDeterminationsToCheckConclusion, recordConclusionDocs,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
@@ -49,6 +50,39 @@ export default async function handler(req, res) {
       }
       const remaining = await countActionsToCheck();
       res.status(200).json({ ok: true, mode: 'actions', checked, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?conclusions=1 — backfill reexamination-certificate (RXCERT) detection for
+    // all ordered reexams, so concluded proceedings are flagged immediately rather
+    // than waiting for the hourly rolling scan (which checks only a few per run).
+    // Resumable; run until done is true. No reset needed.
+    if (req.query && req.query.conclusions === '1') {
+      const deadline = Date.now() + TIME_BUDGET_MS;
+      let checked = 0, concluded = 0;
+      while (Date.now() < deadline) {
+        const rows = await getDeterminationsToCheckConclusion(CONCURRENCY);
+        if (!rows.length) break;
+        await Promise.all(rows.map(async (r) => {
+          try {
+            const docs = await fetchDocuments(r.application_number);
+            let nirc = null, cert = null;
+            for (const d of docs) {
+              const code = (d.documentCode || '').toUpperCase();
+              if (code === 'RXNIRC' && !nirc) nirc = d;
+              if (code === 'RXCERT' && !cert) cert = d;
+            }
+            await recordConclusionDocs(r.application_number, {
+              nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
+              certDocId: cert && cert.documentIdentifier, certDate: cert && cert.officialDate,
+            });
+            if (cert) concluded++;
+            checked++;
+          } catch { /* leave for a later call */ }
+        }));
+      }
+      const remaining = (await getDeterminationsToCheckConclusion(100000)).length;
+      res.status(200).json({ ok: true, mode: 'conclusions', checked, concluded, remaining, done: remaining === 0 });
       return;
     }
 

@@ -111,6 +111,10 @@
         <label for="artunit-select">Art Unit:</label>
         <select id="artunit-select"><option value="">All Art Units</option></select>
       </div>
+      <div class="fb-group">
+        <label for="tc-select">Technology Area:</label>
+        <select id="tc-select"><option value="">All Technology Areas</option></select>
+      </div>
     </div>
     <div id="scope-note" class="sub" style="margin-bottom:14px"></div>
     <div id="stat"></div>
@@ -147,6 +151,38 @@ function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/
 function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
 function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
 function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
+
+// Technology center number → full name (column tooltip) and short label (filter dropdown).
+const TC_NAMES = {
+  '1600': 'Biotechnology & Organic Chemistry',
+  '1700': 'Chemical & Materials Engineering',
+  '2100': 'Computer Architecture, Software & Information Security',
+  '2400': 'Computer Networks, Multiplex Communication & Video',
+  '2600': 'Communications',
+  '2800': 'Semiconductors, Electrical & Optical Systems',
+  '2900': 'Designs',
+  '3600': 'Transportation, Construction, E-Commerce & Agriculture',
+  '3700': 'Mechanical Engineering, Manufacturing & Medical Devices',
+  '3900': 'Central Reexamination Unit',
+};
+const TC_SHORT = {
+  '1600': 'Biotech & Organic Chemistry',
+  '1700': 'Chemical & Materials',
+  '2100': 'Computers & Software',
+  '2400': 'Networks & Security',
+  '2600': 'Communications',
+  '2800': 'Semiconductors & Electrical',
+  '2900': 'Designs',
+  '3600': 'Transportation & E-Commerce',
+  '3700': 'Mechanical & Medical Devices',
+  '3900': 'Central Reexam Unit',
+};
+function tcCell(tc) {
+  if (!tc) return '<span class="ext">—</span>';
+  const name = TC_NAMES[tc];
+  return name ? `<span title="${esc(name)}">${esc(tc)}</span>` : esc(tc);
+}
+function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
 
 // KPI cards (avg/median grant->first action, grant->final action) for a set of rows.
 function statCards(rows) {
@@ -223,12 +259,12 @@ function docLinks(num, docId, label) {
 let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Reexam Ordered', 'First Office Action', 'Days to First Action', 'Final Office Action', 'Days to Final Action', 'Examiner', 'Group Art Unit'];
+  const header = ['Control No.', 'Reexam Ordered', 'First Office Action', 'Days to First Action', 'Final Office Action', 'Days to Final Action', 'Examiner', 'Group Art Unit', 'Technology Area'];
   const rows = filtered().map((p) => [
     p.application_number, fmtDate(p.order_date),
     p.nonf_date ? fmtDate(p.nonf_date) : '', daysBetween(p.order_date, p.nonf_date) ?? '',
     p.finl_date ? fmtDate(p.finl_date) : '', daysBetween(p.order_date, p.finl_date) ?? '',
-    p.examiner_name || '', p.group_art_unit || '',
+    p.examiner_name || '', p.group_art_unit || '', p.tech_center || '',
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -242,7 +278,7 @@ function filtered() {
   const base = scoped();
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   if (!q) return base;
-  return base.filter((p) => [p.application_number, p.examiner_name, p.group_art_unit]
+  return base.filter((p) => [p.application_number, p.examiner_name, p.group_art_unit, p.tech_center]
     .some((v) => String(v || '').toLowerCase().includes(q)));
 }
 
@@ -266,10 +302,11 @@ function render() {
       <td>${cell(num, p.finl_date, daysBetween(p.order_date, p.finl_date), p.finl_doc_id, 'Final Office Action')}</td>
       <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
+      <td>${tcCell(p.tech_center)}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>First Office Action (RXR.NF)</th><th>Final Office Action (RXR.F)</th><th>Examiner</th><th>Group Art Unit</th></tr></thead>
+    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>First Office Action (RXR.NF)</th><th>Final Office Action (RXR.F)</th><th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -277,7 +314,7 @@ function render() {
 // The period keys on the FIRST OFFICE ACTION date (so a window contains
 // proceedings whose first action issued in it, and short windows are meaningful).
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-let aPeriod = 'since2025', aArtUnit = '';
+let aPeriod = 'since2025', aArtUnit = '', aTc = '';
 
 function periodInfo(p) {
   const now = Date.now();
@@ -287,7 +324,7 @@ function periodInfo(p) {
   return { fromMs: Date.UTC(2025, 0, 1), label: 'Since Jan 1, 2025', gran: 'month' };
 }
 
-// Proceedings whose first office action falls in the window (+ art unit).
+// Proceedings whose first office action falls in the window (+ art unit + TC).
 function scoped() {
   const { fromMs } = periodInfo(aPeriod);
   let s = _rows.filter((p) => { const t = ms(p.nonf_date); return !isNaN(t) && t >= fromMs; });
@@ -295,6 +332,7 @@ function scoped() {
     const au = String(p.group_art_unit || '').trim();
     return aArtUnit === '(Unknown)' ? !au : au === aArtUnit;
   });
+  if (aTc) s = s.filter((p) => String(p.tech_center || '').trim() === aTc);
   return s;
 }
 
@@ -305,6 +343,14 @@ function populateArtUnits() {
   if (hasUnknown) aus.push('(Unknown)');
   document.getElementById('artunit-select').innerHTML =
     ['<option value="">All Art Units</option>'].concat(aus.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)).join('');
+}
+
+function populateTechCenters() {
+  const set = new Set();
+  for (const p of _rows) { if (!p.nonf_date) continue; const tc = String(p.tech_center || '').trim(); if (tc) set.add(tc); }
+  const tcs = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  document.getElementById('tc-select').innerHTML =
+    ['<option value="">All Technology Areas</option>'].concat(tcs.map((t) => `<option value="${esc(t)}">${esc(tcOptionLabel(t))}</option>`)).join('');
 }
 
 // Bucket scoped rows by first-action date (day/week/month) → avg grant→first-action days.
@@ -381,7 +427,7 @@ function applyFilters() {
   const note = document.getElementById('scope-note');
   if (note) {
     const phrase = label.startsWith('Since') ? 'on or after ' + label.replace('Since ', '') : 'in the ' + label.toLowerCase();
-    note.textContent = 'Showing first office actions issued ' + phrase + (aArtUnit ? ' · Art Unit ' + aArtUnit : '') + ' (n = ' + s.length + ')';
+    note.textContent = 'Showing first office actions issued ' + phrase + (aArtUnit ? ' · Art Unit ' + aArtUnit : '') + (aTc ? ' · TC ' + aTc : '') + ' (n = ' + s.length + ')';
   }
   document.getElementById('stat').innerHTML = statCards(s);
   buildTrend(s, gran);
@@ -404,8 +450,10 @@ function applyFilters() {
       return;
     }
     populateArtUnits();
+    populateTechCenters();
     document.getElementById('period-select').addEventListener('change', (e) => { aPeriod = e.target.value; applyFilters(); });
     document.getElementById('artunit-select').addEventListener('change', (e) => { aArtUnit = e.target.value; applyFilters(); });
+    document.getElementById('tc-select').addEventListener('change', (e) => { aTc = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
     applyFilters();

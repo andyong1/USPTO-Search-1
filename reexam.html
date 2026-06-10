@@ -167,6 +167,10 @@
         <label for="artunit-select">Art Unit:</label>
         <select id="artunit-select"><option value="">All Art Units</option></select>
       </div>
+      <div class="fb-group">
+        <label for="tc-select">Technology Area:</label>
+        <select id="tc-select"><option value="">All Technology Areas</option></select>
+      </div>
     </div>
     <div id="stats-kpi"></div>
     <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
@@ -552,6 +556,20 @@ function tcCell(tc) {
   const name = TC_NAMES[tc];
   return name ? `<span title="${esc(name)}">${esc(tc)}</span>` : esc(tc);
 }
+// Short parenthetical labels for the Technology Area filter dropdown.
+const TC_SHORT = {
+  '1600': 'Biotech & Organic Chemistry',
+  '1700': 'Chemical & Materials',
+  '2100': 'Computers & Software',
+  '2400': 'Networks & Security',
+  '2600': 'Communications',
+  '2800': 'Semiconductors & Electrical',
+  '2900': 'Designs',
+  '3600': 'Transportation & E-Commerce',
+  '3700': 'Mechanical & Medical Devices',
+  '3900': 'Central Reexam Unit',
+};
+function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
 
 function renderTable() {
   const body = document.getElementById('body');
@@ -612,6 +630,7 @@ function renderTable() {
 let _all = [];               // full collected list (since Jan 1, 2025)
 let fPeriod = 'since2025';   // period selector
 let fArtUnit = '';           // '' = all art units
+let fTc = '';                // '' = all technology areas
 
 function periodInfo(p) {
   const now = Date.now();
@@ -630,6 +649,14 @@ function populateArtUnits(list) {
     ['<option value="">All Art Units</option>'].concat(aus.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)).join('');
 }
 
+function populateTechCenters(list) {
+  const set = new Set();
+  for (const d of list) { const tc = String(d.tech_center || '').trim(); if (tc) set.add(tc); }
+  const tcs = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  document.getElementById('tc-select').innerHTML =
+    ['<option value="">All Technology Areas</option>'].concat(tcs.map((t) => `<option value="${esc(t)}">${esc(tcOptionLabel(t))}</option>`)).join('');
+}
+
 function applyFilters() {
   const { fromMs, label, gran } = periodInfo(fPeriod);
   let subset = _all.filter((d) => { const t = parseDate(d.official_date); return !isNaN(t) && t >= fromMs; });
@@ -637,8 +664,9 @@ function applyFilters() {
     const au = String(d.group_art_unit || '').trim();
     return fArtUnit === '(Unknown)' ? !au : au === fArtUnit;
   });
+  if (fTc) subset = subset.filter((d) => String(d.tech_center || '').trim() === fTc);
   const h = document.getElementById('stats-heading');
-  if (h) h.textContent = 'Statistics — ' + label + (fArtUnit ? ' · Art Unit ' + fArtUnit : '');
+  if (h) h.textContent = 'Statistics — ' + label + (fArtUnit ? ' · Art Unit ' + fArtUnit : '') + (fTc ? ' · TC ' + fTc : '');
   buildKpi(subset);
   document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(subset);
   buildExaminerSection(subset);
@@ -679,8 +707,10 @@ function applyFilters() {
     // Statistics + listing: scoped by the period / art-unit filter bar.
     _all = list;
     populateArtUnits(_all);
+    populateTechCenters(_all);
     document.getElementById('period-select').addEventListener('change', (e) => { fPeriod = e.target.value; applyFilters(); });
     document.getElementById('artunit-select').addEventListener('change', (e) => { fArtUnit = e.target.value; applyFilters(); });
+    document.getElementById('tc-select').addEventListener('change', (e) => { fTc = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
     applyFilters();

@@ -10,7 +10,7 @@ import {
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
-  getDeterminationsToCheckTechCenter, countTechCenterToCheck,
+  getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
@@ -90,12 +90,20 @@ export default async function handler(req, res) {
 
     // ?techcenter=1 — backfill the underlying-patent technology center for all
     // determinations (two-hop: reexam continuity -> underlying app -> group art
-    // unit -> TC). Resumable; run until done is true. No reset needed.
+    // unit -> TC). Resumable; run until done is true.
+    //   &retry=1 first re-pools rows that were checked but never resolved a TC
+    //   (e.g. the second-hop call was throttled), so they get another attempt.
+    // Lower concurrency than other modes because each app makes TWO USPTO calls;
+    // running 5 in parallel (~10 in flight) trips ODP rate limits and silently
+    // leaves blanks.
     if (req.query && req.query.techcenter === '1') {
+      let repooled = 0;
+      if (req.query.retry === '1') repooled = await resetFailedTechCenter();
       const deadline = Date.now() + TIME_BUDGET_MS;
+      const TC_CONCURRENCY = 3;
       let checked = 0, resolved = 0;
       while (Date.now() < deadline) {
-        const rows = await getDeterminationsToCheckTechCenter(CONCURRENCY);
+        const rows = await getDeterminationsToCheckTechCenter(TC_CONCURRENCY);
         if (!rows.length) break;
         await Promise.all(rows.map(async (r) => {
           try { const x = await detectTechCenterForApp(r.application_number); checked++; if (x.found) resolved++; }
@@ -103,7 +111,7 @@ export default async function handler(req, res) {
         }));
       }
       const remaining = await countTechCenterToCheck();
-      res.status(200).json({ ok: true, mode: 'techcenter', checked, resolved, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'techcenter', repooled, checked, resolved, remaining, done: remaining === 0 });
       return;
     }
 

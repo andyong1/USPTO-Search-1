@@ -1318,9 +1318,9 @@ async function downloadAllDocs() {
       desc: d.documentCodeDescriptionText || d.documentDescriptionText || '',
     };
   }).filter((x) => x.id && x.appNum);
-  const pdfItems = items.filter((x) => x.hasPdf); // already in displayed order
-  const skipped = items.length - pdfItems.length;
-  if (!pdfItems.length) { setStatus('No PDF documents available to combine.'); return; }
+  const sel = _docState ? _docState.selected : new Set();
+  const pdfItems = items.filter((x) => x.hasPdf && sel.has(x.id)); // checked rows, in displayed order
+  if (!pdfItems.length) { setStatus('Select at least one document to combine.'); return; }
 
   btn.disabled = true;
   setStatus('Loading PDF engine…');
@@ -1358,7 +1358,6 @@ async function downloadAllDocs() {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 
   let msg = `Combined ${bookmarks.length} document${bookmarks.length === 1 ? '' : 's'} into one PDF.`;
-  if (skipped) msg += ` ${skipped} non-PDF item${skipped === 1 ? '' : 's'} skipped.`;
   if (failed) msg += ` ${failed} failed to download.`;
   setStatus(msg);
   btn.disabled = false;
@@ -1663,14 +1662,22 @@ function humanize(s) {
 }
 
 // Shared documents table with an in-page "View" button per document. The Date
-// column is first and sortable; "Download all as one PDF" follows the order
-// shown. State is kept so the header click can re-sort in place.
-let _docState = null; // { bag, fallbackApp, dir: 'asc' | 'desc' }
+// column is first and sortable; each row has a checkbox (plus a select-all box
+// in the header) and "Download selected as one PDF" combines the checked rows
+// in the order shown. State is kept so sorting/selection persist in place.
+let _docState = null; // { bag, fallbackApp, dir: 'asc'|'desc', selected: Set<id> }
 
 function docDateMs(d) {
   const m = String((d && (d.officialDate || d.officialDateTime || d.mailRoomDate)) || '').match(/(\d{4})-?(\d{2})-?(\d{2})/);
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
 }
+function docIsPdf(d) {
+  const opts = d.downloadOptionBag || d.downloadOptions || [];
+  return opts.some((o) => /pdf/i.test(o.mimeTypeIdentifier || o.mimeType || ''));
+}
+function docId(d) { return d.documentIdentifier || d.documentId || ''; }
+// Ids of the PDF-downloadable (hence selectable / combinable) documents.
+function pdfIds() { return (_docState ? _docState.bag : []).filter(docIsPdf).map(docId).filter(Boolean); }
 // Current document set sorted by date per the selected direction (undated last).
 function sortedDocBag() {
   if (!_docState) return [];
@@ -1685,7 +1692,13 @@ function sortedDocBag() {
 }
 
 function documentsTable(bag, fallbackApp) {
-  _docState = { bag: bag || [], fallbackApp: fallbackApp || '', dir: (_docState && _docState.dir) || 'desc' };
+  const b = bag || [];
+  _docState = {
+    bag: b,
+    fallbackApp: fallbackApp || '',
+    dir: (_docState && _docState.dir) || 'desc',
+    selected: new Set(b.filter(docIsPdf).map(docId).filter(Boolean)), // all selected by default
+  };
   return `<div id="doc-table-host">${docTableInner()}</div>`;
 }
 
@@ -1693,24 +1706,51 @@ function sortDocs() {
   if (!_docState) return;
   _docState.dir = _docState.dir === 'asc' ? 'desc' : 'asc';
   const host = document.getElementById('doc-table-host');
+  if (host) { host.innerHTML = docTableInner(); updateSelectAll(); }
+}
+
+function toggleDoc(id, on) {
+  if (!_docState) return;
+  if (on) _docState.selected.add(id); else _docState.selected.delete(id);
+  updateSelectAll();
+}
+function toggleAllDocs(on) {
+  if (!_docState) return;
+  _docState.selected = on ? new Set(pdfIds()) : new Set();
+  const host = document.getElementById('doc-table-host');
   if (host) host.innerHTML = docTableInner();
+}
+function updateSelectAll() {
+  if (!_docState) return;
+  const ids = pdfIds();
+  const sel = ids.filter((id) => _docState.selected.has(id)).length;
+  const all = document.getElementById('doc-check-all');
+  if (all) { all.checked = ids.length > 0 && sel === ids.length; all.indeterminate = sel > 0 && sel < ids.length; }
+  const cnt = document.getElementById('doc-sel-count');
+  if (cnt) cnt.textContent = `${sel} of ${ids.length} selected`;
 }
 
 function docTableInner() {
   const fallbackApp = _docState.fallbackApp;
+  const sel = _docState.selected;
   const sorted = sortedDocBag();
   const rows = sorted.map(d => {
     const appNum = d.applicationNumberText || fallbackApp || '';
-    const id = d.documentIdentifier || d.documentId || '';
+    const id = docId(d);
     const opts = d.downloadOptionBag || d.downloadOptions || [];
     const formats = opts.map(o => o.mimeTypeIdentifier || o.mimeType || '').filter(Boolean);
     const code = (d.documentCode || 'Document').replace(/[^0-9A-Za-z _.-]/g, '');
+    const isPdf = formats.some(f => /pdf/i.test(f));
     const viewFmt = formats.find(f => /pdf/i.test(f)) || formats[0] || 'PDF';
     const viewBtn = id
       ? `<button class="btn-view" onclick="openDocViewer('${appNum}','${id}','${viewFmt}','${code}')">View</button>`
       : '';
     const dls = formats.map(f => docLink(appNum, id, f)).join('');
+    const chk = (isPdf && id)
+      ? `<input type="checkbox" class="doc-chk" ${sel.has(id) ? 'checked' : ''} onchange="toggleDoc('${jsq(id)}', this.checked)" aria-label="Select document for combined PDF">`
+      : '';
     return `<tr>
+      <td style="text-align:center">${chk}</td>
       <td>${fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate)}</td>
       <td>${esc(d.documentCode || '')}</td>
       <td>${esc(d.documentCodeDescriptionText || d.documentDescriptionText || '')}</td>
@@ -1718,15 +1758,20 @@ function docTableInner() {
       <td style="white-space:nowrap">${viewBtn}${dls || (viewBtn ? '' : '<span class="hint">—</span>')}</td>
     </tr>`;
   }).join('');
-  const dlAll = sorted.length
+  const ids = pdfIds();
+  const selCount = ids.filter(id => sel.has(id)).length;
+  const allChecked = ids.length > 0 && selCount === ids.length;
+  const dlAll = ids.length
     ? `<div class="dl-all-bar">
-         <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download all as one PDF</button>
+         <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download selected as one PDF</button>
+         <span id="doc-sel-count" class="hint">${selCount} of ${ids.length} selected</span>
          <span id="dl-all-status" class="hint" role="status" aria-live="polite"></span>
        </div>`
     : '';
   const arrow = _docState.dir === 'asc' ? ' ▲' : ' ▼';
   return `${dlAll}<div class="result-table-wrap"><table>
     <thead><tr>
+      <th style="width:1%;text-align:center"><input type="checkbox" id="doc-check-all" onclick="toggleAllDocs(this.checked)" title="Select all / none"${allChecked ? ' checked' : ''}></th>
       <th onclick="sortDocs()" style="cursor:pointer;user-select:none" title="Sort by date">Date${arrow}</th>
       <th>Code</th><th>Description</th><th>Dir.</th><th>View / Download</th>
     </tr></thead>

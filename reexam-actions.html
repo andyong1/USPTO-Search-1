@@ -27,6 +27,17 @@
     .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
     .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .filter-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+    .filter-bar .fb-group { display: flex; align-items: center; gap: 8px; }
+    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: #4a5568; }
+    .filter-bar select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
+    .chart-wrap { position: relative; margin-bottom: 8px; }
+    .chart-tip {
+      position: absolute; display: none; background: #1a3a6b; color: #fff;
+      padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45;
+      pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .chart-wrap svg .pt { cursor: pointer; }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -86,7 +97,24 @@
     <h2>Reexamination Office Action Timing</h2>
     <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits (RXR.NF) and (2) the final office action (RXR.F). <strong>Measured for reexaminations ordered on or after January 1, 2025.</strong></div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div class="filter-bar">
+      <div class="fb-group">
+        <label for="period-select">Period:</label>
+        <select id="period-select">
+          <option value="since2025">Since Jan 1, 2025</option>
+          <option value="since2026">Since Jan 1, 2026</option>
+          <option value="last60">Last 60 Days</option>
+          <option value="last30">Last 30 Days</option>
+        </select>
+      </div>
+      <div class="fb-group">
+        <label for="artunit-select">Art Unit:</label>
+        <select id="artunit-select"><option value="">All Art Units</option></select>
+      </div>
+    </div>
+    <div id="scope-note" class="sub" style="margin-bottom:14px"></div>
     <div id="stat"></div>
+    <div id="trend"></div>
     <div id="dist"></div>
   </div>
 
@@ -161,22 +189,23 @@ function buildDistribution(rows) {
   el.innerHTML = tables;
 }
 
-// Populate the "By Examiner" dropdown (examiners with at least one office action)
-// and show that examiner's KPI cards on selection.
-function buildExaminerSection() {
-  const names = [...new Set(_rows.filter((p) => p.nonf_date || p.finl_date)
-    .map((p) => (p.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  if (!names.length) return;
+// Populate the "By Examiner" dropdown (examiners with at least one office action
+// in the current scope) and show that examiner's KPI cards on selection.
+function buildExaminerSection(rows) {
+  const card = document.getElementById('examiner-card');
+  document.getElementById('examiner-stat').innerHTML = '';
+  const names = [...new Set(rows.map((p) => (p.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!names.length) { card.style.display = 'none'; return; }
   const sel = document.getElementById('examiner-select');
   sel.innerHTML = ['<option value="">Select an examiner…</option>']
     .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
-  document.getElementById('examiner-card').style.display = '';
-  sel.addEventListener('change', (e) => {
+  card.style.display = '';
+  sel.onchange = (e) => {
     const name = e.target.value;
     const target = document.getElementById('examiner-stat');
     if (!name) { target.innerHTML = ''; return; }
-    target.innerHTML = statCards(_rows.filter((p) => (p.examiner_name || '').trim() === name));
-  });
+    target.innerHTML = statCards(rows.filter((p) => (p.examiner_name || '').trim() === name));
+  };
 }
 function openDocViewer(appNum, documentId, format, label) {
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
@@ -209,8 +238,8 @@ function exportCsv() {
 }
 
 function filtered() {
-  // Only proceedings that have at least a first office action are listed.
-  const base = _rows.filter((p) => p.nonf_date);
+  // Scoped set (first office action in the selected period + art unit), then text filter.
+  const base = scoped();
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   if (!q) return base;
   return base.filter((p) => [p.application_number, p.examiner_name, p.group_art_unit]
@@ -244,6 +273,123 @@ function render() {
     <tbody>${rows}</tbody></table></div>`;
 }
 
+// ── Period + art-unit filtering and the grant→first-action trend ──
+// The period keys on the FIRST OFFICE ACTION date (so a window contains
+// proceedings whose first action issued in it, and short windows are meaningful).
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let aPeriod = 'since2025', aArtUnit = '';
+
+function periodInfo(p) {
+  const now = Date.now();
+  if (p === 'since2026') return { fromMs: Date.UTC(2026, 0, 1), label: 'Since Jan 1, 2026', gran: 'month' };
+  if (p === 'last60') return { fromMs: now - 60 * 86400000, label: 'Last 60 Days', gran: 'week' };
+  if (p === 'last30') return { fromMs: now - 30 * 86400000, label: 'Last 30 Days', gran: 'day' };
+  return { fromMs: Date.UTC(2025, 0, 1), label: 'Since Jan 1, 2025', gran: 'month' };
+}
+
+// Proceedings whose first office action falls in the window (+ art unit).
+function scoped() {
+  const { fromMs } = periodInfo(aPeriod);
+  let s = _rows.filter((p) => { const t = ms(p.nonf_date); return !isNaN(t) && t >= fromMs; });
+  if (aArtUnit) s = s.filter((p) => {
+    const au = String(p.group_art_unit || '').trim();
+    return aArtUnit === '(Unknown)' ? !au : au === aArtUnit;
+  });
+  return s;
+}
+
+function populateArtUnits() {
+  const set = new Set(); let hasUnknown = false;
+  for (const p of _rows) { if (!p.nonf_date) continue; const au = String(p.group_art_unit || '').trim(); if (au) set.add(au); else hasUnknown = true; }
+  const aus = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (hasUnknown) aus.push('(Unknown)');
+  document.getElementById('artunit-select').innerHTML =
+    ['<option value="">All Art Units</option>'].concat(aus.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)).join('');
+}
+
+// Bucket scoped rows by first-action date (day/week/month) → avg grant→first-action days.
+function trendData(rows, gran) {
+  const map = new Map();
+  for (const p of rows) {
+    const t = ms(p.nonf_date);
+    if (isNaN(t)) continue;
+    const dd = daysBetween(p.order_date, p.nonf_date);
+    if (dd == null) continue;
+    const dt = new Date(t);
+    let bMs;
+    if (gran === 'day') bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+    else if (gran === 'week') { const dow = (dt.getUTCDay() + 6) % 7; bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) - dow * 86400000; }
+    else bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1);
+    if (!map.has(bMs)) map.set(bMs, { ms: bMs, sum: 0, n: 0 });
+    const e = map.get(bMs); e.sum += dd; e.n++;
+  }
+  return [...map.values()].map((e) => ({ ms: e.ms, avg: Math.round(e.sum / e.n), n: e.n })).sort((a, b) => a.ms - b.ms);
+}
+function trendLabel(msVal, gran) {
+  const dt = new Date(msVal);
+  if (gran === 'month') return MONTHS[dt.getUTCMonth()] + " '" + String(dt.getUTCFullYear()).slice(2);
+  return (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate();
+}
+function trendSvg(data, gran) {
+  const W = 720, H = 280, mL = 46, mR = 16, mT = 16, mB = 42;
+  const pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const top = Math.max(30, Math.ceil(Math.max(...data.map((d) => d.avg)) / 30) * 30);
+  const yfor = (v) => yBase - (v / top) * ph;
+  let grid = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = Math.round(top / 4 * i), y = yfor(v);
+    grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/>`
+      + `<text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`;
+  }
+  const n = data.length;
+  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
+  const pts = data.map((d, i) => `${px(i)},${yfor(d.avg)}`).join(' ');
+  const dots = data.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(d.avg)}" r="3.5" fill="#1a3a6b"/>`).join('');
+  const vals = (n <= 16 ? data.map((d, i) => `<text x="${px(i)}" y="${yfor(d.avg) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${d.avg}</text>`).join('') : '');
+  const every = Math.max(1, Math.ceil(n / 12));
+  const xlabels = data.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
+  const hits = data.map((d, i) => `<circle class="pt" cx="${px(i)}" cy="${yfor(d.avg)}" r="14" fill="transparent" data-m="${esc(trendLabel(d.ms, gran))}" data-a="${d.avg}" data-n="${d.n}"></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}`
+    + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}${hits}</svg>`;
+}
+function buildTrend(rows, gran) {
+  const el = document.getElementById('trend');
+  const data = trendData(rows, gran);
+  if (!data.length) { el.innerHTML = ''; return; }
+  const title = gran === 'day' ? 'Daily' : gran === 'week' ? 'Weekly' : 'Monthly';
+  el.innerHTML = `<div class="stats-title">${title} Avg Days: Grant → First Office Action (by first-action date)</div>`
+    + `<div class="chart-wrap">${trendSvg(data, gran)}<div class="chart-tip"></div></div>`;
+  const wrap = el.querySelector('.chart-wrap'), tip = wrap.querySelector('.chart-tip');
+  wrap.addEventListener('mousemove', (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('pt')) {
+      const ds = t.dataset;
+      tip.innerHTML = `<strong>${esc(ds.m)}</strong><br>Avg days: ${ds.a}<br>First actions: ${ds.n}`;
+      tip.style.display = 'block';
+      const r = wrap.getBoundingClientRect();
+      let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;
+      if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 12;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    } else { tip.style.display = 'none'; }
+  });
+  wrap.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+}
+
+function applyFilters() {
+  const { label, gran } = periodInfo(aPeriod);
+  const s = scoped();
+  const note = document.getElementById('scope-note');
+  if (note) {
+    const phrase = label.startsWith('Since') ? 'on or after ' + label.replace('Since ', '') : 'in the ' + label.toLowerCase();
+    note.textContent = 'Showing first office actions issued ' + phrase + (aArtUnit ? ' · Art Unit ' + aArtUnit : '') + ' (n = ' + s.length + ')';
+  }
+  document.getElementById('stat').innerHTML = statCards(s);
+  buildTrend(s, gran);
+  buildDistribution(s);
+  buildExaminerSection(s);
+  render();
+}
+
 (async () => {
   const body = document.getElementById('body');
   try {
@@ -251,18 +397,18 @@ function render() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.actions || [];
-    document.getElementById('stat').innerHTML = statCards(_rows);
-    buildDistribution(_rows);
     const withAction = _rows.filter((p) => p.nonf_date).length;
-    document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${withAction})`;
     if (!withAction) {
+      document.getElementById('list-heading').textContent = 'Proceedings With at Least One Office Action (Total: 0)';
       body.innerHTML = '<div class="state">No reexaminations with a recorded office action yet. The daily scan fills this in as office actions issue.</div>';
       return;
     }
-    buildExaminerSection();
+    populateArtUnits();
+    document.getElementById('period-select').addEventListener('change', (e) => { aPeriod = e.target.value; applyFilters(); });
+    document.getElementById('artunit-select').addEventListener('change', (e) => { aArtUnit = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
-    render();
+    applyFilters();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
   }

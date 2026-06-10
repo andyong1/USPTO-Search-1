@@ -18,14 +18,13 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
-  getDeterminationsToCheckConclusion, recordConclusionDocs, getConclusionsToParse, setConclusionOutcome,
+  getDeterminationsToCheckConclusion, recordConclusionDocs,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchDocumentBytes } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
-import { extractPdfText, parseReexamOutcome } from '../../lib/reexamOutcome.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -117,27 +116,6 @@ async function detectConclusionsStep(maxApps, deadline) {
     } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
   }
   return { checked: rows.length, concluded: found, errors };
-}
-
-// Parse the claim outcome from the certificate/NIRC PDF text. Heavier (downloads
-// + parses a PDF), so a small cap per run.
-async function parseConclusionsStep(maxDocs, deadline) {
-  const rows = await getConclusionsToParse(maxDocs);
-  let parsed = 0;
-  const errors = [];
-  for (const r of rows) {
-    if (Date.now() > deadline) break;
-    const docId = r.cert_doc_id || r.nirc_doc_id;
-    if (!docId) continue;
-    let buffer;
-    try { ({ buffer } = await fetchDocumentBytes(r.application_number, docId, 'PDF')); }
-    catch (e) { errors.push({ application: r.application_number, error: String(e.message || e) }); continue; } // retry next run
-    const text = await extractPdfText(buffer);
-    const outcome = text ? parseReexamOutcome(text) : null;
-    await setConclusionOutcome(r.application_number, outcome); // marks parsed=true
-    parsed++;
-  }
-  return { parsed, errors };
 }
 
 async function enumerate() {
@@ -273,13 +251,15 @@ export default async function handler(req, res) {
     try { subscriberDigest = await maybeSendSubscriberDigest(req); }
     catch (e) { subscriberDigest = { error: String(e.message || e) }; }
 
-    // 3c) Detect NIRC/certificate (conclusion) for ordered reexams, then parse the
-    // claim outcome from a couple of those PDFs. Both rolling and capped per run.
+    // 3c) Detect the reexamination certificate (RXCERT) for ordered reexams so we
+    // can flag concluded proceedings. Rolling and capped per run. We no longer
+    // parse the claim outcome from the PDF text (most certificates are scanned
+    // images without extractable text); the column just shows "Concluded" + the
+    // certificate document.
     let conclusions = { skipped: true };
     try {
       const detect = await detectConclusionsStep(5, Date.now() + 8000);
-      const parse = await parseConclusionsStep(1, Date.now() + 12000);
-      conclusions = { detect, parse };
+      conclusions = { detect };
     } catch (e) { conclusions = { error: String(e.message || e) }; }
 
     // 3d) Detect post-order patent owner petitions (PET.OP) + opposition/decision

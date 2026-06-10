@@ -53,8 +53,12 @@
     }
     .chart-wrap svg .pt { cursor: pointer; }
     /* KPI summary strip */
-    .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
     @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr 1fr; } }
+    .filter-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
+    .filter-bar .fb-group { display: flex; align-items: center; gap: 8px; }
+    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: #4a5568; }
+    .filter-bar select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 12px; text-align: center; }
     .kpi .num { font-size: 1.55rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -147,8 +151,23 @@
   </div>
 
   <div class="card" style="margin-top:24px">
-    <h2>Statistics from Jan. 1, 2025 Through Present</h2>
+    <h2 id="stats-heading">Statistics — Since Jan 1, 2025</h2>
     <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div class="filter-bar">
+      <div class="fb-group">
+        <label for="period-select">Period:</label>
+        <select id="period-select">
+          <option value="since2025">Since Jan 1, 2025</option>
+          <option value="since2026">Since Jan 1, 2026</option>
+          <option value="last60">Last 60 Days</option>
+          <option value="last30">Last 30 Days</option>
+        </select>
+      </div>
+      <div class="fb-group">
+        <label for="artunit-select">Art Unit:</label>
+        <select id="artunit-select"><option value="">All Art Units</option></select>
+      </div>
+    </div>
     <div id="stats-kpi"></div>
     <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
     <div class="stats-grid">
@@ -252,7 +271,7 @@ function withinDays(raw, days) {
   const now = Date.now();
   return t <= now + 86400000 && (now - t) <= days * 86400000;
 }
-// KPI summary strip: headline figures across the collected determinations.
+// KPI summary strip: headline figures for the currently-selected period/art unit.
 function buildKpi(list) {
   const el = document.getElementById('stats-kpi');
   const ordered = list.filter((d) => /ordered/i.test(d.determination_type || '')).length;
@@ -267,21 +286,11 @@ function buildKpi(list) {
   days.sort((a, b) => a - b);
   const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
 
-  // Recent windows.
-  const last30 = list.filter((d) => withinDays(d.official_date, 30));
-  const o30 = last30.filter((d) => /ordered/i.test(d.determination_type || '')).length;
-  const gr30 = last30.length ? (o30 / last30.length * 100).toFixed(1) + '%' : '—';
-  const last90 = list.filter((d) => withinDays(d.official_date, 90));
-  const o90 = last90.filter((d) => /ordered/i.test(d.determination_type || '')).length;
-  const gr90 = last90.length ? (o90 / last90.length * 100).toFixed(1) + '%' : '—';
-
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
-    ${card(pct(ordered) + '%', 'Ordered', ordered + ' of ' + tot)}
+    ${card(pct(ordered) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
-    ${card(gr30, 'Grant Rate (Last 30 Days)', last30.length ? o30 + ' of ' + last30.length + ' ordered' : 'no data')}
-    ${card(gr90, 'Grant Rate (Last 90 Days)', last90.length ? o90 + ' of ' + last90.length + ' ordered' : 'no data')}
     ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
   </div>`;
 }
@@ -371,25 +380,34 @@ function buildExaminerSection(list) {
   });
 }
 
-// ── Monthly grant-rate trend (#1) ──────────────────────────────────
+// ── Grant-rate trend (month / week / day granularity) ──────────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function monthLabel(ym) { const [y, m] = ym.split('-'); return (MONTHS[(+m) - 1] || m) + " '" + y.slice(2); }
-
-function monthlyData(list) {
+// Label a bucket's start timestamp for the chosen granularity.
+function trendLabel(msVal, gran) {
+  const dt = new Date(msVal);
+  if (gran === 'month') return MONTHS[dt.getUTCMonth()] + " '" + String(dt.getUTCFullYear()).slice(2);
+  return (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate(); // M/D for week (week-start) and day
+}
+// Bucket determinations by day, week (Monday start), or month; sorted chronologically.
+function trendData(list, gran) {
   const map = new Map();
   for (const d of list) {
-    const m = String(d.official_date || '').match(/(\d{4})-(\d{2})/);
-    if (!m) continue;
-    const key = m[1] + '-' + m[2];
-    if (!map.has(key)) map.set(key, { ordered: 0, denied: 0 });
-    const e = map.get(key);
+    const t = parseDate(d.official_date);
+    if (isNaN(t)) continue;
+    const dt = new Date(t);
+    let bMs;
+    if (gran === 'day') bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
+    else if (gran === 'week') { const dow = (dt.getUTCDay() + 6) % 7; bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) - dow * 86400000; }
+    else bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1);
+    if (!map.has(bMs)) map.set(bMs, { ms: bMs, ordered: 0, denied: 0 });
+    const e = map.get(bMs);
     if (/denied/i.test(d.determination_type || '')) e.denied++; else e.ordered++;
   }
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([month, v]) => ({ month, ...v }));
+  return [...map.values()].sort((a, b) => a.ms - b.ms);
 }
 
-// Line graph of the monthly grant rate: % of that month's determinations ordered.
-function grantRateLineSvg(data) {
+// Line graph of the grant rate: % of each bucket's determinations ordered.
+function grantRateLineSvg(data, gran) {
   const W = 720, H = 280, mL = 46, mR = 16, mT = 16, mB = 42;
   const pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
   const yfor = (v) => yBase - (v / 100) * ph;
@@ -404,25 +422,27 @@ function grantRateLineSvg(data) {
   const rate = (d) => { const t = d.ordered + d.denied; return t ? (d.ordered / t * 100) : 0; };
   const pts = data.map((d, i) => `${px(i)},${yfor(rate(d))}`).join(' ');
   const dots = data.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(rate(d))}" r="3.5" fill="#1a3a6b"/>`).join('');
-  const vals = data.map((d, i) => `<text x="${px(i)}" y="${yfor(rate(d)) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${rate(d).toFixed(0)}%</text>`).join('');
-  const xlabels = data.map((d, i) => `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(monthLabel(d.month))}</text>`).join('');
+  // Thin value labels / x-axis labels when there are many buckets (e.g., daily).
+  const vals = (n <= 16 ? data.map((d, i) => `<text x="${px(i)}" y="${yfor(rate(d)) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${rate(d).toFixed(0)}%</text>`).join('') : '');
+  const every = Math.max(1, Math.ceil(n / 12));
+  const xlabels = data.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
   // Transparent larger hit-circles for easy hover; carry the counts as data-*.
   const hits = data.map((d, i) => {
     const t = d.ordered + d.denied;
     return `<circle class="pt" cx="${px(i)}" cy="${yfor(rate(d))}" r="14" fill="transparent"`
-      + ` data-m="${esc(monthLabel(d.month))}" data-o="${d.ordered}" data-d="${d.denied}" data-t="${t}" data-r="${rate(d).toFixed(0)}"></circle>`;
+      + ` data-m="${esc(trendLabel(d.ms, gran))}" data-o="${d.ordered}" data-d="${d.denied}" data-t="${t}" data-r="${rate(d).toFixed(0)}"></circle>`;
   }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}`
     + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}${hits}</svg>`;
 }
 
-function buildTrend(list) {
+function buildTrend(list, gran) {
   const el = document.getElementById('stats-trend');
-  // Start the graph at January 2026 (Dec 2025 has only a single entry).
-  const data = monthlyData(list).filter((m) => m.month >= '2025-01');
+  const data = trendData(list, gran);
   if (!data.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div class="stats-title">Monthly Grant Rate (% of determinations ordered)</div>
-    <div class="chart-wrap">${grantRateLineSvg(data)}<div class="chart-tip"></div></div>`;
+  const title = gran === 'day' ? 'Daily' : gran === 'week' ? 'Weekly' : 'Monthly';
+  el.innerHTML = `<div class="stats-title">${title} Grant Rate (% of determinations ordered)</div>
+    <div class="chart-wrap">${grantRateLineSvg(data, gran)}<div class="chart-tip"></div></div>`;
 
   const wrap = el.querySelector('.chart-wrap');
   const tip = wrap.querySelector('.chart-tip');
@@ -568,6 +588,46 @@ function renderTable() {
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+// ── Period + art-unit filtering (scopes the stats card and the listing) ──
+let _all = [];               // full collected list (since Jan 1, 2025)
+let fPeriod = 'since2025';   // period selector
+let fArtUnit = '';           // '' = all art units
+
+function periodInfo(p) {
+  const now = Date.now();
+  if (p === 'since2026') return { fromMs: Date.UTC(2026, 0, 1), label: 'Since Jan 1, 2026', gran: 'month' };
+  if (p === 'last60') return { fromMs: now - 60 * 86400000, label: 'Last 60 Days', gran: 'week' };
+  if (p === 'last30') return { fromMs: now - 30 * 86400000, label: 'Last 30 Days', gran: 'day' };
+  return { fromMs: Date.UTC(2025, 0, 1), label: 'Since Jan 1, 2025', gran: 'month' };
+}
+
+function populateArtUnits(list) {
+  const set = new Set(); let hasUnknown = false;
+  for (const d of list) { const au = String(d.group_art_unit || '').trim(); if (au) set.add(au); else hasUnknown = true; }
+  const aus = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (hasUnknown) aus.push('(Unknown)');
+  document.getElementById('artunit-select').innerHTML =
+    ['<option value="">All Art Units</option>'].concat(aus.map((a) => `<option value="${esc(a)}">${esc(a)}</option>`)).join('');
+}
+
+function applyFilters() {
+  const { fromMs, label, gran } = periodInfo(fPeriod);
+  let subset = _all.filter((d) => { const t = parseDate(d.official_date); return !isNaN(t) && t >= fromMs; });
+  if (fArtUnit) subset = subset.filter((d) => {
+    const au = String(d.group_art_unit || '').trim();
+    return fArtUnit === '(Unknown)' ? !au : au === fArtUnit;
+  });
+  const h = document.getElementById('stats-heading');
+  if (h) h.textContent = 'Statistics — ' + label + (fArtUnit ? ' · Art Unit ' + fArtUnit : '');
+  buildKpi(subset);
+  document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(subset);
+  buildExaminerSection(subset);
+  buildTrend(subset, gran);
+  buildPendency(subset);
+  allDeterminations = subset; // scopes the detailed listing + CSV export
+  renderTable();
+}
+
 (async () => {
   const body = document.getElementById('body');
   try {
@@ -596,17 +656,14 @@ function renderTable() {
         'Determinations collected as of ' + earliest.toLocaleDateString('en-US', opts) + ' (earliest entry below).';
     }
 
-    // Statistics: KPI strip, monthly grant-rate trend, by group art unit, by examiner, pendency.
-    buildKpi(list);
-    document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(list);
-    buildExaminerSection(list);
-    buildTrend(list);
-    buildPendency(list);
-
-    allDeterminations = list;
+    // Statistics + listing: scoped by the period / art-unit filter bar.
+    _all = list;
+    populateArtUnits(_all);
+    document.getElementById('period-select').addEventListener('change', (e) => { fPeriod = e.target.value; applyFilters(); });
+    document.getElementById('artunit-select').addEventListener('change', (e) => { fArtUnit = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
-    renderTable();
+    applyFilters();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';
   }

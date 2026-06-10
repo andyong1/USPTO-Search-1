@@ -19,6 +19,7 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
+  getDeterminationsToCheckTechCenter,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getOrderedReexamsToCheckActions,
@@ -26,6 +27,7 @@ import {
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
 
@@ -294,6 +296,17 @@ export default async function handler(req, res) {
       actions = { checked: aApps.length };
     } catch (e) { actions = { error: String(e.message || e) }; }
 
+    // 3f) Resolve the underlying-patent technology center for a few determinations
+    // per run (two-hop continuity -> underlying app -> group art unit -> TC).
+    let techCenters = { skipped: true };
+    try {
+      const tRows = await getDeterminationsToCheckTechCenter(3);
+      const tDeadline = Date.now() + 8000;
+      let resolved = 0;
+      for (const r of tRows) { if (Date.now() > tDeadline) break; try { const x = await detectTechCenterForApp(r.application_number); if (x.found) resolved++; } catch { /* retry next run */ } }
+      techCenters = { checked: tRows.length, resolved };
+    } catch (e) { techCenters = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -309,6 +322,7 @@ export default async function handler(req, res) {
       conclusions,
       petitions,
       actions,
+      techCenters,
       errors,
     });
   } catch (err) {

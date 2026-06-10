@@ -10,10 +10,12 @@ import {
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
+  getDeterminationsToCheckTechCenter, countTechCenterToCheck,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
 
@@ -83,6 +85,25 @@ export default async function handler(req, res) {
       }
       const remaining = (await getDeterminationsToCheckConclusion(100000)).length;
       res.status(200).json({ ok: true, mode: 'conclusions', checked, concluded, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?techcenter=1 — backfill the underlying-patent technology center for all
+    // determinations (two-hop: reexam continuity -> underlying app -> group art
+    // unit -> TC). Resumable; run until done is true. No reset needed.
+    if (req.query && req.query.techcenter === '1') {
+      const deadline = Date.now() + TIME_BUDGET_MS;
+      let checked = 0, resolved = 0;
+      while (Date.now() < deadline) {
+        const rows = await getDeterminationsToCheckTechCenter(CONCURRENCY);
+        if (!rows.length) break;
+        await Promise.all(rows.map(async (r) => {
+          try { const x = await detectTechCenterForApp(r.application_number); checked++; if (x.found) resolved++; }
+          catch { /* leave for a later call */ }
+        }));
+      }
+      const remaining = await countTechCenterToCheck();
+      res.status(200).json({ ok: true, mode: 'techcenter', checked, resolved, remaining, done: remaining === 0 });
       return;
     }
 

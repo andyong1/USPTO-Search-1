@@ -200,6 +200,10 @@
     }
     .dl-link:hover { background: #edf2f7; }
     .badge-count { background: #c53030; color: white; border-radius: 10px; padding: 1px 9px; font-size: 0.72rem; margin-left: 8px; vertical-align: middle; }
+    .dl-all-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .btn-dl-all { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; }
+    .btn-dl-all:hover { background: #15305a; }
+    .btn-dl-all:disabled { opacity: 0.6; cursor: default; }
 
     /* Application detail */
     .detail-head {
@@ -1247,6 +1251,119 @@ function docLink(appNum, documentId, fmt) {
   return `<a class="dl-link" href="${u}" download>${esc(fmt)}</a>`;
 }
 
+// ── Download all documents as one bookmarked PDF ───────────────────
+// Merging happens in the browser (pdf-lib) so a large file history can't hit
+// the server's 60s/memory limits; the server just proxies one document at a
+// time, as it already does. pdf-lib is loaded lazily from a pinned CDN URL on
+// first use. To self-host instead, drop dist/pdf-lib.min.js at /vendor/ and
+// point PDFLIB_SRC there.
+const PDFLIB_SRC = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+let _pdfLibPromise = null;
+function loadPdfLib() {
+  if (window.PDFLib) return Promise.resolve(window.PDFLib);
+  if (_pdfLibPromise) return _pdfLibPromise;
+  _pdfLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = PDFLIB_SRC;
+    s.onload = () => window.PDFLib ? resolve(window.PDFLib) : reject(new Error('PDF library failed to initialize.'));
+    s.onerror = () => { _pdfLibPromise = null; reject(new Error('Could not load the PDF library.')); };
+    document.head.appendChild(s);
+  });
+  return _pdfLibPromise;
+}
+
+// Add a chronological outline (bookmarks) to the merged document: one entry per
+// source document, each jumping to that document's first page (/Fit).
+function addPdfBookmarks(pdfDoc, items) {
+  const { PDFName, PDFString, PDFArray } = window.PDFLib;
+  const context = pdfDoc.context;
+  const pages = pdfDoc.getPages();
+  const outlineRef = context.nextRef();
+  const itemRefs = items.map(() => context.nextRef());
+  items.forEach((bm, i) => {
+    const dest = PDFArray.withContext(context);
+    dest.push(pages[bm.pageIndex].ref);
+    dest.push(PDFName.of('Fit'));
+    const dict = context.obj({ Title: PDFString.of(bm.title), Parent: outlineRef, Dest: dest });
+    if (i > 0) dict.set(PDFName.of('Prev'), itemRefs[i - 1]);
+    if (i < items.length - 1) dict.set(PDFName.of('Next'), itemRefs[i + 1]);
+    context.assign(itemRefs[i], dict);
+  });
+  const outline = context.obj({
+    Type: PDFName.of('Outlines'),
+    First: itemRefs[0],
+    Last: itemRefs[itemRefs.length - 1],
+    Count: items.length,
+  });
+  context.assign(outlineRef, outline);
+  pdfDoc.catalog.set(PDFName.of('Outlines'), outlineRef);
+}
+
+async function downloadAllDocs() {
+  const fallbackApp = _docState ? _docState.fallbackApp : '';
+  const btn = document.getElementById('dl-all-btn');
+  const status = document.getElementById('dl-all-status');
+  const setStatus = (t) => { if (status) status.textContent = t; };
+
+  // Follow the order currently shown on the page (Date column sort direction).
+  const items = sortedDocBag().map((d) => {
+    const opts = d.downloadOptionBag || d.downloadOptions || [];
+    const formats = opts.map((o) => o.mimeTypeIdentifier || o.mimeType || '').filter(Boolean);
+    return {
+      appNum: d.applicationNumberText || fallbackApp || '',
+      id: d.documentIdentifier || d.documentId || '',
+      hasPdf: formats.some((f) => /pdf/i.test(f)),
+      dateRaw: d.officialDate || d.officialDateTime || d.mailRoomDate || '',
+      code: d.documentCode || '',
+      desc: d.documentCodeDescriptionText || d.documentDescriptionText || '',
+    };
+  }).filter((x) => x.id && x.appNum);
+  const pdfItems = items.filter((x) => x.hasPdf); // already in displayed order
+  const skipped = items.length - pdfItems.length;
+  if (!pdfItems.length) { setStatus('No PDF documents available to combine.'); return; }
+
+  btn.disabled = true;
+  setStatus('Loading PDF engine…');
+  let PDFLib;
+  try { PDFLib = await loadPdfLib(); }
+  catch (e) { setStatus(e.message); btn.disabled = false; return; }
+
+  const merged = await PDFLib.PDFDocument.create();
+  const bookmarks = [];
+  let failed = 0;
+  for (let i = 0; i < pdfItems.length; i++) {
+    const it = pdfItems[i];
+    setStatus(`Downloading ${i + 1} of ${pdfItems.length}…`);
+    try {
+      const resp = await fetch(docUrl(it.appNum, it.id, 'PDF', 'attachment'));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const src = await PDFLib.PDFDocument.load(await resp.arrayBuffer(), { ignoreEncryption: true });
+      const startPage = merged.getPageCount();
+      const copied = await merged.copyPages(src, src.getPageIndices());
+      copied.forEach((p) => merged.addPage(p));
+      const title = [fmtDate(it.dateRaw), it.code, it.desc].filter(Boolean).join(' — ') || ('Document ' + (i + 1));
+      bookmarks.push({ title: title.slice(0, 180), pageIndex: startPage });
+    } catch { failed++; }
+  }
+  if (!merged.getPageCount()) { setStatus('Could not combine any documents (downloads failed).'); btn.disabled = false; return; }
+
+  setStatus('Building bookmarks…');
+  try { addPdfBookmarks(merged, bookmarks); } catch { /* bookmarks are best-effort */ }
+  const bytes = await merged.save();
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `file-history-${pdfItems[0].appNum || 'documents'}.pdf`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+  let msg = `Combined ${bookmarks.length} document${bookmarks.length === 1 ? '' : 's'} into one PDF.`;
+  if (skipped) msg += ` ${skipped} non-PDF item${skipped === 1 ? '' : 's'} skipped.`;
+  if (failed) msg += ` ${failed} failed to download.`;
+  setStatus(msg);
+  btn.disabled = false;
+}
+
 function renderDocuments(data, fallbackApp) {
   const bag = data.documentBag || data.documents || [];
   document.getElementById('results-count').innerHTML =
@@ -1545,9 +1662,44 @@ function humanize(s) {
     .trim();
 }
 
-// Shared documents table with an in-page "View" button per document.
+// Shared documents table with an in-page "View" button per document. The Date
+// column is first and sortable; "Download all as one PDF" follows the order
+// shown. State is kept so the header click can re-sort in place.
+let _docState = null; // { bag, fallbackApp, dir: 'asc' | 'desc' }
+
+function docDateMs(d) {
+  const m = String((d && (d.officialDate || d.officialDateTime || d.mailRoomDate)) || '').match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
+}
+// Current document set sorted by date per the selected direction (undated last).
+function sortedDocBag() {
+  if (!_docState) return [];
+  const sign = _docState.dir === 'desc' ? -1 : 1;
+  return [..._docState.bag].sort((a, b) => {
+    const av = docDateMs(a), bv = docDateMs(b);
+    if (isNaN(av) && isNaN(bv)) return 0;
+    if (isNaN(av)) return 1;
+    if (isNaN(bv)) return -1;
+    return sign * (av - bv);
+  });
+}
+
 function documentsTable(bag, fallbackApp) {
-  const rows = bag.map(d => {
+  _docState = { bag: bag || [], fallbackApp: fallbackApp || '', dir: (_docState && _docState.dir) || 'asc' };
+  return `<div id="doc-table-host">${docTableInner()}</div>`;
+}
+
+function sortDocs() {
+  if (!_docState) return;
+  _docState.dir = _docState.dir === 'asc' ? 'desc' : 'asc';
+  const host = document.getElementById('doc-table-host');
+  if (host) host.innerHTML = docTableInner();
+}
+
+function docTableInner() {
+  const fallbackApp = _docState.fallbackApp;
+  const sorted = sortedDocBag();
+  const rows = sorted.map(d => {
     const appNum = d.applicationNumberText || fallbackApp || '';
     const id = d.documentIdentifier || d.documentId || '';
     const opts = d.downloadOptionBag || d.downloadOptions || [];
@@ -1559,15 +1711,25 @@ function documentsTable(bag, fallbackApp) {
       : '';
     const dls = formats.map(f => docLink(appNum, id, f)).join('');
     return `<tr>
+      <td>${fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate)}</td>
       <td>${esc(d.documentCode || '')}</td>
       <td>${esc(d.documentCodeDescriptionText || d.documentDescriptionText || '')}</td>
-      <td>${fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate)}</td>
       <td>${esc(d.directionCategory || '')}</td>
       <td style="white-space:nowrap">${viewBtn}${dls || (viewBtn ? '' : '<span class="hint">—</span>')}</td>
     </tr>`;
   }).join('');
-  return `<div class="result-table-wrap"><table>
-    <thead><tr><th>Code</th><th>Description</th><th>Date</th><th>Dir.</th><th>View / Download</th></tr></thead>
+  const dlAll = sorted.length
+    ? `<div class="dl-all-bar">
+         <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download all as one PDF</button>
+         <span id="dl-all-status" class="hint" role="status" aria-live="polite"></span>
+       </div>`
+    : '';
+  const arrow = _docState.dir === 'asc' ? ' ▲' : ' ▼';
+  return `${dlAll}<div class="result-table-wrap"><table>
+    <thead><tr>
+      <th onclick="sortDocs()" style="cursor:pointer;user-select:none" title="Sort by date">Date${arrow}</th>
+      <th>Code</th><th>Description</th><th>Dir.</th><th>View / Download</th>
+    </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

@@ -1697,7 +1697,7 @@ function documentsTable(bag, fallbackApp) {
     bag: b,
     fallbackApp: fallbackApp || '',
     dir: (_docState && _docState.dir) || 'desc',
-    selected: new Set(b.filter(docIsPdf).map(docId).filter(Boolean)), // all selected by default
+    selected: new Set(), // none selected by default — user picks rows (or select-all)
   };
   return `<div id="doc-table-host">${docTableInner()}</div>`;
 }

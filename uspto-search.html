@@ -204,6 +204,8 @@
     .btn-dl-all { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; }
     .btn-dl-all:hover { background: #15305a; }
     .btn-dl-all:disabled { opacity: 0.6; cursor: default; }
+    .btn-sel { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; }
+    .btn-sel:hover { background: #cbd5e0; }
 
     /* Application detail */
     .detail-head {
@@ -1678,6 +1680,13 @@ function docIsPdf(d) {
 function docId(d) { return d.documentIdentifier || d.documentId || ''; }
 // Ids of the PDF-downloadable (hence selectable / combinable) documents.
 function pdfIds() { return (_docState ? _docState.bag : []).filter(docIsPdf).map(docId).filter(Boolean); }
+// Foreign Reference (FOR) and Non-Patent Literature (NPL) cited-art documents.
+function docIsRefOrNpl(d) {
+  const code = String(d.documentCode || '').toUpperCase();
+  if (code === 'FOR' || code === 'NPL') return true;
+  const desc = String(d.documentCodeDescriptionText || d.documentDescriptionText || '').toLowerCase();
+  return /foreign reference/.test(desc) || /non[\s-]*patent literature/.test(desc);
+}
 // Current document set sorted by date per the selected direction (undated last).
 function sortedDocBag() {
   if (!_docState) return [];
@@ -1719,6 +1728,15 @@ function toggleAllDocs(on) {
   _docState.selected = on ? new Set(pdfIds()) : new Set();
   const host = document.getElementById('doc-table-host');
   if (host) host.innerHTML = docTableInner();
+}
+// Select every PDF document except Foreign Reference (FOR) and NPL cited art.
+function selectExceptRefs() {
+  if (!_docState) return;
+  _docState.selected = new Set(
+    _docState.bag.filter((d) => docIsPdf(d) && !docIsRefOrNpl(d)).map(docId).filter(Boolean)
+  );
+  const host = document.getElementById('doc-table-host');
+  if (host) { host.innerHTML = docTableInner(); updateSelectAll(); }
 }
 function updateSelectAll() {
   if (!_docState) return;
@@ -1764,6 +1782,7 @@ function docTableInner() {
   const dlAll = ids.length
     ? `<div class="dl-all-bar">
          <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download selected as one PDF</button>
+         <button class="btn-sel" id="sel-except-btn" onclick="selectExceptRefs()" title="Select all documents except Foreign Reference and Non-Patent Literature">Select all except foreign refs &amp; NPL</button>
          <span id="doc-sel-count" class="hint">${selCount} of ${ids.length} selected</span>
          <span id="dl-all-status" class="hint" role="status" aria-live="polite"></span>
        </div>`

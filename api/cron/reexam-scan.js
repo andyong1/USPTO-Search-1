@@ -284,7 +284,7 @@ export default async function handler(req, res) {
       petitions = { scanned: apps.length, detected, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
-    // 3e) Office-action timing: find first non-final / final action dates for a
+    // 3e) Office action timing: find first non-final / final action dates for a
     // few ordered reexams per run (rolling, re-checks until a final action issues).
     let actions = { skipped: true };
     try {

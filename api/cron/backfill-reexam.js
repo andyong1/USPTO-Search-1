@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ?actions=1 — backfill office-action timing (first non-final / final action
+    // ?actions=1 — backfill office action timing (first non-final / final action
     // dates) for ordered reexams since the cutoff. Resumable; run until done.
     if (req.query && req.query.actions === '1') {
       // ?reset=1 clears existing rows so everything re-scans (e.g., to backfill doc ids).

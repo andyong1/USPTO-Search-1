@@ -19,8 +19,30 @@ import { Readable } from 'node:stream';
 export const config = { maxDuration: 60 };
 
 const DL_BASE = 'https://api.uspto.gov/api/v1/download/applications';
+const META_BASE = 'https://api.uspto.gov/api/v1/patent/applications';
 const ATTEMPTS = 2;
 const CONNECT_TIMEOUT_MS = 25000;
+
+// Resolve a document's real download URL from its metadata. Most docs are served
+// at the constructed {docId}.{ext}, but some (e.g. certain petitions) live at a
+// nested {docId}/files/{fileId}.{ext} path and 400 on the constructed URL.
+async function resolveRealUrl(appNum, documentId, format, apiKey) {
+  try {
+    const r = await fetchHeaders(`${META_BASE}/${encodeURIComponent(appNum)}/documents`,
+      { headers: { 'X-API-KEY': apiKey, Accept: 'application/json' } }, 10000);
+    if (!r.ok) return null;
+    const data = await r.json();
+    const bag = data.documentBag || data.documents || [];
+    const doc = bag.find((d) => (d.documentIdentifier || d.documentId) === documentId);
+    if (!doc) return null;
+    const want = String(format).toUpperCase();
+    const opt = (doc.downloadOptionBag || doc.downloadOptions || []).find((o) => {
+      const m = String(o.mimeTypeIdentifier || o.mimeType || '').toUpperCase();
+      return want === 'PDF' ? m.includes('PDF') : m.includes(want);
+    });
+    return (opt && (opt.downloadUrl || opt.url)) || null;
+  } catch { return null; }
+}
 
 const EXT = { PDF: 'pdf', XML: 'xml', 'MS WORD': 'docx', DOCX: 'docx', DOC: 'docx' };
 const CTYPE = { pdf: 'application/pdf', xml: 'application/xml', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
@@ -67,26 +89,36 @@ export default async function handler(req, res) {
     return;
   }
 
-  const url = `${DL_BASE}/${encodeURIComponent(appNum)}/${encodeURIComponent(documentId)}.${ext}`;
+  let url = `${DL_BASE}/${encodeURIComponent(appNum)}/${encodeURIComponent(documentId)}.${ext}`;
   const filename = `${appNum}-${documentId}.${ext}`;
 
   let lastStatus = 0;
   let lastDetail = '';
+  let triedReal = false;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    let upstream;
+    let upstream = null;
     try {
       upstream = await fetchHeaders(url, { headers: { 'X-API-KEY': apiKey } }, CONNECT_TIMEOUT_MS);
     } catch (err) {
       lastStatus = 504; // aborted / network error
       lastDetail = String(err.message || err);
-      continue; // retry
     }
 
-    if (!upstream.ok) {
+    if (upstream && !upstream.ok) {
       lastStatus = upstream.status;
       lastDetail = (await upstream.text().catch(() => '')).slice(0, 200);
-      if (upstream.status < 500 && upstream.status !== 408) break; // 4xx won't change on retry
-      continue; // retry 5xx/408
+    }
+
+    if (!upstream || !upstream.ok) {
+      // The constructed URL may be wrong for this doc — resolve its real download
+      // URL from metadata (once) and try that before giving up / retrying.
+      if (!triedReal) {
+        triedReal = true;
+        const real = await resolveRealUrl(appNum, documentId, format, apiKey);
+        if (real && real !== url) { url = real; continue; }
+      }
+      if (upstream && upstream.status < 500 && upstream.status !== 408) break; // 4xx won't change on retry
+      continue; // retry 5xx/408/network
     }
 
     // Success — set headers and stream the body straight through.

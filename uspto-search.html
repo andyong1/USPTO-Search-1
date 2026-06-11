@@ -206,6 +206,7 @@
     .btn-dl-all:disabled { opacity: 0.6; cursor: default; }
     .btn-sel { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; }
     .btn-sel:hover { background: #cbd5e0; }
+    .dl-btn-col { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 
     /* Application detail */
     .detail-head {
@@ -1705,7 +1706,7 @@ function documentsTable(bag, fallbackApp) {
   _docState = {
     bag: b,
     fallbackApp: fallbackApp || '',
-    dir: (_docState && _docState.dir) || 'desc',
+    dir: 'desc', // always open newest-first; the Date header still toggles in place
     selected: new Set(), // none selected by default — user picks rows (or select-all)
   };
   return `<div id="doc-table-host">${docTableInner()}</div>`;
@@ -1781,8 +1782,10 @@ function docTableInner() {
   const allChecked = ids.length > 0 && selCount === ids.length;
   const dlAll = ids.length
     ? `<div class="dl-all-bar">
-         <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download selected as one PDF</button>
-         <button class="btn-sel" id="sel-except-btn" onclick="selectExceptRefs()" title="Select all documents except Foreign Reference and Non-Patent Literature">Select all except foreign refs &amp; NPL</button>
+         <div class="dl-btn-col">
+           <button class="btn-dl-all" id="dl-all-btn" onclick="downloadAllDocs()">⬇ Download selected as single PDF</button>
+           <button class="btn-sel" id="sel-except-btn" onclick="selectExceptRefs()" title="Select all documents except Foreign Reference and Non-Patent Literature">Select all except foreign refs &amp; NPL</button>
+         </div>
          <span id="doc-sel-count" class="hint">${selCount} of ${ids.length} selected</span>
          <span id="dl-all-status" class="hint" role="status" aria-live="polite"></span>
        </div>`

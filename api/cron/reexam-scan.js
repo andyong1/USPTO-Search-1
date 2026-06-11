@@ -319,7 +319,7 @@ export default async function handler(req, res) {
       for (const r of prows) {
         if (Date.now() > pDeadline) break;
         try {
-          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false });
+          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: 12000 });
           if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); deferred++; }
           else { await setPetition325dDone(r.application_number, x.is325d); resolved++; }
         } catch { await setPetition325dFailed(r.application_number); }

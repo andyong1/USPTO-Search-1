@@ -134,11 +134,11 @@ export default async function handler(req, res) {
       // text-layer ones instantly and flags image-only ones 'pending_ocr'. No OCR,
       // so no rate limits; the bulk of the pool clears here.
       let textDrained = false;
-      while (Date.now() < deadline - 5000) {
+      while (Date.now() < deadline - 25000) {
         const batch = await getPetitionsToCheck325d(5);
         if (!batch.length) { textDrained = true; break; }
         for (const r of batch) {
-          if (Date.now() > deadline - 5000) break;
+          if (Date.now() > deadline - 25000) break;
           try {
             const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false });
             if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
@@ -152,12 +152,12 @@ export default async function handler(req, res) {
       // the petition pending so it retries on a later run / the daily job — never
       // marking a rate-limited petition as failed.
       if (textDrained) {
-        while (Date.now() < deadline - 30000) {
+        while (Date.now() < deadline - 43000) {
           const todo = await getPetitionsPendingOcr(1);
           if (!todo.length) break;
           const r = todo[0];
           try {
-            const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true });
+            const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 2 });
             await setPetition325dDone(r.application_number, !!x.is325d); checked++; ocrChecked++; if (x.is325d) cite325d++;
           } catch (e) {
             const msg = String(e && e.message || e);

@@ -1334,20 +1334,32 @@ async function downloadAllDocs() {
 
   const merged = await PDFLib.PDFDocument.create();
   const bookmarks = [];
-  let failed = 0;
-  for (let i = 0; i < pdfItems.length; i++) {
-    const it = pdfItems[i];
-    setStatus(`Downloading ${i + 1} of ${pdfItems.length}…`);
-    try {
-      const resp = await fetch(docUrl(it.appNum, it.id, 'PDF', 'attachment'));
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const src = await PDFLib.PDFDocument.load(await resp.arrayBuffer(), { ignoreEncryption: true });
+  let failed = 0, done = 0;
+  // Download + parse a few documents in parallel for speed, but bounded so the
+  // browser/proxy aren't flooded, and append pages strictly in displayed order.
+  // Source docs are released each batch, so peak memory stays ≈ the final PDF
+  // plus a few in-flight documents.
+  const CONCURRENCY = 4;
+  for (let i = 0; i < pdfItems.length; i += CONCURRENCY) {
+    const chunk = pdfItems.slice(i, i + CONCURRENCY);
+    setStatus(`Downloading ${Math.min(i + chunk.length, pdfItems.length)} of ${pdfItems.length}…`);
+    const loaded = await Promise.all(chunk.map(async (it) => {
+      try {
+        const resp = await fetch(docUrl(it.appNum, it.id, 'PDF', 'attachment'));
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const src = await PDFLib.PDFDocument.load(await resp.arrayBuffer(), { ignoreEncryption: true });
+        return { it, src };
+      } catch { return { it, src: null }; }
+    }));
+    for (const { it, src } of loaded) {
+      done++;
+      if (!src) { failed++; continue; }
       const startPage = merged.getPageCount();
       const copied = await merged.copyPages(src, src.getPageIndices());
       copied.forEach((p) => merged.addPage(p));
-      const title = [fmtDate(it.dateRaw), it.code, it.desc].filter(Boolean).join(' — ') || ('Document ' + (i + 1));
+      const title = [fmtDate(it.dateRaw), it.code, it.desc].filter(Boolean).join(' — ') || ('Document ' + done);
       bookmarks.push({ title: title.slice(0, 180), pageIndex: startPage });
-    } catch { failed++; }
+    }
   }
   if (!merged.getPageCount()) { setStatus('Could not combine any documents (downloads failed).'); btn.disabled = false; return; }
 

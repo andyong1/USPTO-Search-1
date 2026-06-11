@@ -133,17 +133,21 @@ export default async function handler(req, res) {
       // Phase 1 — fast text-only pass over never-touched petitions: resolves the
       // text-layer ones instantly and flags image-only ones 'pending_ocr'. No OCR,
       // so no rate limits; the bulk of the pool clears here.
+      // These petition PDFs are slow to download, so fetch a few in parallel
+      // (wall-time ≈ the slowest, not the sum) with a longer per-download timeout.
+      // Start a batch only early enough that a ~30s download finishes under 60s.
       let textDrained = false;
-      while (Date.now() < deadline - 25000) {
-        const batch = await getPetitionsToCheck325d(5);
+      while (Date.now() < deadline - 38000) {
+        const batch = await getPetitionsToCheck325d(3);
         if (!batch.length) { textDrained = true; break; }
-        for (const r of batch) {
-          if (Date.now() > deadline - 25000) break;
-          try {
-            const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false });
-            if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
-            else { await setPetition325dDone(r.application_number, !!x.is325d); checked++; if (x.is325d) cite325d++; }
-          } catch (e) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, e); }
+        const results = await Promise.all(batch.map(async (r) => {
+          try { return { r, x: await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: 30000 }), err: null }; }
+          catch (e) { return { r, x: null, err: e }; }
+        }));
+        for (const { r, x, err } of results) {
+          if (err) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, err); continue; }
+          if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
+          else { await setPetition325dDone(r.application_number, !!x.is325d); checked++; if (x.is325d) cite325d++; }
         }
       }
 

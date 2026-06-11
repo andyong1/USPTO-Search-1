@@ -8,7 +8,7 @@ import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
-  getPetitionsToOcr325d, setPetition325dDone, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d,
+  getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
@@ -126,24 +126,49 @@ export default async function handler(req, res) {
       let repooled = 0;
       if (req.query.retry === '1') repooled = await resetFailedPetition325d();
       const deadline = Date.now() + TIME_BUDGET_MS;
-      let checked = 0, cite325d = 0, failed = 0;
+      let checked = 0, cite325d = 0, failed = 0, ocrChecked = 0, rateLimited = false;
       const errors = [];
-      while (Date.now() < deadline - 30000) {
-        const todo = await getPetitionsToOcr325d(1);
-        if (!todo.length) break;
-        const r = todo[0];
-        try {
-          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true });
-          await setPetition325dDone(r.application_number, !!x.is325d);
-          checked++; if (x.is325d) cite325d++;
-        } catch (e) {
-          await setPetition325dFailed(r.application_number);
-          failed++;
-          if (errors.length < 3) errors.push({ application: r.application_number, error: String(e && e.message || e) });
+      const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
+
+      // Phase 1 — fast text-only pass over never-touched petitions: resolves the
+      // text-layer ones instantly and flags image-only ones 'pending_ocr'. No OCR,
+      // so no rate limits; the bulk of the pool clears here.
+      let textDrained = false;
+      while (Date.now() < deadline - 5000) {
+        const batch = await getPetitionsToCheck325d(5);
+        if (!batch.length) { textDrained = true; break; }
+        for (const r of batch) {
+          if (Date.now() > deadline - 5000) break;
+          try {
+            const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false });
+            if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
+            else { await setPetition325dDone(r.application_number, !!x.is325d); checked++; if (x.is325d) cite325d++; }
+          } catch (e) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, e); }
         }
       }
+
+      // Phase 2 — OCR the image-only ones, only once the text pass is drained and
+      // time remains. Paced; on a 429 (OCR.space rate/daily cap) we STOP and leave
+      // the petition pending so it retries on a later run / the daily job — never
+      // marking a rate-limited petition as failed.
+      if (textDrained) {
+        while (Date.now() < deadline - 30000) {
+          const todo = await getPetitionsPendingOcr(1);
+          if (!todo.length) break;
+          const r = todo[0];
+          try {
+            const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true });
+            await setPetition325dDone(r.application_number, !!x.is325d); checked++; ocrChecked++; if (x.is325d) cite325d++;
+          } catch (e) {
+            const msg = String(e && e.message || e);
+            if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }
+            await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, e);
+          }
+        }
+      }
+
       const remaining = await countPetitions325dPending();
-      res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, cite325d, failed, errors, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, ocrChecked, cite325d, failed, rateLimited, errors, remaining, done: remaining === 0 });
       return;
     }
 

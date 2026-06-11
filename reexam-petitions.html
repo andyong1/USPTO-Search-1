@@ -133,7 +133,7 @@ const dash = '<span class="ext">—</span>';
 let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)'];
+  const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)', 'First Office Action'];
   const rows = filtered().map((p) => [
     p.application_number, fmtDate(p.order_date),
     p.petition_doc_id ? fmtDate(p.petition_date) : '',
@@ -141,6 +141,7 @@ function exportCsv() {
     p.decision_outcome || (p.decision_doc_id ? 'Decided' : ''),
     p.decision_doc_id ? fmtDate(p.decision_date) : '',
     p.decision_doc_id ? (p.decision_325d ? 'Yes' : 'No') : '',
+    p.nonf_date ? fmtDate(p.nonf_date) : '',
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -171,6 +172,7 @@ function render() {
       const lbl = o ? (o.charAt(0).toUpperCase() + o.slice(1)) : 'Decided';
       decCell = `<span class="badge ${cls}">${esc(lbl)}</span> ${fmtDate(p.decision_date)}${docLinks(num, p.decision_doc_id, 'Petition Decision')}`;
     }
+    const nonfCell = p.nonf_date ? `${fmtDate(p.nonf_date)}${docLinks(num, p.nonf_doc_id, 'First Office Action')}` : dash;
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
@@ -180,10 +182,11 @@ function render() {
       <td>${petCell}</td>
       <td>${oppCell}</td>
       <td>${decCell}</td>
+      <td>${nonfCell}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision Citing § 325(d)</th></tr></thead>
+    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision Citing § 325(d)</th><th>First Office Action</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

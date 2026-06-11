@@ -23,6 +23,7 @@ import {
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
+  getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
@@ -327,6 +328,18 @@ export default async function handler(req, res) {
       petition325d = { checked: prows.length, resolved, deferred };
     } catch (e) { petition325d = { error: String(e.message || e) }; }
 
+    // 3h) Refresh ACTIVE post-order petitions (have a petition, no decision yet)
+    // daily, so a newly-filed requester opposition or Office decision shows up
+    // within a day instead of waiting on the 7-day discovery cooldown.
+    let petitionRefresh = { skipped: true };
+    try {
+      const apps = await getActivePetitionsToRefresh(8);
+      const rDeadline = Date.now() + 8000;
+      let refreshed = 0;
+      for (const a of apps) { if (Date.now() > rDeadline) break; try { await detectPostOrderPetitionForApp(a.application_number, a.order_date); refreshed++; } catch { /* retry next run */ } }
+      petitionRefresh = { checked: apps.length, refreshed };
+    } catch (e) { petitionRefresh = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -344,6 +357,7 @@ export default async function handler(req, res) {
       actions,
       techCenters,
       petition325d,
+      petitionRefresh,
       errors,
     });
   } catch (err) {

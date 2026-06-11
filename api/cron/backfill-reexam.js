@@ -130,25 +130,22 @@ export default async function handler(req, res) {
       const errors = [];
       const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
 
-      // Phase 1 — fast text-only pass over never-touched petitions: resolves the
-      // text-layer ones instantly and flags image-only ones 'pending_ocr'. No OCR,
-      // so no rate limits; the bulk of the pool clears here.
-      // These petition PDFs are slow to download, so fetch a few in parallel
-      // (wall-time ≈ the slowest, not the sum) with a longer per-download timeout.
-      // Start a batch only early enough that a ~30s download finishes under 60s.
+      // Phase 1 — text-only pass over never-touched petitions: resolves the
+      // text-layer ones and flags image-only ones 'pending_ocr'. No OCR here, so
+      // no OCR rate limits. Process ONE petition at a time with a generous
+      // download timeout — firing several USPTO downloads in parallel got our
+      // server throttled (403 / timeouts), while single sequential downloads
+      // (like an interactive View) succeed.
       let textDrained = false;
-      while (Date.now() < deadline - 38000) {
-        const batch = await getPetitionsToCheck325d(3);
+      while (Date.now() < deadline - 45000) {
+        const batch = await getPetitionsToCheck325d(1);
         if (!batch.length) { textDrained = true; break; }
-        const results = await Promise.all(batch.map(async (r) => {
-          try { return { r, x: await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: 30000 }), err: null }; }
-          catch (e) { return { r, x: null, err: e }; }
-        }));
-        for (const { r, x, err } of results) {
-          if (err) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, err); continue; }
+        const r = batch[0];
+        try {
+          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: 38000 });
           if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
           else { await setPetition325dDone(r.application_number, !!x.is325d); checked++; if (x.is325d) cite325d++; }
-        }
+        } catch (e) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, e); }
       }
 
       // Phase 2 — OCR the image-only ones, only once the text pass is drained and

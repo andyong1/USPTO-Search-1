@@ -8,13 +8,14 @@ import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
+  getPetitionsToOcr325d, setPetition325dDone, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
-import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -112,6 +113,32 @@ export default async function handler(req, res) {
       }
       const remaining = await countTechCenterToCheck();
       res.status(200).json({ ok: true, mode: 'techcenter', repooled, checked, resolved, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?petition325d=1 — determine whether each patent owner petition cites 35
+    // U.S.C. 325(d): text-first, OCR fallback for image-only petitions. Petitions
+    // determined NOT to cite 325(d) drop off the petitions page. Resumable.
+    //   &retry=1 first re-pools petitions whose prior attempt failed.
+    // One petition per loop iteration; OCR is page-capped so each stays well
+    // under the function limit.
+    if (req.query && req.query.petition325d === '1') {
+      let repooled = 0;
+      if (req.query.retry === '1') repooled = await resetFailedPetition325d();
+      const deadline = Date.now() + TIME_BUDGET_MS;
+      let checked = 0, cite325d = 0;
+      while (Date.now() < deadline - 30000) {
+        const todo = await getPetitionsToOcr325d(1);
+        if (!todo.length) break;
+        const r = todo[0];
+        try {
+          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true });
+          await setPetition325dDone(r.application_number, !!x.is325d);
+          checked++; if (x.is325d) cite325d++;
+        } catch { await setPetition325dFailed(r.application_number); }
+      }
+      const remaining = await countPetitions325dPending();
+      res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, cite325d, remaining, done: remaining === 0 });
       return;
     }
 

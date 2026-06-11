@@ -22,11 +22,12 @@ import {
   getDeterminationsToCheckTechCenter,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
+  getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
-import { detectPostOrderPetitionForApp } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -307,6 +308,25 @@ export default async function handler(req, res) {
       techCenters = { checked: tRows.length, resolved };
     } catch (e) { techCenters = { error: String(e.message || e) }; }
 
+    // 3g) Petition §325(d) detection — TEXT ONLY in the cron (fast). Image-only
+    // petitions are flagged 'pending_ocr' and left to the ?petition325d=1 backfill
+    // so a slow OCR call can't blow this function's time budget.
+    let petition325d = { skipped: true };
+    try {
+      const prows = await getPetitionsToCheck325d(3);
+      const pDeadline = Date.now() + 6000;
+      let resolved = 0, deferred = 0;
+      for (const r of prows) {
+        if (Date.now() > pDeadline) break;
+        try {
+          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false });
+          if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); deferred++; }
+          else { await setPetition325dDone(r.application_number, x.is325d); resolved++; }
+        } catch { await setPetition325dFailed(r.application_number); }
+      }
+      petition325d = { checked: prows.length, resolved, deferred };
+    } catch (e) { petition325d = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -323,6 +343,7 @@ export default async function handler(req, res) {
       petitions,
       actions,
       techCenters,
+      petition325d,
       errors,
     });
   } catch (err) {

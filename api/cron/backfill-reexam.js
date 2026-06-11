@@ -126,7 +126,8 @@ export default async function handler(req, res) {
       let repooled = 0;
       if (req.query.retry === '1') repooled = await resetFailedPetition325d();
       const deadline = Date.now() + TIME_BUDGET_MS;
-      let checked = 0, cite325d = 0;
+      let checked = 0, cite325d = 0, failed = 0;
+      const errors = [];
       while (Date.now() < deadline - 30000) {
         const todo = await getPetitionsToOcr325d(1);
         if (!todo.length) break;
@@ -135,10 +136,14 @@ export default async function handler(req, res) {
           const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: true });
           await setPetition325dDone(r.application_number, !!x.is325d);
           checked++; if (x.is325d) cite325d++;
-        } catch { await setPetition325dFailed(r.application_number); }
+        } catch (e) {
+          await setPetition325dFailed(r.application_number);
+          failed++;
+          if (errors.length < 3) errors.push({ application: r.application_number, error: String(e && e.message || e) });
+        }
       }
       const remaining = await countPetitions325dPending();
-      res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, cite325d, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, cite325d, failed, errors, remaining, done: remaining === 0 });
       return;
     }
 

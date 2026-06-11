@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File History PDF — USPTO Patent File Wrapper</title>
+  <meta name="description" content="Enter a patent or application number to download the entire file history as a single, bookmarked PDF (documents in chronological order), using the USPTO Open Data Portal." />
+  <meta property="og:title" content="File History PDF — USPTO Patent File Wrapper" />
+  <meta property="og:description" content="Download a patent or application's full file history as one bookmarked PDF." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 820px; margin: 0 auto; padding: 24px 16px 60px; }
+    .site-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 16px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+    .site-nav a:hover { background: #cbd5e0; }
+    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5; }
+    .toggle { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+    .toggle label { font-size: 0.92rem; font-weight: 600; color: #4a5568; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .order-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .order-row label { font-size: 0.92rem; font-weight: 600; color: #4a5568; }
+    .order-row select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.92rem; }
+    .num-input { width: 100%; padding: 11px 13px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 1rem; margin-bottom: 14px; }
+    .num-input:focus { outline: none; border-color: #1a3a6b; }
+    .btn-row { display: flex; flex-direction: column; gap: 10px; align-items: stretch; max-width: 420px; }
+    .btn-primary { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 11px 16px; border-radius: 8px; }
+    .btn-primary:hover { background: #15305a; }
+    .btn-sel { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.92rem; padding: 11px 16px; border-radius: 8px; }
+    .btn-sel:hover { background: #cbd5e0; }
+    .btn-primary:disabled, .btn-sel:disabled { opacity: 0.55; cursor: default; }
+    .status { margin-top: 16px; font-size: 0.9rem; color: #4a5568; min-height: 1.2em; }
+    .status.err { color: #c53030; font-weight: 600; }
+    .status.ok { color: #276749; font-weight: 600; }
+    .note { font-size: 0.78rem; color: #a0aec0; margin-top: 18px; line-height: 1.5; }
+    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
+    footer a { color: #1a3a6b; text-decoration: none; }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <nav class="site-nav">
+    <a href="/uspto-search">Application Search &amp; Tracking</a>
+    <a href="/reexam">Reexam Determinations</a>
+    <a href="/reexam-actions">Reexam Office Action Timing</a>
+    <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+    <a href="/reexam-petitions">Post-Order Petitions</a>
+    <a href="/file-history" class="active" aria-current="page">File History PDF</a>
+  </nav>
+
+  <div class="card">
+    <h2>Download a Full File History as One PDF</h2>
+    <div class="sub">Enter a patent or application number and download its entire file-wrapper history as a single, bookmarked PDF — one bookmark per document, in the date order you choose below.</div>
+
+    <div class="toggle">
+      <label><input type="radio" name="numkind" value="application" checked> Application / control number</label>
+      <label><input type="radio" name="numkind" value="patent"> Patent number</label>
+    </div>
+
+    <div class="order-row">
+      <label for="order-select">Date order:</label>
+      <select id="order-select">
+        <option value="asc">Ascending — earliest document first</option>
+        <option value="desc">Descending — most recent document first</option>
+      </select>
+    </div>
+
+    <input id="num-input" class="num-input" type="text" placeholder="e.g., 16/123,456 or 16123456 (or 90/016,038)" aria-label="Patent or application number"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();buildHistory(false);}" />
+
+    <div class="btn-row">
+      <button class="btn-primary" id="btn-all" onclick="buildHistory(false)">⬇ Download entire file history</button>
+      <button class="btn-sel" id="btn-trim" onclick="buildHistory(true)">⬇ Download without foreign refs &amp; NPL</button>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <div class="note">Combining happens entirely in your browser, so large file histories may take a little while and produce a large file. Only documents available in PDF form are included; any image-only or non-PDF entries are skipped. All documents are public USPTO records, fetched live from the Open Data Portal — this tool stores nothing. Informational only; not legal advice.</div>
+  </div>
+
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return ''; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : ''; }
+function docDateMs(d) {
+  const m = String((d && (d.officialDate || d.officialDateTime || d.mailRoomDate)) || '').match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN;
+}
+function docIsPdf(d) {
+  const opts = d.downloadOptionBag || d.downloadOptions || [];
+  return opts.some((o) => /pdf/i.test(o.mimeTypeIdentifier || o.mimeType || ''));
+}
+function docId(d) { return d.documentIdentifier || d.documentId || ''; }
+// Foreign Reference (FOR) and Non-Patent Literature (NPL) cited-art documents.
+function docIsRefOrNpl(d) {
+  const code = String(d.documentCode || '').toUpperCase();
+  if (code === 'FOR' || code === 'NPL') return true;
+  const desc = String(d.documentCodeDescriptionText || d.documentDescriptionText || '').toLowerCase();
+  return /foreign reference/.test(desc) || /non[\s-]*patent literature/.test(desc);
+}
+
+// pdf-lib is loaded lazily from a pinned CDN URL on first use. To self-host,
+// drop dist/pdf-lib.min.js at /vendor/ and point PDFLIB_SRC there.
+const PDFLIB_SRC = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+let _pdfLibPromise = null;
+function loadPdfLib() {
+  if (window.PDFLib) return Promise.resolve(window.PDFLib);
+  if (_pdfLibPromise) return _pdfLibPromise;
+  _pdfLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = PDFLIB_SRC;
+    s.onload = () => window.PDFLib ? resolve(window.PDFLib) : reject(new Error('PDF library failed to initialize.'));
+    s.onerror = () => { _pdfLibPromise = null; reject(new Error('Could not load the PDF library.')); };
+    document.head.appendChild(s);
+  });
+  return _pdfLibPromise;
+}
+
+// Add a chronological outline (bookmarks): one entry per document, /Fit destination.
+function addPdfBookmarks(pdfDoc, items) {
+  const { PDFName, PDFString, PDFArray } = window.PDFLib;
+  const context = pdfDoc.context;
+  const pages = pdfDoc.getPages();
+  const outlineRef = context.nextRef();
+  const itemRefs = items.map(() => context.nextRef());
+  items.forEach((bm, i) => {
+    const dest = PDFArray.withContext(context);
+    dest.push(pages[bm.pageIndex].ref);
+    dest.push(PDFName.of('Fit'));
+    const dict = context.obj({ Title: PDFString.of(bm.title), Parent: outlineRef, Dest: dest });
+    if (i > 0) dict.set(PDFName.of('Prev'), itemRefs[i - 1]);
+    if (i < items.length - 1) dict.set(PDFName.of('Next'), itemRefs[i + 1]);
+    context.assign(itemRefs[i], dict);
+  });
+  const outline = context.obj({
+    Type: PDFName.of('Outlines'),
+    First: itemRefs[0],
+    Last: itemRefs[itemRefs.length - 1],
+    Count: items.length,
+  });
+  context.assign(outlineRef, outline);
+  pdfDoc.catalog.set(PDFName.of('Outlines'), outlineRef);
+}
+
+// Resolve the input to an application/control number. For a patent number, look
+// up the corresponding application via the search proxy first.
+async function resolveAppNumber(kind, raw) {
+  if (kind === 'patent') {
+    const pn = raw.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    if (!pn) throw new Error('Enter a patent number.');
+    const res = await fetch('/api/search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: `applicationMetaData.patentNumber:${pn}`,
+        fields: ['applicationNumberText', 'applicationMetaData.patentNumber'],
+        pagination: { offset: 0, limit: 1 },
+      }),
+    });
+    if (!res.ok) throw new Error('Patent lookup failed (HTTP ' + res.status + ').');
+    const data = await res.json().catch(() => ({}));
+    const rec = (data.patentFileWrapperDataBag || [])[0];
+    const appNum = rec && (rec.applicationNumberText || (rec.applicationMetaData && rec.applicationMetaData.applicationNumberText));
+    if (!appNum) throw new Error('No application found for patent ' + pn + '.');
+    return appNum;
+  }
+  const n = raw.replace(/[^0-9A-Za-z]/g, '');
+  if (!n) throw new Error('Enter an application or control number.');
+  return n;
+}
+
+async function fetchDocs(appNum) {
+  const res = await fetch(`/api/application?appNum=${encodeURIComponent(appNum)}&section=documents`);
+  if (!res.ok) throw new Error('Could not load documents (HTTP ' + res.status + ').');
+  const data = await res.json().catch(() => ({}));
+  const rec = (data.patentFileWrapperDataBag && data.patentFileWrapperDataBag[0]) || data;
+  return rec.documentBag || rec.documents || data.documentBag || data.documents || [];
+}
+
+let _busy = false;
+function setBusy(on) {
+  _busy = on;
+  document.getElementById('btn-all').disabled = on;
+  document.getElementById('btn-trim').disabled = on;
+  document.getElementById('num-input').disabled = on;
+}
+
+async function buildHistory(excludeRefs) {
+  if (_busy) return;
+  const kind = document.querySelector('input[name="numkind"]:checked').value;
+  const raw = (document.getElementById('num-input').value || '').trim();
+  const status = document.getElementById('status');
+  const setStatus = (t, cls) => { status.className = 'status' + (cls ? ' ' + cls : ''); status.textContent = t; };
+  if (!raw) { setStatus('Please enter a number first.', 'err'); return; }
+
+  setBusy(true);
+  try {
+    setStatus('Looking up application…');
+    let appNum;
+    try { appNum = await resolveAppNumber(kind, raw); }
+    catch (e) { setStatus(e.message, 'err'); return; }
+
+    setStatus('Loading document list…');
+    let bag;
+    try { bag = await fetchDocs(appNum); }
+    catch (e) { setStatus(e.message, 'err'); return; }
+
+    let docs = bag.filter((d) => docIsPdf(d) && docId(d));
+    if (excludeRefs) docs = docs.filter((d) => !docIsRefOrNpl(d));
+    if (!docs.length) { setStatus('No PDF documents found for application ' + appNum + '.', 'err'); return; }
+
+    // Order by date per the dropdown (undated entries always last).
+    const order = (document.getElementById('order-select') || {}).value || 'asc';
+    const sign = order === 'desc' ? -1 : 1;
+    docs.sort((a, b) => {
+      const av = docDateMs(a), bv = docDateMs(b);
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;
+      if (isNaN(bv)) return -1;
+      return sign * (av - bv);
+    });
+
+    setStatus('Loading PDF engine…');
+    let PDFLib;
+    try { PDFLib = await loadPdfLib(); }
+    catch (e) { setStatus(e.message, 'err'); return; }
+
+    const merged = await PDFLib.PDFDocument.create();
+    const bookmarks = [];
+    let failed = 0;
+    for (let i = 0; i < docs.length; i++) {
+      const d = docs[i];
+      const id = docId(d);
+      setStatus(`Downloading ${i + 1} of ${docs.length}…`);
+      try {
+        const resp = await fetch(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(id)}&format=PDF&disposition=attachment`);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const src = await PDFLib.PDFDocument.load(await resp.arrayBuffer(), { ignoreEncryption: true });
+        const start = merged.getPageCount();
+        const copied = await merged.copyPages(src, src.getPageIndices());
+        copied.forEach((p) => merged.addPage(p));
+        const title = [fmtDate(d.officialDate || d.officialDateTime || d.mailRoomDate), d.documentCode, d.documentCodeDescriptionText || d.documentDescriptionText]
+          .filter(Boolean).join(' — ') || ('Document ' + (i + 1));
+        bookmarks.push({ title: title.slice(0, 180), pageIndex: start });
+      } catch { failed++; }
+    }
+    if (!merged.getPageCount()) { setStatus('Could not combine any documents (downloads failed).', 'err'); return; }
+
+    setStatus('Building bookmarks…');
+    try { addPdfBookmarks(merged, bookmarks); } catch { /* best-effort */ }
+    const bytes = await merged.save();
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `file-history-${appNum}${excludeRefs ? '-no-refs' : ''}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+
+    let msg = `Combined ${bookmarks.length} document${bookmarks.length === 1 ? '' : 's'} for application ${appNum} into one PDF`
+      + (excludeRefs ? ' (foreign references & NPL excluded).' : '.');
+    if (failed) msg += ` ${failed} failed to download.`;
+    setStatus(msg, 'ok');
+  } finally {
+    setBusy(false);
+  }
+}
+
+document.querySelectorAll('input[name="numkind"]').forEach((r) => r.addEventListener('change', () => {
+  const kind = document.querySelector('input[name="numkind"]:checked').value;
+  document.getElementById('num-input').placeholder = kind === 'patent'
+    ? 'e.g., 9,266,697 or 9266697'
+    : 'e.g., 16/123,456 or 16123456 (or 90/016,038)';
+}));
+</script>
+</body>
+</html>

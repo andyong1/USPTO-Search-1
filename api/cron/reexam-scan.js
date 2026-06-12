@@ -18,7 +18,7 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
-  getDocEventsSince, getOwnerDigestAt, setOwnerDigestAt,
+  getDocEventsByOfficialDate, getOwnerDigestDate, setOwnerDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getOrderedReexamsToCheckPetitions,
@@ -96,28 +96,29 @@ async function maybeSendSubscriberDigest(req) {
   return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
 }
 
-// Owner daily digest (8 AM PT): every relevant document first detected since the
-// last digest, grouped by category. Only the 8 AM PT run sends; window advances
-// only on success. First run just sets the baseline (no historical backlog email).
-// ?forceOwnerEmail=1 bypasses the hour gate (uses the last 24h if no baseline yet).
+// Owner daily digest (8 AM PT): every relevant document whose official USPTO date
+// was the prior day, grouped by category. Only the 8 AM PT run sends, at most once
+// per target day. ?forceOwnerEmail=1 bypasses the gate; ?ownerDate=YYYY-MM-DD picks
+// a specific day (for testing).
 async function maybeSendOwnerDigest(req) {
   const force = req.query && req.query.forceOwnerEmail === '1';
   const now = new Date();
-  const nowISO = now.toISOString();
   const todayPT = ymdInTZ(now, SUB_TZ);
-  if (!force && hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
+  const targetDate = (req.query && req.query.ownerDate) ? String(req.query.ownerDate) : previousDay(todayPT);
 
-  const since = await getOwnerDigestAt();
-  if (!since && !force) { await setOwnerDigestAt(nowISO); return { skipped: 'baseline initialized' }; }
-  if (!force && since && ymdInTZ(new Date(since), SUB_TZ) === todayPT) return { skipped: 'already sent today' };
+  if (!force) {
+    if (hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
+    const last = await getOwnerDigestDate();
+    if (last === targetDate) return { skipped: 'already handled today' };
+  }
 
-  const sinceISO = since ? (since instanceof Date ? since.toISOString() : String(since)) : new Date(now.getTime() - 86400000).toISOString();
-  const events = await getDocEventsSince(sinceISO);
-  const r = events.length ? await sendOwnerDigest(events, { dateLabel: prettyDate(previousDay(todayPT)) }) : { skipped: 'no new documents' };
-  // Advance the window unless the send actively errored (so a transient failure
-  // retries with the same docs next day rather than dropping them).
-  if (!(r && r.error)) await setOwnerDigestAt(nowISO);
-  return { since: sinceISO, newDocs: events.length, send: r };
+  const events = await getDocEventsByOfficialDate(targetDate);
+  // Mark the day handled even when empty, so we check at most once per day.
+  if (!force) await setOwnerDigestDate(targetDate);
+  if (!events.length) return { date: targetDate, newDocs: 0 };
+
+  const r = await sendOwnerDigest(events, { dateLabel: prettyDate(targetDate) });
+  return { date: targetDate, newDocs: events.length, send: r };
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we

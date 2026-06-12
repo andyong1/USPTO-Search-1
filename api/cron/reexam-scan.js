@@ -18,6 +18,7 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
+  getDocEventsSince, getOwnerDigestAt, setOwnerDigestAt,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getOrderedReexamsToCheckPetitions,
@@ -27,7 +28,7 @@ import {
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
-import { sendReexamDigest, sendReexamSubscriberDigest } from '../../lib/email.js';
+import { sendReexamDigest, sendReexamSubscriberDigest, sendOwnerDigest } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -93,6 +94,30 @@ async function maybeSendSubscriberDigest(req) {
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
   return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
+}
+
+// Owner daily digest (8 AM PT): every relevant document first detected since the
+// last digest, grouped by category. Only the 8 AM PT run sends; window advances
+// only on success. First run just sets the baseline (no historical backlog email).
+// ?forceOwnerEmail=1 bypasses the hour gate (uses the last 24h if no baseline yet).
+async function maybeSendOwnerDigest(req) {
+  const force = req.query && req.query.forceOwnerEmail === '1';
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const todayPT = ymdInTZ(now, SUB_TZ);
+  if (!force && hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
+
+  const since = await getOwnerDigestAt();
+  if (!since && !force) { await setOwnerDigestAt(nowISO); return { skipped: 'baseline initialized' }; }
+  if (!force && since && ymdInTZ(new Date(since), SUB_TZ) === todayPT) return { skipped: 'already sent today' };
+
+  const sinceISO = since ? (since instanceof Date ? since.toISOString() : String(since)) : new Date(now.getTime() - 86400000).toISOString();
+  const events = await getDocEventsSince(sinceISO);
+  const r = events.length ? await sendOwnerDigest(events, { dateLabel: prettyDate(previousDay(todayPT)) }) : { skipped: 'no new documents' };
+  // Advance the window unless the send actively errored (so a transient failure
+  // retries with the same docs next day rather than dropping them).
+  if (!(r && r.error)) await setOwnerDigestAt(nowISO);
+  return { since: sinceISO, newDocs: events.length, send: r };
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we
@@ -255,6 +280,11 @@ export default async function handler(req, res) {
     try { subscriberDigest = await maybeSendSubscriberDigest(req); }
     catch (e) { subscriberDigest = { error: String(e.message || e) }; }
 
+    // 3b-ii) Owner daily digest (8 AM PT) of all newly-detected relevant docs.
+    let ownerDigest = { skipped: true };
+    try { ownerDigest = await maybeSendOwnerDigest(req); }
+    catch (e) { ownerDigest = { error: String(e.message || e) }; }
+
     // 3c) Detect the reexamination certificate (RXCERT) for ordered reexams so we
     // can flag concluded proceedings. Rolling and capped per run. We no longer
     // parse the claim outcome from the PDF text (most certificates are scanned
@@ -352,6 +382,7 @@ export default async function handler(req, res) {
       counts, // { total, remaining, determined }
       digest,
       subscriberDigest,
+      ownerDigest,
       conclusions,
       petitions,
       actions,

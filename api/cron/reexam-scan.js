@@ -319,14 +319,21 @@ export default async function handler(req, res) {
       petitions = { scanned: apps.length, detected, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
-    // 3e) Office action timing: find first non-final / final action dates for a
-    // few ordered reexams per run (rolling, re-checks until a final action issues).
+    // 3e) Office action timing: find first non-final / final action dates for
+    // ordered reexams per run (rolling, daily cooldown, re-checks until a final
+    // action issues). Processed in small concurrent batches for throughput so a
+    // newly-issued action is detected within about a day.
     let actions = { skipped: true };
     try {
-      const aApps = await getOrderedReexamsToCheckActions(5);
-      const aDeadline = Date.now() + 8000;
-      for (const a of aApps) { if (Date.now() > aDeadline) break; try { await detectActionsForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
-      actions = { checked: aApps.length };
+      const aApps = await getOrderedReexamsToCheckActions(12);
+      const aDeadline = Date.now() + 12000;
+      let aChecked = 0;
+      for (let i = 0; i < aApps.length && Date.now() < aDeadline; i += 4) {
+        await Promise.all(aApps.slice(i, i + 4).map(async (a) => {
+          try { await detectActionsForApp(a.application_number, a.order_date); aChecked++; } catch { /* retry next run */ }
+        }));
+      }
+      actions = { checked: aChecked };
     } catch (e) { actions = { error: String(e.message || e) }; }
 
     // 3f) Resolve the underlying-patent technology center for a few determinations

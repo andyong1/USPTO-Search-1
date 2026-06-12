@@ -38,6 +38,8 @@
       pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .chart-wrap svg .pt { cursor: pointer; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
@@ -282,11 +284,35 @@ function filtered() {
     .some((v) => String(v || '').toLowerCase().includes(q)));
 }
 
+// Table sort: default by first office action date, most recent first.
+let aSort = { key: 'nonf_date', dir: 'desc' };
+function sortActions(key) {
+  if (aSort.key === key) aSort.dir = aSort.dir === 'asc' ? 'desc' : 'asc';
+  else aSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
+  render();
+}
+function sortedItems(items) {
+  const { key, dir } = aSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  const isDate = key === 'order_date' || key === 'nonf_date' || key === 'finl_date';
+  return [...items].sort((a, b) => {
+    if (isDate) {
+      const av = ms(a[key]), bv = ms(b[key]);
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;   // missing dates always sort last
+      if (isNaN(bv)) return -1;
+      return sign * (av - bv);
+    }
+    return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true });
+  });
+}
+
 function render() {
   const body = document.getElementById('body');
-  const items = filtered();
+  const items = sortedItems(filtered());
   document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${items.length})`;
   if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  const arrow = (k) => (aSort.key === k ? (aSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const cell = (num, date, n, docId, label) => date
     ? `${fmtDate(date)} <span class="days">(${n} days)</span>${docLinks(num, docId, label)}`
     : '<span class="ext">—</span>';
@@ -306,7 +332,13 @@ function render() {
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>First Office Action (RXR.NF)</th><th>Final Office Action (RXR.F)</th><th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th></tr></thead>
+    <thead><tr>
+      <th class="sortable" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" onclick="sortActions('nonf_date')">First Office Action (RXR.NF)${arrow('nonf_date')}</th>
+      <th class="sortable" onclick="sortActions('finl_date')">Final Office Action (RXR.F)${arrow('finl_date')}</th>
+      <th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th>
+    </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

@@ -35,13 +35,21 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Per-call time budget. Defaults to ~50s (just under the 60s function limit).
+  // Pass ?maxSeconds=25 so the call returns before a scheduler's request timeout
+  // (e.g. cron-job.org's free 30s cap); it just does less per run, so run it more
+  // often or repeatedly until done.
+  const budgetMs = (req.query && req.query.maxSeconds)
+    ? Math.max(5000, Math.min(55000, Math.round(Number(req.query.maxSeconds) * 1000) || TIME_BUDGET_MS))
+    : TIME_BUDGET_MS;
+
   try {
     // ?actions=1 — backfill office action timing (first non-final / final action
     // dates) for ordered reexams since the cutoff. Resumable; run until done.
     if (req.query && req.query.actions === '1') {
       // ?reset=1 clears existing rows so everything re-scans (e.g., to backfill doc ids).
       if (req.query.reset === '1') await resetReexamActions();
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       let checked = 0;
       while (Date.now() < deadline) {
         const apps = await getOrderedReexamsToCheckActions(CONCURRENCY);
@@ -61,7 +69,7 @@ export default async function handler(req, res) {
     // than waiting for the hourly rolling scan (which checks only a few per run).
     // Resumable; run until done is true. No reset needed.
     if (req.query && req.query.conclusions === '1') {
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       let checked = 0, concluded = 0;
       while (Date.now() < deadline) {
         const rows = await getDeterminationsToCheckConclusion(CONCURRENCY);
@@ -100,7 +108,7 @@ export default async function handler(req, res) {
     if (req.query && req.query.techcenter === '1') {
       let repooled = 0;
       if (req.query.retry === '1') repooled = await resetFailedTechCenter();
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       const TC_CONCURRENCY = 3;
       let checked = 0, resolved = 0;
       while (Date.now() < deadline) {
@@ -125,7 +133,7 @@ export default async function handler(req, res) {
     if (req.query && req.query.petition325d === '1') {
       let repooled = 0;
       if (req.query.retry === '1') repooled = await resetFailedPetition325d();
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       let checked = 0, cite325d = 0, failed = 0, ocrChecked = 0, rateLimited = false;
       const errors = [];
       const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
@@ -181,7 +189,7 @@ export default async function handler(req, res) {
     //   subsequent: ?determinations=1                  (keeps scanning the pool)
     if (req.query && req.query.determinations === '1') {
       const from = String(req.query.from || '2024-08-01');
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       let enumerated = 0;
 
       // Enumerate the filing window into the watch table and re-pool it for
@@ -248,7 +256,7 @@ export default async function handler(req, res) {
     if (req.query && req.query.petitions === '1') {
       // ?reset=1 clears the 7-day scan cooldown so every ordered reexam is re-checked.
       if (req.query.reset === '1') await resetPetitionScan();
-      const deadline = Date.now() + TIME_BUDGET_MS;
+      const deadline = Date.now() + budgetMs;
       let scanned = 0, detected = 0;
       while (Date.now() < deadline) {
         const apps = await getOrderedReexamsToCheckPetitions(CONCURRENCY);
@@ -288,7 +296,7 @@ export default async function handler(req, res) {
     let reset = 0;
     if (req.query && req.query.reset === '1') reset = await resetEmptyDeterminationMeta();
 
-    const deadline = Date.now() + TIME_BUDGET_MS;
+    const deadline = Date.now() + budgetMs;
     let processed = 0;
 
     while (Date.now() < deadline) {

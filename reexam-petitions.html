@@ -105,7 +105,7 @@
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" aria-label="Filter petitions" style="margin-top:0" />
       <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
-        <input type="checkbox" id="opp-dec-filter" onchange="render()" /> Only rows with a requestor opposition or § 325(d) petition decision
+        <input type="checkbox" id="dec-filter" onchange="render()" /> Show only rows with a § 325(d) petition decision
       </label>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
@@ -158,9 +158,9 @@ function exportCsv() {
 
 function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
-  const onlyOppDec = document.getElementById('opp-dec-filter').checked;
+  const onlyDecided = document.getElementById('dec-filter').checked;
   let rows = _rows;
-  if (onlyOppDec) rows = rows.filter((p) => p.opposition_doc_id || p.decision_doc_id);
+  if (onlyDecided) rows = rows.filter((p) => p.decision_doc_id);
   if (q) rows = rows.filter((p) => String(p.application_number || '').toLowerCase().includes(q));
   return rows;
 }

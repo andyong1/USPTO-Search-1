@@ -24,13 +24,12 @@ import {
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
-  getPreorderDecisionsToCheckSnq, setPreorderSnqDone, setPreorderSnqPendingOcr, setPreorderSnqFailed,
   getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest, sendOwnerDigest } from '../../lib/email.js';
-import { detectPostOrderPetitionForApp, detectPetition325d, detectPreorderDecisionSnq } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -379,25 +378,6 @@ export default async function handler(req, res) {
       petitionRefresh = { checked: apps.length, refreshed };
     } catch (e) { petitionRefresh = { error: String(e.message || e) }; }
 
-    // 3i) Pre-order petition-decision SNQ detection — TEXT ONLY in the cron (fast).
-    // Image-only decisions are flagged 'pending_ocr' and left to the
-    // ?preorderSnq=1 backfill so a slow OCR call can't blow this time budget.
-    let preorderSnq = { skipped: true };
-    try {
-      const srows = await getPreorderDecisionsToCheckSnq(3);
-      const sDeadline = Date.now() + 6000;
-      let resolved = 0, deferred = 0;
-      for (const r of srows) {
-        if (Date.now() > sDeadline) break;
-        try {
-          const x = await detectPreorderDecisionSnq(r.application_number, r.decision_doc_id, { allowOcr: false, downloadMs: 12000 });
-          if (x.isSnq === null) { await setPreorderSnqPendingOcr(r.application_number); deferred++; }
-          else { await setPreorderSnqDone(r.application_number, x.isSnq); resolved++; }
-        } catch { await setPreorderSnqFailed(r.application_number); }
-      }
-      preorderSnq = { checked: srows.length, resolved, deferred };
-    } catch (e) { preorderSnq = { error: String(e.message || e) }; }
-
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -417,7 +397,6 @@ export default async function handler(req, res) {
       techCenters,
       petition325d,
       petitionRefresh,
-      preorderSnq,
       errors,
     });
   } catch (err) {

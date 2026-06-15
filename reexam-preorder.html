@@ -47,7 +47,6 @@
     .badge.granted { background: #c6f6d5; color: #276749; }
     .badge.dismissed { background: #fed7d7; color: #c53030; }
     .badge.other { background: #e2e8f0; color: #4a5568; }
-    .badge.snq { background: #bee3f8; color: #2c5282; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
@@ -150,14 +149,13 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
 let _subs = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Pre-Order Submission Date', 'Requestor Petition Date', 'Petition Decision Date', 'Petition Decision', 'Decision References SNQ', 'Reexam Determination', 'Determination Date', 'Reexam Outcome'];
+  const header = ['Control No.', 'Pre-Order Submission Date', 'Requestor Petition Date', 'Petition Decision Date', 'Petition Decision', 'Reexam Determination', 'Determination Date', 'Reexam Outcome'];
   const rows = _subs.map((s) => [
     s.application_number,
     fmtDate(s.official_date),
     s.petition_doc_id ? fmtDate(s.petition_date) : '',
     s.decision_doc_id ? fmtDate(s.decision_date) : '',
     s.decision_outcome || '',
-    s.decision_doc_id ? (s.decision_snq === true ? 'Yes' : s.decision_snq === false ? 'No' : 'Pending') : '',
     s.determination_type || '',
     s.determination_type ? fmtDate(s.det_date) : '',
     s.outcome_summary || ((s.cert_doc_id || s.nirc_doc_id) ? 'Concluded' : ''),
@@ -269,12 +267,7 @@ document.addEventListener('keydown', (e) => {
       if (s.decision_doc_id) {
         const o = s.decision_outcome || 'other';
         const lbl = o === 'granted' ? 'Granted' : (o === 'dismissed' ? 'Dismissed' : 'Decided');
-        // SNQ reference flag (text/OCR). true → references SNQ; false → none found;
-        // null/undefined → not yet checked (show nothing).
-        let snqNote = '';
-        if (s.decision_snq === true) snqNote = `<div class="doclinks"><span class="badge snq">References SNQ</span></div>`;
-        else if (s.decision_snq === false) snqNote = `<div class="doclinks"><span class="badge other">No SNQ reference</span></div>`;
-        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id, 'Petition Decision')}${snqNote}`;
+        decCell = `<span class="badge ${o}">${lbl}</span> ${fmtDate(s.decision_date)}${docLinks(num, s.decision_doc_id, 'Petition Decision')}`;
       }
       let detCell = dash;
       if (s.determination_type) {

@@ -9,14 +9,13 @@ import {
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d,
-  getPreorderDecisionsToCheckSnq, getPreorderDecisionsPendingSnqOcr, setPreorderSnqDone, setPreorderSnqPendingOcr, setPreorderSnqFailed, countPreorderSnqPending, resetFailedPreorderSnq,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
-import { detectPostOrderPetitionForApp, detectPetition325d, detectPreorderDecisionSnq } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -179,55 +178,6 @@ export default async function handler(req, res) {
 
       const remaining = await countPetitions325dPending();
       res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, ocrChecked, cite325d, failed, rateLimited, errors, remaining, done: remaining === 0 });
-      return;
-    }
-
-    // ?preorderSnq=1 — determine whether each pre-order petition decision references
-    // a substantial new question of patentability (SNQ): text-first, OCR fallback
-    // for image-only decisions. Resumable; same two-phase shape as petition325d.
-    //   &retry=1 first re-pools decisions whose prior attempt failed.
-    if (req.query && req.query.preorderSnq === '1') {
-      let repooled = 0;
-      if (req.query.retry === '1') repooled = await resetFailedPreorderSnq();
-      const deadline = Date.now() + budgetMs;
-      let checked = 0, refSnq = 0, failed = 0, ocrChecked = 0, rateLimited = false;
-      const errors = [];
-      const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
-
-      // Phase 1 — text-only over never-touched decisions (one at a time, generous
-      // download timeout; flags image-only ones 'pending_ocr').
-      let textDrained = false;
-      while (Date.now() < deadline - 45000) {
-        const batch = await getPreorderDecisionsToCheckSnq(1);
-        if (!batch.length) { textDrained = true; break; }
-        const r = batch[0];
-        try {
-          const x = await detectPreorderDecisionSnq(r.application_number, r.decision_doc_id, { allowOcr: false, downloadMs: 38000 });
-          if (x.isSnq === null) { await setPreorderSnqPendingOcr(r.application_number); }
-          else { await setPreorderSnqDone(r.application_number, !!x.isSnq); checked++; if (x.isSnq) refSnq++; }
-        } catch (e) { await setPreorderSnqFailed(r.application_number); failed++; pushErr(r.application_number, e); }
-      }
-
-      // Phase 2 — OCR the image-only ones. On a 429 (OCR.space rate/daily cap) we
-      // STOP and leave the decision pending so it retries later — never marked failed.
-      if (textDrained) {
-        while (Date.now() < deadline - 43000) {
-          const todo = await getPreorderDecisionsPendingSnqOcr(1);
-          if (!todo.length) break;
-          const r = todo[0];
-          try {
-            const x = await detectPreorderDecisionSnq(r.application_number, r.decision_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 2 });
-            await setPreorderSnqDone(r.application_number, !!x.isSnq); checked++; ocrChecked++; if (x.isSnq) refSnq++;
-          } catch (e) {
-            const msg = String(e && e.message || e);
-            if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }
-            await setPreorderSnqFailed(r.application_number); failed++; pushErr(r.application_number, e);
-          }
-        }
-      }
-
-      const remaining = await countPreorderSnqPending();
-      res.status(200).json({ ok: true, mode: 'preorderSnq', repooled, checked, ocrChecked, refSnq, failed, rateLimited, errors, remaining, done: remaining === 0 });
       return;
     }
 

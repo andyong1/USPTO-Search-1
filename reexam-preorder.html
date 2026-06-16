@@ -36,6 +36,9 @@
     .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
+    .table-filter { width: 100%; max-width: 280px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; }
     td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
     tr:hover td { background: #f7fafc; }
     a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
@@ -121,6 +124,7 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="renderTable()" aria-label="Filter submissions" />
       <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
         <input type="checkbox" id="dec-filter" onchange="renderTable()" /> Show only rows with a petition decision
       </label>
@@ -175,15 +179,46 @@ function exportCsv() {
 
 // Apply the "petition decision only" checkbox to the loaded submissions.
 function filteredSubs() {
-  const el = document.getElementById('dec-filter');
-  const onlyDecided = el && el.checked;
-  return onlyDecided ? _subs.filter((s) => s.decision_doc_id) : _subs;
+  const dec = document.getElementById('dec-filter');
+  const onlyDecided = dec && dec.checked;
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
+  let rows = _subs;
+  if (onlyDecided) rows = rows.filter((s) => s.decision_doc_id);
+  if (q) rows = rows.filter((s) => String(s.application_number || '').toLowerCase().includes(q));
+  return rows;
 }
 
-// Deep-linkable filter state: reflect the "decision only" checkbox into the URL
-// query so a filtered view can be shared or bookmarked.
+// Sortable columns (default: pre-order submission date, most recent first).
+let sSort = { key: 'official_date', dir: 'desc' };
+const S_DATE_KEYS = new Set(['official_date', 'petition_date', 'decision_date', 'det_date']);
+function sortMs(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
+function sortPreorder(key) {
+  if (sSort.key === key) sSort.dir = sSort.dir === 'asc' ? 'desc' : 'asc';
+  else sSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
+  renderTable();
+}
+function sortedSubs(items) {
+  const { key, dir } = sSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  const isDate = S_DATE_KEYS.has(key);
+  return [...items].sort((a, b) => {
+    if (isDate) {
+      const av = sortMs(a[key]), bv = sortMs(b[key]);
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;   // missing dates sort last
+      if (isNaN(bv)) return -1;
+      return sign * (av - bv);
+    }
+    return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true });
+  });
+}
+
+// Deep-linkable filter state: reflect the control-no. text filter and the
+// "decision only" checkbox into the URL query so a view can be shared/bookmarked.
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim();
+  if (q) p.set('q', q);
   const dec = document.getElementById('dec-filter');
   if (dec && dec.checked) p.set('decided', '1');
   const qs = p.toString();
@@ -191,14 +226,16 @@ function writeFiltersToUrl() {
 }
 function readFiltersFromUrl() {
   const params = new URLSearchParams(location.search);
+  const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
 }
 
 function renderTable() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
-  const items = filteredSubs();
+  const items = sortedSubs(filteredSubs());
   if (!items.length) { body.innerHTML = '<div class="state">No matching rows.</div>'; return; }
+  const arrow = (k) => (sSort.key === k ? (sSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const docLinks = (num, docId, label) => {
     if (!docId) return '';
     const lbl = (label || 'Document').replace(/'/g, '');
@@ -244,7 +281,13 @@ function renderTable() {
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Pre-Order Submission</th><th>Requestor Petition</th><th>Petition Decision</th><th>Reexam Determination</th></tr></thead>
+    <thead><tr>
+      <th class="sortable" onclick="sortPreorder('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" onclick="sortPreorder('official_date')">Pre-Order Submission${arrow('official_date')}</th>
+      <th class="sortable" onclick="sortPreorder('petition_date')">Requestor Petition${arrow('petition_date')}</th>
+      <th class="sortable" onclick="sortPreorder('decision_date')">Petition Decision${arrow('decision_date')}</th>
+      <th class="sortable" onclick="sortPreorder('det_date')">Reexam Determination${arrow('det_date')}</th>
+    </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

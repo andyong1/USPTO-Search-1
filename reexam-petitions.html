@@ -39,6 +39,8 @@
     .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
     td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
     tr:hover td { background: #f7fafc; }
     a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
@@ -139,7 +141,7 @@ let _rows = [];
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
   const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)', 'First Office Action'];
-  const rows = filtered().map((p) => [
+  const rows = sortedRows(filtered()).map((p) => [
     p.application_number, fmtDate(p.order_date),
     p.petition_doc_id ? fmtDate(p.petition_date) : '',
     p.opposition_doc_id ? fmtDate(p.opposition_date) : '',
@@ -182,11 +184,36 @@ function readFiltersFromUrl() {
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
 }
 
+// Sortable columns (default: patent owner petition date, most recent first).
+let pSort = { key: 'petition_date', dir: 'desc' };
+const P_DATE_KEYS = new Set(['order_date', 'petition_date', 'opposition_date', 'decision_date', 'nonf_date']);
+function sortPetitions(key) {
+  if (pSort.key === key) pSort.dir = pSort.dir === 'asc' ? 'desc' : 'asc';
+  else pSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
+  render();
+}
+function sortedRows(items) {
+  const { key, dir } = pSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  const isDate = P_DATE_KEYS.has(key);
+  return [...items].sort((a, b) => {
+    if (isDate) {
+      const av = ms(a[key]), bv = ms(b[key]);
+      if (isNaN(av) && isNaN(bv)) return 0;
+      if (isNaN(av)) return 1;   // missing dates sort last
+      if (isNaN(bv)) return -1;
+      return sign * (av - bv);
+    }
+    return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true });
+  });
+}
+
 function render() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
-  const items = filtered();
+  const items = sortedRows(filtered());
   if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; return; }
+  const arrow = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const rows = items.map((p) => {
     const num = p.application_number || '';
     const petCell = p.petition_doc_id ? `${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
@@ -212,7 +239,14 @@ function render() {
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
-    <thead><tr><th>Control No.</th><th>Reexam Ordered</th><th>Patent Owner Petition</th><th>Requestor Opposition</th><th>Petition Decision Citing § 325(d)</th><th>First Office Action</th></tr></thead>
+    <thead><tr>
+      <th class="sortable" onclick="sortPetitions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" onclick="sortPetitions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" onclick="sortPetitions('petition_date')">Patent Owner Petition${arrow('petition_date')}</th>
+      <th class="sortable" onclick="sortPetitions('opposition_date')">Requestor Opposition${arrow('opposition_date')}</th>
+      <th class="sortable" onclick="sortPetitions('decision_date')">Petition Decision Citing § 325(d)${arrow('decision_date')}</th>
+      <th class="sortable" onclick="sortPetitions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+    </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 

@@ -175,6 +175,7 @@ function writeFiltersToUrl() {
   if (q) p.set('q', q);
   const dec = document.getElementById('dec-filter');
   if (dec && dec.checked) p.set('decided', '1');
+  if (pSort.key !== 'petition_date' || pSort.dir !== 'desc') { p.set('sort', pSort.key); p.set('dir', pSort.dir); }
   const qs = p.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
 }
@@ -182,11 +183,14 @@ function readFiltersFromUrl() {
   const params = new URLSearchParams(location.search);
   const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
+  const usort = params.get('sort'), udir = params.get('dir');
+  if (P_SORT_KEYS.includes(usort)) pSort = { key: usort, dir: udir === 'asc' ? 'asc' : 'desc' };
 }
 
 // Sortable columns (default: patent owner petition date, most recent first).
 let pSort = { key: 'petition_date', dir: 'desc' };
 const P_DATE_KEYS = new Set(['order_date', 'petition_date', 'opposition_date', 'decision_date', 'nonf_date']);
+const P_SORT_KEYS = ['application_number', 'order_date', 'petition_date', 'opposition_date', 'decision_date', 'nonf_date'];
 function sortPetitions(key) {
   if (pSort.key === key) pSort.dir = pSort.dir === 'asc' ? 'desc' : 'asc';
   else pSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };

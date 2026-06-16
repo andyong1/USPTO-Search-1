@@ -191,6 +191,7 @@ function filteredSubs() {
 // Sortable columns (default: pre-order submission date, most recent first).
 let sSort = { key: 'official_date', dir: 'desc' };
 const S_DATE_KEYS = new Set(['official_date', 'petition_date', 'decision_date', 'det_date']);
+const S_SORT_KEYS = ['application_number', 'official_date', 'petition_date', 'decision_date', 'det_date'];
 function sortMs(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
 function sortPreorder(key) {
   if (sSort.key === key) sSort.dir = sSort.dir === 'asc' ? 'desc' : 'asc';
@@ -221,6 +222,7 @@ function writeFiltersToUrl() {
   if (q) p.set('q', q);
   const dec = document.getElementById('dec-filter');
   if (dec && dec.checked) p.set('decided', '1');
+  if (sSort.key !== 'official_date' || sSort.dir !== 'desc') { p.set('sort', sSort.key); p.set('dir', sSort.dir); }
   const qs = p.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
 }
@@ -228,6 +230,8 @@ function readFiltersFromUrl() {
   const params = new URLSearchParams(location.search);
   const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
+  const usort = params.get('sort'), udir = params.get('dir');
+  if (S_SORT_KEYS.includes(usort)) sSort = { key: usort, dir: udir === 'asc' ? 'asc' : 'desc' };
 }
 
 function renderTable() {

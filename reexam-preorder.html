@@ -180,7 +180,22 @@ function filteredSubs() {
   return onlyDecided ? _subs.filter((s) => s.decision_doc_id) : _subs;
 }
 
+// Deep-linkable filter state: reflect the "decision only" checkbox into the URL
+// query so a filtered view can be shared or bookmarked.
+function writeFiltersToUrl() {
+  const p = new URLSearchParams();
+  const dec = document.getElementById('dec-filter');
+  if (dec && dec.checked) p.set('decided', '1');
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+function readFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
+}
+
 function renderTable() {
+  writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = filteredSubs();
   if (!items.length) { body.innerHTML = '<div class="state">No matching rows.</div>'; return; }
@@ -315,6 +330,7 @@ document.addEventListener('keydown', (e) => {
     }
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('filter-bar').style.display = 'flex';
+    readFiltersFromUrl();
     renderTable();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load submissions (' + esc(e.message) + ').</div>';

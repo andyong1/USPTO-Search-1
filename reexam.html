@@ -572,6 +572,7 @@ const TC_SHORT = {
 function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
 
 function renderTable() {
+  writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = filteredSorted();
   const arrow = (k) => (tableSort.key === k ? (tableSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
@@ -631,6 +632,35 @@ let _all = [];               // full collected list (since Jan 1, 2025)
 let fPeriod = 'since2025';   // period selector
 let fArtUnit = '';           // '' = all art units
 let fTc = '';                // '' = all technology areas
+
+// Deep-linkable filter state: reflect the period / art-unit / TC / text filter /
+// sort into the URL query so a filtered view can be shared or bookmarked.
+const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
+const URL_SORT_KEYS = ['application_number', 'official_date', 'examiner_name', 'group_art_unit', 'tech_center'];
+function writeFiltersToUrl() {
+  const p = new URLSearchParams();
+  if (fPeriod && fPeriod !== 'since2025') p.set('period', fPeriod);
+  if (fArtUnit) p.set('au', fArtUnit);
+  if (fTc) p.set('tc', fTc);
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim();
+  if (q) p.set('q', q);
+  if (tableSort.key !== 'official_date' || tableSort.dir !== 'desc') { p.set('sort', tableSort.key); p.set('dir', tableSort.dir); }
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+// Read filters from the URL on load. Art unit / TC are validated against the
+// available <option>s (a stale value just falls back to "all").
+function readFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (URL_PERIODS.includes(params.get('period'))) fPeriod = params.get('period');
+  const uq = params.get('q');
+  if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
+  const usort = params.get('sort'), udir = params.get('dir');
+  if (URL_SORT_KEYS.includes(usort)) tableSort = { key: usort, dir: udir === 'asc' ? 'asc' : 'desc' };
+  document.getElementById('period-select').value = fPeriod;
+  const auSel = document.getElementById('artunit-select'); auSel.value = params.get('au') || ''; fArtUnit = auSel.value;
+  const tcSel = document.getElementById('tc-select'); tcSel.value = params.get('tc') || ''; fTc = tcSel.value;
+}
 
 function periodInfo(p) {
   const now = Date.now();
@@ -713,6 +743,7 @@ function applyFilters() {
     document.getElementById('tc-select').addEventListener('change', (e) => { fTc = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
+    readFiltersFromUrl();
     applyFilters();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';

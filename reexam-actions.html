@@ -308,6 +308,7 @@ function sortedItems(items) {
 }
 
 function render() {
+  writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = sortedItems(filtered());
   document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${items.length})`;
@@ -347,6 +348,34 @@ function render() {
 // proceedings whose first action issued in it, and short windows are meaningful).
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let aPeriod = 'since2025', aArtUnit = '', aTc = '';
+
+// Deep-linkable filter state: reflect period / art-unit / TC / text filter / sort
+// into the URL query so a filtered view can be shared or bookmarked.
+const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
+const URL_SORT_KEYS = ['application_number', 'order_date', 'nonf_date', 'finl_date'];
+function writeFiltersToUrl() {
+  const p = new URLSearchParams();
+  if (aPeriod && aPeriod !== 'since2025') p.set('period', aPeriod);
+  if (aArtUnit) p.set('au', aArtUnit);
+  if (aTc) p.set('tc', aTc);
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim();
+  if (q) p.set('q', q);
+  if (aSort.key !== 'nonf_date' || aSort.dir !== 'desc') { p.set('sort', aSort.key); p.set('dir', aSort.dir); }
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+// Read filters from the URL on load. Art unit / TC are validated against the
+// available <option>s (a stale value just falls back to "all").
+function readFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  if (URL_PERIODS.includes(params.get('period'))) aPeriod = params.get('period');
+  const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
+  const usort = params.get('sort'), udir = params.get('dir');
+  if (URL_SORT_KEYS.includes(usort)) aSort = { key: usort, dir: udir === 'asc' ? 'asc' : 'desc' };
+  document.getElementById('period-select').value = aPeriod;
+  const auSel = document.getElementById('artunit-select'); auSel.value = params.get('au') || ''; aArtUnit = auSel.value;
+  const tcSel = document.getElementById('tc-select'); tcSel.value = params.get('tc') || ''; aTc = tcSel.value;
+}
 
 function periodInfo(p) {
   const now = Date.now();
@@ -488,6 +517,7 @@ function applyFilters() {
     document.getElementById('tc-select').addEventListener('change', (e) => { aTc = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
+    readFiltersFromUrl();
     applyFilters();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';

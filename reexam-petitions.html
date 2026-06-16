@@ -165,7 +165,25 @@ function filtered() {
   return rows;
 }
 
+// Deep-linkable filter state: reflect the control-no. text filter and the
+// "decision only" checkbox into the URL query so a view can be shared/bookmarked.
+function writeFiltersToUrl() {
+  const p = new URLSearchParams();
+  const q = ((document.getElementById('table-filter') || {}).value || '').trim();
+  if (q) p.set('q', q);
+  const dec = document.getElementById('dec-filter');
+  if (dec && dec.checked) p.set('decided', '1');
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+function readFiltersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
+  if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
+}
+
 function render() {
+  writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = filtered();
   if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; return; }
@@ -241,6 +259,7 @@ function render() {
     }
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('filter-bar').style.display = 'flex';
+    readFiltersFromUrl();
     render();
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load petitions (' + esc(e.message) + ').</div>';

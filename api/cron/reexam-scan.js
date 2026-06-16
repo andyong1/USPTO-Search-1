@@ -17,6 +17,7 @@ import {
   recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
+  getPreorderCounts, setPreorderCounts,
   listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDocEventsByOfficialDate, getOwnerDigestDate, setOwnerDigestDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
@@ -27,7 +28,7 @@ import {
   getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage } from '../../lib/uspto.js';
 import { sendReexamDigest, sendReexamSubscriberDigest, sendOwnerDigest } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
@@ -238,6 +239,19 @@ export default async function handler(req, res) {
       catch (e) { enumerated = { error: String(e.message || e) }; }
     }
 
+    // 1b) Once/day: precompute the pre-order coverage denominators (total reexams
+    // filed since the cutoff + those whose 30-day window elapsed) so the pre-order
+    // page reads them from the DB instead of making live USPTO searches per view.
+    let preorderCounts = null;
+    try {
+      const pc = await getPreorderCounts();
+      if (hoursSince(pc.preorder_counts_at) >= 20) {
+        const cov = await fetchPreorderCoverage(PREORDER_CUTOFF);
+        await setPreorderCounts(cov.totalFiled, cov.deadlinePassed);
+        preorderCounts = cov;
+      }
+    } catch (e) { preorderCounts = { error: String(e.message || e) }; }
+
     // 2) Scan a chunk (rolling, least-recently-scanned first).
     const batch = await getReexamScanBatch(SCAN_BATCH);
     let newDeterminations = 0;
@@ -384,6 +398,7 @@ export default async function handler(req, res) {
     res.status(200).json({
       ok: true,
       enumerated,
+      preorderCounts,
       scanned: batch.length,
       newDeterminations,
       backfilled,

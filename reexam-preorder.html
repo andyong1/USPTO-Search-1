@@ -81,6 +81,21 @@
     .effect-callout { margin-top: 16px; background: #ebf4ff; border: 1px solid #c3dafe; border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; line-height: 1.55; color: #2d3748; }
     .effect-callout .effect-note { color: #718096; font-size: 0.85em; }
     .freshness { margin-top: 12px; font-size: 0.78rem; color: #a0aec0; }
+    /* Mobile / small-screen polish */
+    @media (max-width: 640px) {
+      .container { padding: 16px 10px 48px; }
+      header { padding: 12px 14px; gap: 12px; }
+      header h1 { font-size: 1.05rem; }
+      .site-nav { gap: 6px; margin-bottom: 18px; }
+      .site-nav a { padding: 8px 11px; font-size: 0.82rem; }
+      .card { padding: 16px 14px; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 8px 9px; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .table-filter { max-width: none; }
+      .modal-overlay { padding: 8px; }
+      .modal-box { height: 94vh; }
+    }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
 </head>

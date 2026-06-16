@@ -61,6 +61,21 @@
     .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
+    /* Mobile / small-screen polish */
+    @media (max-width: 640px) {
+      .container { padding: 16px 10px 48px; }
+      header { padding: 12px 14px; gap: 12px; }
+      header h1 { font-size: 1.05rem; }
+      .site-nav { gap: 6px; margin-bottom: 18px; }
+      .site-nav a { padding: 8px 11px; font-size: 0.82rem; }
+      .card { padding: 16px 14px; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 8px 9px; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .table-filter { max-width: none; }
+      .modal-overlay { padding: 8px; }
+      .modal-box { height: 94vh; }
+    }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
 </head>

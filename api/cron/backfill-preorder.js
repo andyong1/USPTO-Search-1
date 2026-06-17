@@ -71,7 +71,13 @@ export default async function handler(req, res) {
     let reset = 0;
     if (req.query && req.query.reset === '1') reset = await resetPreorderChecked();
 
-    const deadline = Date.now() + TIME_BUDGET_MS;
+    // Per-call time budget. Pass ?maxSeconds=25 so the call returns before a
+    // scheduler's request timeout (e.g. cron-job.org's free 30s cap); it's
+    // resumable via the 2-day cooldown, so just run it on a schedule.
+    const budgetMs = (req.query && req.query.maxSeconds)
+      ? Math.max(5000, Math.min(55000, Math.round(Number(req.query.maxSeconds) * 1000) || TIME_BUDGET_MS))
+      : TIME_BUDGET_MS;
+    const deadline = Date.now() + budgetMs;
     let processed = 0, found = 0;
 
     while (Date.now() < deadline) {

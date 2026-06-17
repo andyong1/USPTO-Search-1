@@ -130,6 +130,13 @@
       <p><strong>What changed on April 5, 2026.</strong> The USPTO added a <a href="https://www.uspto.gov/sites/default/files/documents/og-preorder-snq-apr2026.pdf" target="_blank" rel="noopener">pre-order procedure</a> for ex parte reexamination. For any request filed on or after April 5, 2026, a patent owner may file a paper — no petition, no fee — arguing that the request's cited teachings do not raise a substantial new question of patentability under 35 U.S.C. § 303(a), before the Office decides whether to order reexamination. The paper is capped at 30 pages, due within 30 days of service (not extendable), and should not address § 325(d) discretion. A requestor generally cannot respond unless it first obtains leave by petition under 37 CFR § 1.182; any permitted response is capped at 10 pages and due within 15 calendar days of service of the pre-order paper. This page tracks those submissions, petitions, and determinations.</p>
     </div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0 14px;font-size:0.9rem;font-weight:600;color:#4a5568">Period:
+      <select id="stat-period" onchange="buildStats()" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;font-weight:400">
+        <option value="sinceCutoff">Since Apr 5, 2026</option>
+        <option value="last60">Last 60 Days</option>
+        <option value="last30">Last 30 Days</option>
+      </select>
+    </div>
     <div id="stat"></div>
   </div>
 
@@ -139,13 +146,6 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
-      <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#4a5568">Period:
-        <select id="period-select" onchange="renderTable()" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;font-weight:400">
-          <option value="sinceCutoff">Since Apr 5, 2026</option>
-          <option value="last60">Last 60 Days</option>
-          <option value="last30">Last 30 Days</option>
-        </select>
-      </label>
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="renderTable()" aria-label="Filter submissions" />
       <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
         <input type="checkbox" id="dec-filter" onchange="renderTable()" /> Show only rows with a petition decision
@@ -178,6 +178,7 @@ function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
 
 let _subs = [];
+let _preData = null;
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
   const header = ['Control No.', 'Pre-Order Submission Date', 'Requestor Petition Date', 'Petition Decision Date', 'Petition Decision', 'Reexam Determination', 'Determination Date', 'Reexam Outcome'];
@@ -199,25 +200,13 @@ function exportCsv() {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-// Period floor (ms) from the selector. "Since Apr 5, 2026" = all (every pre-order
-// submission is on/after the cutoff anyway), so it returns 0.
-function periodFromMs() {
-  const p = ((document.getElementById('period-select') || {}).value) || 'sinceCutoff';
-  const now = Date.now();
-  if (p === 'last60') return now - 60 * 86400000;
-  if (p === 'last30') return now - 30 * 86400000;
-  return 0;
-}
-
-// Apply the period selector, "petition decision only" checkbox, and control-no.
-// text filter to the loaded submissions (scoped by pre-order submission date).
+// Apply the "petition decision only" checkbox and control-no. text filter to the
+// loaded submissions. (The period selector scopes the KPI stats, not the table.)
 function filteredSubs() {
   const dec = document.getElementById('dec-filter');
   const onlyDecided = dec && dec.checked;
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
-  const fromMs = periodFromMs();
   let rows = _subs;
-  if (fromMs) rows = rows.filter((s) => { const t = sortMs(s.official_date); return !isNaN(t) && t >= fromMs; });
   if (onlyDecided) rows = rows.filter((s) => s.decision_doc_id);
   if (q) rows = rows.filter((s) => String(s.application_number || '').toLowerCase().includes(q));
   return rows;
@@ -253,8 +242,6 @@ function sortedSubs(items) {
 // "decision only" checkbox into the URL query so a view can be shared/bookmarked.
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
-  const per = ((document.getElementById('period-select') || {}).value) || 'sinceCutoff';
-  if (per !== 'sinceCutoff') p.set('period', per);
   const q = ((document.getElementById('table-filter') || {}).value || '').trim();
   if (q) p.set('q', q);
   const dec = document.getElementById('dec-filter');
@@ -265,8 +252,6 @@ function writeFiltersToUrl() {
 }
 function readFiltersFromUrl() {
   const params = new URLSearchParams(location.search);
-  const uper = params.get('period');
-  if (['sinceCutoff', 'last60', 'last30'].includes(uper)) { const sel = document.getElementById('period-select'); if (sel) sel.value = uper; }
   const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
   const usort = params.get('sort'), udir = params.get('dir');
@@ -277,8 +262,6 @@ function renderTable() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = sortedSubs(filteredSubs());
-  const lh = document.getElementById('list-heading');
-  if (lh) lh.textContent = `Pre-Order SNQ Submissions (Showing ${items.length} of ${_subs.length})`;
   if (!items.length) { body.innerHTML = '<div class="state">No matching rows.</div>'; return; }
   const arrow = (k) => (sSort.key === k ? (sSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const docLinks = (num, docId, label) => {
@@ -363,56 +346,74 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Build the KPI strip + pre-order effect callout, scoped to the period selector.
+// Submission/petition counts reflect the chosen window (by submission date); the
+// coverage % uses cutoff-anchored denominators (server-computed), so it is shown
+// only for the full "Since Apr 5, 2026" period.
+function buildStats() {
+  const el = document.getElementById('stat');
+  if (!el) return;
+  const subs = _subs, data = _preData || {};
+  const p = ((document.getElementById('stat-period') || {}).value) || 'sinceCutoff';
+  const now = Date.now();
+  const fromMs = p === 'last60' ? now - 60 * 86400000 : p === 'last30' ? now - 30 * 86400000 : 0;
+  const periodLbl = p === 'last60' ? 'last 60 days' : p === 'last30' ? 'last 30 days' : 'since Apr 5, 2026';
+  const isAll = !fromMs;
+  const ymd = (r) => { const m = String(r || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+  const win = isAll ? subs : subs.filter((s) => { const t = ymd(s.official_date); return !isNaN(t) && t >= fromMs; });
+
+  const total = data.totalFiled;
+  const withPreorderAll = new Set(subs.map((s) => s.application_number)).size;
+  const withPreorder = new Set(win.map((s) => s.application_number)).size;
+  const withPetition = win.filter((s) => s.petition_doc_id).length;
+  const decisions = win.filter((s) => s.decision_doc_id).length;
+  const dismissals = win.filter((s) => s.decision_outcome === 'dismissed').length;
+  const dismissalRate = decisions > 0 ? (dismissals / decisions * 100).toFixed(1) + '%' : '—';
+
+  // Coverage % (cutoff-anchored denominator) — meaningful only over the full period.
+  const windowOpenMs = now - 30 * 86400000;
+  const early = subs.filter((s) => { const f = ymd(s.filing_date); return !isNaN(f) && f > windowOpenMs; }).length;
+  const denom = (data.deadlinePassed != null) ? data.deadlinePassed + early : null;
+  const pct = isAll ? ((denom && denom > 0) ? (withPreorderAll / denom * 100).toFixed(1) + '%' : '—') : '—';
+  const pctSub = isAll
+    ? (denom ? `${withPreorderAll} of ${denom} proceedings (excludes proceedings where pre-order deadline has not yet passed)` : '')
+    : 'Shown for the full period only';
+  const winSub = isAll ? '' : `<div class="sub">in the ${periodLbl}</div>`;
+
+  // Pre-order effect (cutoff-anchored; not windowed).
+  const eff = data.effect || {};
+  const pT = (eff.preorder_denied || 0) + (eff.preorder_ordered || 0);
+  const oT = (eff.overall_denied || 0) + (eff.overall_ordered || 0);
+  const pRate = pT ? Math.round(eff.preorder_denied / pT * 100) + '%' : '—';
+  const oRate = oT ? Math.round(eff.overall_denied / oT * 100) + '%' : '—';
+  const effectHtml = oT > 0
+    ? `<div class="effect-callout"><strong>Pre-order effect.</strong> Among ex parte reexams filed on or after April 5, 2026 that have reached a determination, reexamination was <strong>denied</strong> (no substantial new question found) in <strong>${pRate}</strong> of proceedings where patent owner filed a pre-order submission (${eff.preorder_denied || 0} of ${pT}), versus <strong>${oRate}</strong> across all such reexams (${eff.overall_denied || 0} of ${oT}). <span class="effect-note">Early data — sample sizes are still small.</span></div>`
+    : '';
+  const latestSub = subs.reduce((m, s) => (s.official_date && s.official_date > m ? s.official_date : m), '');
+  const freshHtml = `<div class="freshness">Data refreshed daily from the USPTO Open Data Portal.${latestSub ? ' Most recent pre-order submission on file: ' + fmtDate(latestSub) + '.' : ''}</div>`;
+
+  el.innerHTML = `<div class="kpi-strip">
+    <div class="kpi"><div class="num">${total != null ? total : '—'}</div><div class="lbl">Reexams Filed Since Apr 5, 2026</div></div>
+    <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div>${winSub}</div>
+    <div class="kpi"><div class="num">${pct}</div><div class="lbl">Percentage With Pre-Order Submission</div>${pctSub ? `<div class="sub">${pctSub}</div>` : ''}</div>
+    <div class="kpi"><div class="num">${withPetition}</div><div class="lbl">With Requestor Petition to Respond</div>${winSub}</div>
+    <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Requestor Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions${isAll ? '' : ' · ' + periodLbl}</div>` : ''}</div>
+  </div>${effectHtml}${freshHtml}`;
+}
+
 (async () => {
   const body = document.getElementById('body');
   try {
     const res = await fetch('/api/reexam-preorder');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const subs = data.submissions || [];
-    const withPreorder = new Set(subs.map((s) => s.application_number)).size;
-    const total = data.totalFiled;
-    // Coverage %: pre-order submissions ÷ (reexams whose 30-day pre-order window
-    // has elapsed + reexams that filed a pre-order while still within the window).
-    const DAY = 86400000;
-    const parseYmd = (r) => { const m = String(r || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
-    const windowOpenMs = Date.now() - 30 * DAY;
-    const earlyWithPreorder = subs.filter((s) => { const f = parseYmd(s.filing_date); return !isNaN(f) && f > windowOpenMs; }).length;
-    const denom = (data.deadlinePassed != null) ? data.deadlinePassed + earlyWithPreorder : null;
-    const pct = (denom && denom > 0) ? (withPreorder / denom * 100).toFixed(1) + '%' : '—';
+    _preData = data;
+    _subs = data.submissions || [];
+    const totalApps = new Set(_subs.map((s) => s.application_number)).size;
+    document.getElementById('list-heading').textContent = `Pre-Order SNQ Submissions (Total: ${totalApps})`;
+    buildStats();
 
-    // Petition stats
-    const withPetition = subs.filter((s) => s.petition_doc_id).length;
-    const decisions = subs.filter((s) => s.decision_doc_id).length;
-    const dismissals = subs.filter((s) => s.decision_outcome === 'dismissed').length;
-    const dismissalRate = decisions > 0 ? (dismissals / decisions * 100).toFixed(1) + '%' : '—';
-
-    // Pre-order effect: denial rate among pre-order proceedings vs all reexams (since cutoff).
-    const eff = data.effect || {};
-    const pT = (eff.preorder_denied || 0) + (eff.preorder_ordered || 0);
-    const oT = (eff.overall_denied || 0) + (eff.overall_ordered || 0);
-    const pRate = pT ? Math.round(eff.preorder_denied / pT * 100) + '%' : '—';
-    const oRate = oT ? Math.round(eff.overall_denied / oT * 100) + '%' : '—';
-    const effectHtml = oT > 0
-      ? `<div class="effect-callout"><strong>Pre-order effect.</strong> Among ex parte reexams filed on or after April 5, 2026 that have reached a determination, reexamination was <strong>denied</strong> (no substantial new question found) in <strong>${pRate}</strong> of proceedings where patent owner filed a pre-order submission (${eff.preorder_denied || 0} of ${pT}), versus <strong>${oRate}</strong> across all such reexams (${eff.overall_denied || 0} of ${oT}). <span class="effect-note">Early data — sample sizes are still small.</span></div>`
-      : '';
-
-    // Data freshness: most recent pre-order submission on file.
-    const latestSub = subs.reduce((m, s) => (s.official_date && s.official_date > m ? s.official_date : m), '');
-    const freshHtml = `<div class="freshness">Data refreshed daily from the USPTO Open Data Portal.${latestSub ? ' Most recent pre-order submission on file: ' + fmtDate(latestSub) + '.' : ''}</div>`;
-
-    document.getElementById('stat').innerHTML = `<div class="kpi-strip">
-      <div class="kpi"><div class="num">${total != null ? total : '—'}</div><div class="lbl">Reexams Filed Since Apr 5, 2026</div></div>
-      <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div></div>
-      <div class="kpi"><div class="num">${pct}</div><div class="lbl">Percentage With Pre-Order Submission</div>${denom ? `<div class="sub">${withPreorder} of ${denom} proceedings (excludes proceedings where pre-order deadline has not yet passed)</div>` : ''}</div>
-      <div class="kpi"><div class="num">${withPetition}</div><div class="lbl">With Requestor Petition to Respond</div></div>
-      <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Requestor Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions</div>` : ''}</div>
-    </div>${effectHtml}${freshHtml}`;
-
-    document.getElementById('list-heading').textContent = `Pre-Order SNQ Submissions (Total: ${withPreorder})`;
-    _subs = subs;
-
-    if (!subs.length) {
+    if (!_subs.length) {
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }

@@ -110,6 +110,14 @@
       <p>After a reexamination is ordered (a substantial new question of patentability was found), patent owners recently have been petitioning the Patent Office to reconsider that grant or terminate the proceeding pursuant to 35 U.S.C. § 325(d). This page tracks such motions and the Office's decisions. Where a proceeding has multiple PET.OP documents (the petition plus exhibits), the shortest is treated as the petition itself. The requester opposition (RXOPPPET or RXPET.) and the Office's petition decision are shown where on file.</p>
     </div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0 14px;font-size:0.9rem;font-weight:600;color:#4a5568">Period:
+      <select id="stat-period" onchange="buildStats()" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;font-weight:400">
+        <option value="since2025">Since Jan 1, 2025</option>
+        <option value="since2026">Since Jan 1, 2026</option>
+        <option value="last60">Last 60 Days</option>
+        <option value="last30">Last 30 Days</option>
+      </select>
+    </div>
     <div id="stat"></div>
     <div id="timing"></div>
   </div>
@@ -269,6 +277,48 @@ function render() {
     <tbody>${rows}</tbody></table></div>`;
 }
 
+// Build the KPI strip + petition-timing cards, scoped to the period selector
+// (by petition date). The period scopes these statistics only — not the table.
+function buildStats() {
+  const statEl = document.getElementById('stat');
+  if (!statEl) return;
+  const p = ((document.getElementById('stat-period') || {}).value) || 'since2025';
+  const now = Date.now();
+  const fromMs = p === 'since2026' ? Date.UTC(2026, 0, 1)
+    : p === 'last60' ? now - 60 * 86400000
+    : p === 'last30' ? now - 30 * 86400000
+    : Date.UTC(2025, 0, 1);
+  const win = _rows.filter((r) => { const t = ms(r.petition_date); return !isNaN(t) && t >= fromMs; });
+  const total = win.length;
+  const withOpp = win.filter((p) => p.opposition_doc_id).length;
+  const granting = win.filter((p) => p.decision_outcome === 'granted').length;
+  const dismissing = win.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
+  const decided = granting + dismissing;
+  const grantRate = decided > 0 ? Math.round(granting / decided * 100) + '%' : '—';
+  statEl.innerHTML = `
+    <div class="kpi-strip two">
+      <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
+      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
+    </div>
+    <div class="stats-title">Petition Decisions</div>
+    <div class="kpi-strip three">
+      <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
+      <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
+      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
+    </div>`;
+
+  // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
+  const toPet = win.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);
+  const toDec = win.map((p) => p.decision_doc_id ? daysBetween(p.petition_date, p.decision_date) : null).filter((d) => d != null);
+  const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  document.getElementById('timing').innerHTML = `<div class="stats-title">Petition Timing</div><div class="kpi-strip four">
+    ${tcard(avg(toPet), 'Avg Days: Reexam Ordered → Petition', toPet.length)}
+    ${tcard(median(toPet), 'Median Days: Reexam Ordered → Petition', toPet.length)}
+    ${tcard(avg(toDec), 'Avg Days: Petition → Decision', toDec.length)}
+    ${tcard(median(toDec), 'Median Days: Petition → Decision', toDec.length)}
+  </div>`;
+}
+
 (async () => {
   const body = document.getElementById('body');
   try {
@@ -276,37 +326,9 @@ function render() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.petitions || [];
-    const total = _rows.length;
-    const withOpp = _rows.filter((p) => p.opposition_doc_id).length;
-    const granting = _rows.filter((p) => p.decision_outcome === 'granted').length;
-    const dismissing = _rows.filter((p) => p.decision_outcome === 'dismissed' || p.decision_outcome === 'denied').length;
-    const decided = granting + dismissing;
-    const grantRate = decided > 0 ? Math.round(granting / decided * 100) + '%' : '—';
-    document.getElementById('stat').innerHTML = `
-      <div class="kpi-strip two">
-        <div class="kpi"><div class="num">${total}</div><div class="lbl">Post-Order Petitions</div></div>
-        <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Requester Opposition</div></div>
-      </div>
-      <div class="stats-title">Petition Decisions</div>
-      <div class="kpi-strip three">
-        <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
-        <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
-        <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
-      </div>`;
-
-    // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
-    const toPet = _rows.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);
-    const toDec = _rows.map((p) => p.decision_doc_id ? daysBetween(p.petition_date, p.decision_date) : null).filter((d) => d != null);
-    const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
-    document.getElementById('timing').innerHTML = `<div class="stats-title">Petition Timing</div><div class="kpi-strip four">
-      ${tcard(avg(toPet), 'Avg Days: Reexam Ordered → Petition', toPet.length)}
-      ${tcard(median(toPet), 'Median Days: Reexam Ordered → Petition', toPet.length)}
-      ${tcard(avg(toDec), 'Avg Days: Petition → Decision', toDec.length)}
-      ${tcard(median(toDec), 'Median Days: Petition → Decision', toDec.length)}
-    </div>`;
-
-    document.getElementById('list-heading').textContent = `Petitions (Total: ${total})`;
-    if (!total) {
+    buildStats();
+    document.getElementById('list-heading').textContent = `Petitions (Total: ${_rows.length})`;
+    if (!_rows.length) {
       body.innerHTML = '<div class="state">No post-order patent owner petitions recorded yet. The daily scan lists them here as they are filed.</div>';
       return;
     }

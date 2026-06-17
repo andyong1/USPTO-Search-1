@@ -144,24 +144,29 @@ export default async function handler(req, res) {
       // download timeout — firing several USPTO downloads in parallel got our
       // server throttled (403 / timeouts), while single sequential downloads
       // (like an interactive View) succeed.
+      const remainMs = () => deadline - Date.now();
+      // Per-item download timeout scaled to the budget, so a short (?maxSeconds)
+      // call still does useful text work instead of nothing.
+      const dlMs = Math.min(38000, Math.max(10000, budgetMs - 4000));
       let textDrained = false;
-      while (Date.now() < deadline - 45000) {
+      while (remainMs() > dlMs) {
         const batch = await getPetitionsToCheck325d(1);
         if (!batch.length) { textDrained = true; break; }
         const r = batch[0];
         try {
-          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: 38000 });
+          const x = await detectPetition325d(r.application_number, r.petition_doc_id, { allowOcr: false, downloadMs: dlMs });
           if (x.is325d === null) { await setPetition325dPendingOcr(r.application_number); }
           else { await setPetition325dDone(r.application_number, !!x.is325d); checked++; if (x.is325d) cite325d++; }
         } catch (e) { await setPetition325dFailed(r.application_number); failed++; pushErr(r.application_number, e); }
       }
 
-      // Phase 2 — OCR the image-only ones, only once the text pass is drained and
-      // time remains. Paced; on a 429 (OCR.space rate/daily cap) we STOP and leave
-      // the petition pending so it retries on a later run / the daily job — never
-      // marking a rate-limited petition as failed.
+      // Phase 2 — OCR the image-only ones, once the text pass is drained. OCR is
+      // slow (~20-45s/item), so it only runs when enough budget remains for one
+      // item — i.e. a full run with no (or large) ?maxSeconds. Short cron calls do
+      // the text pass and leave OCR for a longer run. On a 429 (OCR.space rate/daily
+      // cap) we STOP and leave the petition pending so it retries — never failed.
       if (textDrained) {
-        while (Date.now() < deadline - 43000) {
+        while (remainMs() > 40000) {
           const todo = await getPetitionsPendingOcr(1);
           if (!todo.length) break;
           const r = todo[0];

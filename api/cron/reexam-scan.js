@@ -315,10 +315,14 @@ export default async function handler(req, res) {
     // on ordered reexams. Rolling and capped per run.
     let petitions = { skipped: true };
     try {
-      const apps = await getOrderedReexamsToCheckPetitions(5);
+      const apps = await getOrderedReexamsToCheckPetitions(12);
       const pDeadline = Date.now() + 10000;
       let detected = 0;
-      for (const a of apps) { if (Date.now() > pDeadline) break; try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); } catch { /* retry next run */ } }
+      for (let i = 0; i < apps.length && Date.now() < pDeadline; i += 4) {
+        await Promise.all(apps.slice(i, i + 4).map(async (a) => {
+          try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); } catch { /* retry next run */ }
+        }));
+      }
       // OCR one petition decision (OCR.space) per run: flag 325(d) + store a
       // searchable PDF in Blob.
       let ocrDone = 0;

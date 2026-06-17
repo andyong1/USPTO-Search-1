@@ -254,18 +254,18 @@ export default async function handler(req, res) {
     // ?petitions=1 — backfill post-order petitions (petition + opposition +
     // decision) across all ordered reexams. Run until done is true.
     if (req.query && req.query.petitions === '1') {
-      // ?reset=1 clears the 7-day scan cooldown so every ordered reexam is re-checked.
+      // ?reset=1 clears the scan cooldown so every ordered reexam is re-checked.
       if (req.query.reset === '1') await resetPetitionScan();
       const deadline = Date.now() + budgetMs;
       let scanned = 0, detected = 0;
       while (Date.now() < deadline) {
         const apps = await getOrderedReexamsToCheckPetitions(CONCURRENCY);
         if (!apps.length) break;
-        for (const a of apps) {
-          if (Date.now() > deadline) break;
+        // Concurrent metadata fetches (like the actions backfill) for throughput.
+        await Promise.all(apps.map(async (a) => {
           try { detected += await detectPostOrderPetitionForApp(a.application_number, a.order_date); scanned++; }
           catch { /* leave unscanned; retried next call */ }
-        }
+        }));
       }
       // OCR petition decisions (OCR.space) within the remaining budget. Resumable.
       // ?ocrretry=1 re-pools previously failed OCR attempts first.

@@ -395,7 +395,7 @@ function monthlySeries(dates, startMs) {
   while (m <= end) { series.push({ ms: m, count: counts.get(m) || 0 }); m = nextMonth(m); if (series.length > 240) break; }
   return series;
 }
-function lineChartSvg(series) {
+function barChartSvg(series) {
   const W = 720, H = 260, mL = 38, mR = 14, mT = 18, mB = 40;
   const pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
   const maxV = Math.max(1, ...series.map((d) => d.count));
@@ -405,13 +405,14 @@ function lineChartSvg(series) {
   let grid = '';
   for (let i = 0; i <= steps; i++) { const v = Math.round(top / steps * i), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
   const n = series.length;
-  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
-  const pts = series.map((d, i) => `${px(i)},${yfor(d.count)}`).join(' ');
-  const dots = series.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(d.count)}" r="3.5" fill="#1a3a6b"/>`).join('');
-  const vals = (n <= 18 ? series.map((d, i) => `<text x="${px(i)}" y="${yfor(d.count) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${d.count}</text>`).join('') : '');
+  const slot = pw / Math.max(1, n);
+  const bw = Math.min(46, slot * 0.62);
+  const cx = (i) => mL + slot * (i + 0.5);
+  const bars = series.map((d, i) => { const y = yfor(d.count), h = yBase - y; return `<rect x="${cx(i) - bw / 2}" y="${y}" width="${bw}" height="${h}" fill="#1a3a6b" rx="2"/>`; }).join('');
+  const vals = (n <= 24 ? series.map((d, i) => (d.count ? `<text x="${cx(i)}" y="${yfor(d.count) - 5}" text-anchor="middle" font-size="10" fill="#1a3a6b">${d.count}</text>` : '')).join('') : '');
   const every = Math.max(1, Math.ceil(n / 12));
-  const xlabels = series.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${monthLbl(d.ms)}</text>` : '')).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
+  const xlabels = series.map((d, i) => (i % every === 0 ? `<text x="${cx(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${monthLbl(d.ms)}</text>` : '')).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${bars}${vals}${xlabels}</svg>`;
 }
 // Pre-order SNQ submissions per month, starting April 2026 (the rule's effective date).
 function buildTrend() {
@@ -419,8 +420,8 @@ function buildTrend() {
   if (!el) return;
   const dates = _subs.map((s) => s.official_date).filter(Boolean);
   if (!dates.length) { el.innerHTML = ''; return; }
-  const series = monthlySeries(dates, Date.UTC(2026, 3, 1));
-  el.innerHTML = `<div style="font-size:0.85rem;font-weight:600;color:#4a5568;margin:18px 0 8px">Pre-Order SNQ Submissions per Month</div>${lineChartSvg(series)}`;
+  const series = monthlySeries(dates, Date.UTC(2026, 4, 1));
+  el.innerHTML = `<div style="font-size:0.85rem;font-weight:600;color:#4a5568;margin:18px 0 8px">Pre-Order SNQ Submissions per Month</div>${barChartSvg(series)}`;
 }
 
 (async () => {

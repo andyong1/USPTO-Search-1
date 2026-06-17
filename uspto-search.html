@@ -1048,7 +1048,9 @@ let watchedSort = { key: 'application_number', dir: 'asc' };
 
 function sortWatched(key) {
   if (watchedSort.key === key) watchedSort.dir = watchedSort.dir === 'asc' ? 'desc' : 'asc';
-  else watchedSort = { key, dir: 'asc' };
+  // First click on the filing-date column shows the most recent first; other
+  // columns start ascending.
+  else watchedSort = { key, dir: key === 'latest_date' ? 'desc' : 'asc' };
   renderWatched(watchedData);
 }
 

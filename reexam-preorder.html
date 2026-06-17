@@ -139,6 +139,13 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#4a5568">Period:
+        <select id="period-select" onchange="renderTable()" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;font-weight:400">
+          <option value="sinceCutoff">Since Apr 5, 2026</option>
+          <option value="last60">Last 60 Days</option>
+          <option value="last30">Last 30 Days</option>
+        </select>
+      </label>
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="renderTable()" aria-label="Filter submissions" />
       <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
         <input type="checkbox" id="dec-filter" onchange="renderTable()" /> Show only rows with a petition decision
@@ -192,12 +199,25 @@ function exportCsv() {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
-// Apply the "petition decision only" checkbox to the loaded submissions.
+// Period floor (ms) from the selector. "Since Apr 5, 2026" = all (every pre-order
+// submission is on/after the cutoff anyway), so it returns 0.
+function periodFromMs() {
+  const p = ((document.getElementById('period-select') || {}).value) || 'sinceCutoff';
+  const now = Date.now();
+  if (p === 'last60') return now - 60 * 86400000;
+  if (p === 'last30') return now - 30 * 86400000;
+  return 0;
+}
+
+// Apply the period selector, "petition decision only" checkbox, and control-no.
+// text filter to the loaded submissions (scoped by pre-order submission date).
 function filteredSubs() {
   const dec = document.getElementById('dec-filter');
   const onlyDecided = dec && dec.checked;
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
+  const fromMs = periodFromMs();
   let rows = _subs;
+  if (fromMs) rows = rows.filter((s) => { const t = sortMs(s.official_date); return !isNaN(t) && t >= fromMs; });
   if (onlyDecided) rows = rows.filter((s) => s.decision_doc_id);
   if (q) rows = rows.filter((s) => String(s.application_number || '').toLowerCase().includes(q));
   return rows;
@@ -233,6 +253,8 @@ function sortedSubs(items) {
 // "decision only" checkbox into the URL query so a view can be shared/bookmarked.
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
+  const per = ((document.getElementById('period-select') || {}).value) || 'sinceCutoff';
+  if (per !== 'sinceCutoff') p.set('period', per);
   const q = ((document.getElementById('table-filter') || {}).value || '').trim();
   if (q) p.set('q', q);
   const dec = document.getElementById('dec-filter');
@@ -243,6 +265,8 @@ function writeFiltersToUrl() {
 }
 function readFiltersFromUrl() {
   const params = new URLSearchParams(location.search);
+  const uper = params.get('period');
+  if (['sinceCutoff', 'last60', 'last30'].includes(uper)) { const sel = document.getElementById('period-select'); if (sel) sel.value = uper; }
   const uq = params.get('q'); if (uq) { const f = document.getElementById('table-filter'); if (f) f.value = uq; }
   if (params.get('decided') === '1') { const c = document.getElementById('dec-filter'); if (c) c.checked = true; }
   const usort = params.get('sort'), udir = params.get('dir');
@@ -253,6 +277,8 @@ function renderTable() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = sortedSubs(filteredSubs());
+  const lh = document.getElementById('list-heading');
+  if (lh) lh.textContent = `Pre-Order SNQ Submissions (Showing ${items.length} of ${_subs.length})`;
   if (!items.length) { body.innerHTML = '<div class="state">No matching rows.</div>'; return; }
   const arrow = (k) => (sSort.key === k ? (sSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const docLinks = (num, docId, label) => {

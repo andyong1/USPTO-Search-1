@@ -130,14 +130,8 @@
       <p><strong>What changed on April 5, 2026.</strong> The USPTO added a <a href="https://www.uspto.gov/sites/default/files/documents/og-preorder-snq-apr2026.pdf" target="_blank" rel="noopener">pre-order procedure</a> for ex parte reexamination. For any request filed on or after April 5, 2026, a patent owner may file a paper — no petition, no fee — arguing that the request's cited teachings do not raise a substantial new question of patentability under 35 U.S.C. § 303(a), before the Office decides whether to order reexamination. The paper is capped at 30 pages, due within 30 days of service (not extendable), and should not address § 325(d) discretion. A requestor generally cannot respond unless it first obtains leave by petition under 37 CFR § 1.182; any permitted response is capped at 10 pages and due within 15 calendar days of service of the pre-order paper. This page tracks those submissions, petitions, and determinations.</p>
     </div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
-    <div style="display:flex;align-items:center;gap:8px;margin:4px 0 14px;font-size:0.9rem;font-weight:600;color:#4a5568">Period:
-      <select id="stat-period" onchange="buildStats()" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;font-weight:400">
-        <option value="sinceCutoff">Since Apr 5, 2026</option>
-        <option value="last60">Last 60 Days</option>
-        <option value="last30">Last 30 Days</option>
-      </select>
-    </div>
     <div id="stat"></div>
+    <div id="trend"></div>
   </div>
 
   <div class="card">
@@ -346,41 +340,26 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Build the KPI strip + pre-order effect callout, scoped to the period selector.
-// Submission/petition counts reflect the chosen window (by submission date); the
-// coverage % uses cutoff-anchored denominators (server-computed), so it is shown
-// only for the full "Since Apr 5, 2026" period.
+// Build the KPI strip + pre-order effect callout (all collected submissions).
 function buildStats() {
   const el = document.getElementById('stat');
   if (!el) return;
   const subs = _subs, data = _preData || {};
-  const p = ((document.getElementById('stat-period') || {}).value) || 'sinceCutoff';
-  const now = Date.now();
-  const fromMs = p === 'last60' ? now - 60 * 86400000 : p === 'last30' ? now - 30 * 86400000 : 0;
-  const periodLbl = p === 'last60' ? 'last 60 days' : p === 'last30' ? 'last 30 days' : 'since Apr 5, 2026';
-  const isAll = !fromMs;
   const ymd = (r) => { const m = String(r || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
-  const win = isAll ? subs : subs.filter((s) => { const t = ymd(s.official_date); return !isNaN(t) && t >= fromMs; });
-
   const total = data.totalFiled;
-  const withPreorderAll = new Set(subs.map((s) => s.application_number)).size;
-  const withPreorder = new Set(win.map((s) => s.application_number)).size;
-  const withPetition = win.filter((s) => s.petition_doc_id).length;
-  const decisions = win.filter((s) => s.decision_doc_id).length;
-  const dismissals = win.filter((s) => s.decision_outcome === 'dismissed').length;
+  const withPreorder = new Set(subs.map((s) => s.application_number)).size;
+  const withPetition = subs.filter((s) => s.petition_doc_id).length;
+  const decisions = subs.filter((s) => s.decision_doc_id).length;
+  const dismissals = subs.filter((s) => s.decision_outcome === 'dismissed').length;
   const dismissalRate = decisions > 0 ? (dismissals / decisions * 100).toFixed(1) + '%' : '—';
 
-  // Coverage % (cutoff-anchored denominator) — meaningful only over the full period.
-  const windowOpenMs = now - 30 * 86400000;
+  // Coverage %: pre-order submissions ÷ (reexams whose 30-day window has elapsed
+  // + reexams that filed a pre-order while still within the window).
+  const windowOpenMs = Date.now() - 30 * 86400000;
   const early = subs.filter((s) => { const f = ymd(s.filing_date); return !isNaN(f) && f > windowOpenMs; }).length;
   const denom = (data.deadlinePassed != null) ? data.deadlinePassed + early : null;
-  const pct = isAll ? ((denom && denom > 0) ? (withPreorderAll / denom * 100).toFixed(1) + '%' : '—') : '—';
-  const pctSub = isAll
-    ? (denom ? `${withPreorderAll} of ${denom} proceedings (excludes proceedings where pre-order deadline has not yet passed)` : '')
-    : 'Shown for the full period only';
-  const winSub = isAll ? '' : `<div class="sub">in the ${periodLbl}</div>`;
+  const pct = (denom && denom > 0) ? (withPreorder / denom * 100).toFixed(1) + '%' : '—';
 
-  // Pre-order effect (cutoff-anchored; not windowed).
   const eff = data.effect || {};
   const pT = (eff.preorder_denied || 0) + (eff.preorder_ordered || 0);
   const oT = (eff.overall_denied || 0) + (eff.overall_ordered || 0);
@@ -394,11 +373,54 @@ function buildStats() {
 
   el.innerHTML = `<div class="kpi-strip">
     <div class="kpi"><div class="num">${total != null ? total : '—'}</div><div class="lbl">Reexams Filed Since Apr 5, 2026</div></div>
-    <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div>${winSub}</div>
-    <div class="kpi"><div class="num">${pct}</div><div class="lbl">Percentage With Pre-Order Submission</div>${pctSub ? `<div class="sub">${pctSub}</div>` : ''}</div>
-    <div class="kpi"><div class="num">${withPetition}</div><div class="lbl">With Requestor Petition to Respond</div>${winSub}</div>
-    <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Requestor Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions${isAll ? '' : ' · ' + periodLbl}</div>` : ''}</div>
+    <div class="kpi"><div class="num">${withPreorder}</div><div class="lbl">With Pre-Order Submission</div></div>
+    <div class="kpi"><div class="num">${pct}</div><div class="lbl">Percentage With Pre-Order Submission</div>${denom ? `<div class="sub">${withPreorder} of ${denom} proceedings (excludes proceedings where pre-order deadline has not yet passed)</div>` : ''}</div>
+    <div class="kpi"><div class="num">${withPetition}</div><div class="lbl">With Requestor Petition to Respond</div></div>
+    <div class="kpi"><div class="num">${dismissalRate}</div><div class="lbl">Requestor Petition Dismissal Rate</div>${decisions ? `<div class="sub">${dismissals} of ${decisions} decisions</div>` : ''}</div>
   </div>${effectHtml}${freshHtml}`;
+}
+
+// ── Monthly-count line chart ───────────────────────────────────────
+const CHART_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthStart(t) { const d = new Date(t); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1); }
+function monthLbl(msv) { const d = new Date(msv); return CHART_MONTHS[d.getUTCMonth()] + " '" + String(d.getUTCFullYear()).slice(2); }
+function nextMonth(msv) { const d = new Date(msv); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1); }
+// Contiguous month buckets from startMs through the latest of (today, latest data month).
+function monthlySeries(dates, startMs) {
+  const counts = new Map();
+  for (const raw of dates) { const t = sortMs(raw); if (isNaN(t)) continue; const k = monthStart(t); counts.set(k, (counts.get(k) || 0) + 1); }
+  const now = new Date(); let end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  for (const k of counts.keys()) if (k > end) end = k;
+  const series = []; let m = startMs;
+  while (m <= end) { series.push({ ms: m, count: counts.get(m) || 0 }); m = nextMonth(m); if (series.length > 240) break; }
+  return series;
+}
+function lineChartSvg(series) {
+  const W = 720, H = 260, mL = 38, mR = 14, mT = 18, mB = 40;
+  const pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const maxV = Math.max(1, ...series.map((d) => d.count));
+  const top = maxV <= 5 ? maxV : Math.ceil(maxV / 5) * 5;
+  const yfor = (v) => yBase - (v / top) * ph;
+  const steps = Math.min(top, 5);
+  let grid = '';
+  for (let i = 0; i <= steps; i++) { const v = Math.round(top / steps * i), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
+  const n = series.length;
+  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
+  const pts = series.map((d, i) => `${px(i)},${yfor(d.count)}`).join(' ');
+  const dots = series.map((d, i) => `<circle cx="${px(i)}" cy="${yfor(d.count)}" r="3.5" fill="#1a3a6b"/>`).join('');
+  const vals = (n <= 18 ? series.map((d, i) => `<text x="${px(i)}" y="${yfor(d.count) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${d.count}</text>`).join('') : '');
+  const every = Math.max(1, Math.ceil(n / 12));
+  const xlabels = series.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${monthLbl(d.ms)}</text>` : '')).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
+}
+// Pre-order SNQ submissions per month, starting April 2026 (the rule's effective date).
+function buildTrend() {
+  const el = document.getElementById('trend');
+  if (!el) return;
+  const dates = _subs.map((s) => s.official_date).filter(Boolean);
+  if (!dates.length) { el.innerHTML = ''; return; }
+  const series = monthlySeries(dates, Date.UTC(2026, 3, 1));
+  el.innerHTML = `<div style="font-size:0.85rem;font-weight:600;color:#4a5568;margin:18px 0 8px">Pre-Order SNQ Submissions per Month</div>${lineChartSvg(series)}`;
 }
 
 (async () => {
@@ -412,6 +434,7 @@ function buildStats() {
     const totalApps = new Set(_subs.map((s) => s.application_number)).size;
     document.getElementById('list-heading').textContent = `Pre-Order SNQ Submissions (Total: ${totalApps})`;
     buildStats();
+    buildTrend();
 
     if (!_subs.length) {
       body.innerHTML = '<div class="state">No pre-order submissions recorded yet. The daily scan lists them here as they are filed.</div>';

@@ -114,7 +114,7 @@
 
   <div class="card">
     <h2>Reexamination Office Action Timing</h2>
-    <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits (RXR.NF) and (2) the final office action (RXR.F). <strong>Measured for reexaminations ordered on or after January 1, 2025.</strong></div>
+    <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits and (2) the final office action. <strong>Measured for reexaminations ordered on or after January 1, 2025.</strong></div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
     <div class="filter-bar">
       <div class="fb-group">
@@ -354,8 +354,8 @@ function render() {
     <thead><tr>
       <th class="sortable" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
       <th class="sortable" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
-      <th class="sortable" onclick="sortActions('nonf_date')">First Office Action (RXR.NF)${arrow('nonf_date')}</th>
-      <th class="sortable" onclick="sortActions('finl_date')">Final Office Action (RXR.F)${arrow('finl_date')}</th>
+      <th class="sortable" onclick="sortActions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+      <th class="sortable" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
       <th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;

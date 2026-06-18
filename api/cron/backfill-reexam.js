@@ -8,7 +8,7 @@ import {
   getAppsMissingDeterminationMeta, updateDeterminationMeta, resetEmptyDeterminationMeta,
   getOrderedReexamsToCheckPetitions, resetPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
-  getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d,
+  getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
@@ -132,7 +132,11 @@ export default async function handler(req, res) {
     // under the function limit.
     if (req.query && req.query.petition325d === '1') {
       let repooled = 0;
-      if (req.query.retry === '1') repooled = await resetFailedPetition325d();
+      if (req.query.retry === '1') repooled += await resetFailedPetition325d();
+      // &recheck=1 re-pools petitions previously resolved as NOT citing 325(d) so
+      // image-only false negatives get another (OCR) pass. Re-checks ALL such
+      // petitions, so it can be a large OCR job — run it repeatedly until done.
+      if (req.query.recheck === '1') repooled += await resetDonePetition325dFalse();
       const deadline = Date.now() + budgetMs;
       let checked = 0, cite325d = 0, failed = 0, ocrChecked = 0, rateLimited = false;
       const errors = [];

@@ -213,7 +213,11 @@ export default async function handler(req, res) {
         const r = todo[0];
         try {
           const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, r.nirc_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
-          if (samples.length < 6) samples.push({ app: r.application_number, method: x.method, textLen: x.textLen, parsed: !!x.outcome });
+          if (samples.length < 6) {
+            const s = { app: r.application_number, method: x.method, textLen: x.textLen, parsed: !!x.outcome };
+            if (req.query.debug === '1' && samples.length === 0) s.textSample = String(x.text || '').replace(/\s+/g, ' ').slice(0, 2800);
+            samples.push(s);
+          }
           await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++;
         } catch (e) {
           const msg = String(e && e.message || e);

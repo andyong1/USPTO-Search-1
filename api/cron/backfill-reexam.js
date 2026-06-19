@@ -11,7 +11,7 @@ import {
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
-  getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse,
+  getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
@@ -215,7 +215,11 @@ export default async function handler(req, res) {
     if (req.query && req.query.outcomes === '1') {
       let repooled = 0;
       if (req.query.reparse === '1') repooled = await resetAllConclusionParse();
+      else if (req.query.reocr === '1') repooled = await clearUnparsedCertText();
       else if (req.query.retry === '1') repooled = await resetConclusionParse();
+      // Engine 2 is OCR.space's more accurate model — used to re-OCR certificates
+      // whose engine-1 text was too garbled to parse. Re-pool them with &reocr=1.
+      const ocrEngine = req.query.engine2 === '1' ? '2' : '1';
       const deadline = Date.now() + budgetMs;
       const remainMs = () => deadline - Date.now();
       let checked = 0, parsedOut = 0, reparsed = 0, rejected = 0, failed = 0, rateLimited = false;
@@ -251,7 +255,7 @@ export default async function handler(req, res) {
         if (!todo.length) break;
         const r = todo[0];
         try {
-          const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
+          const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3, ocrEngine });
           if (samples.length < 6) {
             const s = { app: r.application_number, method: x.method, textLen: x.textLen, belongs: x.belongs, parsed: !!x.outcome };
             if (req.query.debug === '1' && !samples.some((q) => q.textSample)) s.textSample = String(x.text || '').replace(/\s+/g, ' ').slice(0, 9000);
@@ -271,7 +275,7 @@ export default async function handler(req, res) {
         }
       }
       const remaining = await countConclusionsUnparsed();
-      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, reparsedFromCache: reparsed, ocrChecked: checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), ocrEngine, repooled, reparsedFromCache: reparsed, ocrChecked: checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
       return;
     }
 

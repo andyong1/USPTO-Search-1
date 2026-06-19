@@ -22,8 +22,8 @@ export default async function handler(req, res) {
       catch { /* leave whatever we have */ }
     }
 
-    // Edge-cache for ~5 min; serve stale while revalidating (data changes ~daily).
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
+    // Always serve fresh data — no caching — so backfill/cron updates show immediately.
+    res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ submissions, effect, totalFiled, deadlinePassed, cutoff: PREORDER_CUTOFF });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load pre-order submissions.', detail: String(err.message || err) });

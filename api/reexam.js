@@ -16,9 +16,9 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    // Edge-cache reads for ~5 min; serve stale while revalidating (data changes
-    // ~daily, detected hourly by the cron — so a few minutes of staleness is fine).
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
+    // Always serve fresh data — no edge/browser caching — so updates from the cron
+    // and backfills show up immediately rather than after a stale-cache window.
+    res.setHeader('Cache-Control', 'no-store');
     // A curl config file: run `curl --create-dirs -K reexam-downloads.txt` to pull
     // every determination + office-action PDF into reexam-docs/ locally. Needs only
     // curl.exe (built into Windows 10/11) — no Node, npm, or PowerShell scripts.

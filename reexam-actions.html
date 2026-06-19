@@ -304,6 +304,10 @@ function filtered() {
 
 // Table sort: default by first office action date, most recent first.
 let aSort = { key: 'nonf_date', dir: 'desc' };
+// Keyboard support for sortable column headers (Enter/Space activates the sort).
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
+});
 function sortActions(key) {
   if (aSort.key === key) aSort.dir = aSort.dir === 'asc' ? 'desc' : 'asc';
   else aSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
@@ -352,10 +356,10 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th class="sortable" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
-      <th class="sortable" onclick="sortActions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
-      <th class="sortable" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortActions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
       <th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;

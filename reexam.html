@@ -519,6 +519,10 @@ function buildPendency(list) {
 // ── Sortable determinations table ──────────────────────────────────
 let allDeterminations = [];
 let tableSort = { key: 'official_date', dir: 'desc' };
+// Keyboard support for sortable column headers (Enter/Space activates the sort).
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
+});
 
 function sortReexam(key) {
   if (tableSort.key === key) tableSort.dir = tableSort.dir === 'asc' ? 'desc' : 'asc';
@@ -635,12 +639,12 @@ function renderTable() {
 
   body.innerHTML = `<div class="table-wrap sticky-head"><table>
     <thead><tr>
-      <th class="sortable" onclick="sortReexam('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('application_number')">Control No.${arrow('application_number')}</th>
       <th>Determination</th>
-      <th class="sortable" onclick="sortReexam('official_date')">Date${arrow('official_date')}</th>
-      <th class="sortable" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
-      <th class="sortable" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
-      <th class="sortable" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('official_date')">Date${arrow('official_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
       <th>Reexam Outcome</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }

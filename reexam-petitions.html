@@ -154,6 +154,10 @@ const docLinks = (num, docId, label) => {
 const dash = '<span class="ext">—</span>';
 
 let _rows = [];
+// Keyboard support for sortable column headers (Enter/Space activates the sort).
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
+});
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
   const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)', 'First Office Action'];
@@ -260,12 +264,12 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th class="sortable" onclick="sortPetitions('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" onclick="sortPetitions('order_date')">Reexam Ordered${arrow('order_date')}</th>
-      <th class="sortable" onclick="sortPetitions('petition_date')">Patent Owner Petition${arrow('petition_date')}</th>
-      <th class="sortable" onclick="sortPetitions('opposition_date')">Requestor Opposition${arrow('opposition_date')}</th>
-      <th class="sortable" onclick="sortPetitions('decision_date')">Petition Decision Citing § 325(d)${arrow('decision_date')}</th>
-      <th class="sortable" onclick="sortPetitions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('petition_date')">Patent Owner Petition${arrow('petition_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('opposition_date')">Requestor Opposition${arrow('opposition_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('decision_date')">Petition Decision Citing § 325(d)${arrow('decision_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
@@ -335,7 +339,9 @@ function lineChartSvg(series) {
   const vals = (n <= 18 ? series.map((d, i) => `<text x="${px(i)}" y="${yfor(d.count) - 9}" text-anchor="middle" font-size="10" fill="#1a3a6b">${d.count}</text>`).join('') : '');
   const every = Math.max(1, Math.ceil(n / 12));
   const xlabels = series.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${monthLbl(d.ms)}</text>` : '')).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
+  const total = series.reduce((s, d) => s + d.count, 0);
+  const aria = `Line chart: post-order petitions citing 35 U.S.C. 325(d) per month` + (series.length ? ` from ${monthLbl(series[0].ms)} to ${monthLbl(series[series.length - 1].ms)}, ${total} total` : '');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="${aria}"><title>${aria}</title>${grid}<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}</svg>`;
 }
 // Post-order § 325(d) petitions per month, from the earliest collected petition.
 function buildTrend() {

@@ -126,6 +126,16 @@ test('parseReexamOutcome — OCR confusions: footnote degree, 1->I, are->arc', (
   assert.equal(c.cancelled, '7, 9 and 10');
 });
 
+test('parseReexamOutcome — OCR dropped the word "claim" (90019701)', () => {
+  // "The patentability of claim 1 is confirmed." OCR dropped "claim".
+  const o = parseReexamOutcome(
+    'NO AMENDMENTS HAVE BEEN MADE TO THE PATENT AS A RESULT OF REEXAMINATION, ' +
+    'IT HAS BEEN DETERMINED THAT: The patentability of 1 is confirmed. * 10');
+  assert.ok(o);
+  assert.equal(o.confirmed, '1');
+  assert.equal(o.cancelled, '');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

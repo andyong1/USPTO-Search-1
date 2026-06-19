@@ -93,6 +93,22 @@ test('parseReexamOutcome — new claims with "claims"/"added" dropped by OCR', (
   assert.equal(o.added, '29-122');
 });
 
+test('parseReexamOutcome — two-column OCR interleaving splits "as amended" (90015341)', () => {
+  // Claim-body text from the adjacent column is interleaved into the disposition,
+  // separating "patentable as" from "amended"; dependent-on-amended claims join
+  // the amended group; new claims are captured separately.
+  const o = parseReexamOutcome(
+    'AS A RESULT OF REEXAMINATION, IT HAS BEEN DETERMINED THAT: ' +
+    'Claims 1-8 and 11-18 are determined to be patentable as straps affixed to the ' +
+    'outer shell, wherein the pair of straps amended. Claims 9-10, dependent on an ' +
+    'amended claim, determined to be patentable. New claims 19-41 are added and ' +
+    'determined to be 20 patentable.');
+  assert.ok(o);
+  assert.equal(o.amended, '1-8 and 11-18, 9-10');
+  assert.equal(o.added, '19-41');
+  assert.equal(o.confirmed, '');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

@@ -205,6 +205,7 @@ export default async function handler(req, res) {
       const remainMs = () => deadline - Date.now();
       let checked = 0, parsedOut = 0, failed = 0, rateLimited = false;
       const errors = [];
+      const samples = [];
       const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
       while (remainMs() > 40000) {
         const todo = await getConclusionsToParse(1);
@@ -212,6 +213,7 @@ export default async function handler(req, res) {
         const r = todo[0];
         try {
           const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, r.nirc_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
+          if (samples.length < 6) samples.push({ app: r.application_number, method: x.method, textLen: x.textLen, parsed: !!x.outcome });
           await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++;
         } catch (e) {
           const msg = String(e && e.message || e);
@@ -223,7 +225,7 @@ export default async function handler(req, res) {
         }
       }
       const remaining = (await getConclusionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
       return;
     }
 

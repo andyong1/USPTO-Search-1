@@ -245,14 +245,17 @@ function buildKpi(rows) { document.getElementById('kpi').innerHTML = outcomeKpiH
 function buildExaminerSection(rows) {
   const card = document.getElementById('examiner-card');
   document.getElementById('examiner-stat').innerHTML = '';
+  oExaminer = '';
   const names = [...new Set(rows.map((d) => (d.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (!names.length) { card.style.display = 'none'; return; }
   const sel = document.getElementById('examiner-select');
   sel.innerHTML = ['<option value="">Select an examiner…</option>'].concat(names.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`)).join('');
   card.style.display = '';
   sel.onchange = (e) => {
-    const name = e.target.value, target = document.getElementById('examiner-stat');
-    target.innerHTML = name ? outcomeKpiHtml(rows.filter((d) => (d.examiner_name || '').trim() === name)) : '';
+    const name = e.target.value;
+    document.getElementById('examiner-stat').innerHTML = name ? outcomeKpiHtml(rows.filter((d) => (d.examiner_name || '').trim() === name)) : '';
+    // Also filter the proceedings table below to the selected examiner.
+    oExaminer = name; render();
   };
 }
 
@@ -365,11 +368,14 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
 });
 function filtered() {
+  let base = _scoped;
+  if (oExaminer) base = base.filter((d) => (d.examiner_name || '').trim() === oExaminer);
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
-  if (!q) return _scoped;
-  return _scoped.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.outcome_summary]
+  if (!q) return base;
+  return base.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.outcome_summary]
     .some((v) => String(v || '').toLowerCase().includes(q)));
 }
+let oExaminer = '';
 let oSort = { key: 'cert_date', dir: 'desc' };
 function sortOutcomes(key) {
   if (oSort.key === key) oSort.dir = oSort.dir === 'asc' ? 'desc' : 'asc';
@@ -378,14 +384,14 @@ function sortOutcomes(key) {
 }
 function sortedItems(items) {
   const { key, dir } = oSort, sign = dir === 'asc' ? 1 : -1;
-  if (key === 'cert_date') return [...items].sort((a, b) => { const av = ms(a.cert_date), bv = ms(b.cert_date); if (isNaN(av) && isNaN(bv)) return 0; if (isNaN(av)) return 1; if (isNaN(bv)) return -1; return sign * (av - bv); });
+  if (key === 'cert_date' || key === 'official_date') return [...items].sort((a, b) => { const av = ms(a[key]), bv = ms(b[key]); if (isNaN(av) && isNaN(bv)) return 0; if (isNaN(av)) return 1; if (isNaN(bv)) return -1; return sign * (av - bv); });
   return [...items].sort((a, b) => sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true }));
 }
 function render() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = sortedItems(filtered());
-  document.getElementById('list-heading').textContent = `Concluded Proceedings (Total: ${items.length})`;
+  document.getElementById('list-heading').textContent = `Concluded Proceedings (Total: ${items.length})` + (oExaminer ? ` · Examiner: ${oExaminer}` : '');
   if (!items.length) { body.innerHTML = '<div class="state">No matching concluded proceedings.</div>'; return; }
   const arrow = (k) => (oSort.key === k ? (oSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const rows = items.map((d) => {
@@ -396,7 +402,8 @@ function render() {
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
-      <td><span class="badge">${fmtDate(d.cert_date)}</span>${docLinks(num, d.cert_doc_id, 'Certificate')}</td>
+      <td>${fmtDate(d.official_date)}</td>
+      <td>${fmtDate(d.cert_date)}${docLinks(num, d.cert_doc_id, 'Certificate')}</td>
       <td>${outcome}</td>
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
@@ -406,6 +413,7 @@ function render() {
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('official_date')">Reexam Ordered${arrow('official_date')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('cert_date')">Reexam Certificate${arrow('cert_date')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('outcome_summary')">Reexam Outcome${arrow('outcome_summary')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('examiner_name')">Examiner${arrow('examiner_name')}</th>
@@ -417,8 +425,8 @@ function render() {
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Certificate Date', 'Reexam Outcome', 'Examiner', 'Group Art Unit', 'Technology Area'];
-  const rows = filtered().map((d) => [d.application_number, fmtDate(d.cert_date), d.outcome_summary || 'outcome pending', d.examiner_name || '', d.group_art_unit || '', d.tech_center || '']);
+  const header = ['Control No.', 'Reexam Ordered', 'Certificate Date', 'Reexam Outcome', 'Examiner', 'Group Art Unit', 'Technology Area'];
+  const rows = filtered().map((d) => [d.application_number, fmtDate(d.official_date), fmtDate(d.cert_date), d.outcome_summary || 'outcome pending', d.examiner_name || '', d.group_art_unit || '', d.tech_center || '']);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -429,7 +437,7 @@ function exportCsv() {
 // ── Period / art-unit / TC scope (keyed on certificate date) ──
 let oPeriod = 'since2025', oArtUnit = '', oTc = '';
 const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
-const URL_SORT_KEYS = ['application_number', 'cert_date', 'outcome_summary', 'examiner_name', 'group_art_unit', 'tech_center'];
+const URL_SORT_KEYS = ['application_number', 'official_date', 'cert_date', 'outcome_summary', 'examiner_name', 'group_art_unit', 'tech_center'];
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
   if (oPeriod && oPeriod !== 'since2025') p.set('period', oPeriod);

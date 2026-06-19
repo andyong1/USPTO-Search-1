@@ -11,11 +11,13 @@ import {
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
+  getConclusionsToParse, setConclusionOutcome, resetConclusionParse,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
+import { detectCertificateOutcome } from '../../lib/conclusions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -187,6 +189,40 @@ export default async function handler(req, res) {
 
       const remaining = await countPetitions325dPending();
       res.status(200).json({ ok: true, mode: 'petition325d', repooled, checked, ocrChecked, cite325d, failed, rateLimited, errors, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?outcomes=1 — OCR each reexamination certificate (or NIRC) and parse the
+    // claim disposition (confirmed / cancelled / amended / new). OCR is slow, so a
+    // new item only starts when ~40s of budget remains — i.e. a full run with no
+    // (or large) ?maxSeconds. &retry=1 re-pools certificates that parsed to no
+    // outcome (e.g. an image-only cert an earlier OCR pass missed).
+    if (req.query && req.query.outcomes === '1') {
+      let repooled = 0;
+      if (req.query.retry === '1') repooled = await resetConclusionParse();
+      const deadline = Date.now() + budgetMs;
+      const remainMs = () => deadline - Date.now();
+      let checked = 0, parsedOut = 0, failed = 0, rateLimited = false;
+      const errors = [];
+      const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
+      while (remainMs() > 40000) {
+        const todo = await getConclusionsToParse(1);
+        if (!todo.length) break;
+        const r = todo[0];
+        try {
+          const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, r.nirc_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
+          await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++;
+        } catch (e) {
+          const msg = String(e && e.message || e);
+          if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }
+          // Mark attempted (no outcome) so a persistently-failing cert can't block
+          // the queue; &retry=1 re-pools it later.
+          try { await setConclusionOutcome(r.application_number, null); } catch { /* ignore */ }
+          failed++; pushErr(r.application_number, e);
+        }
+      }
+      const remaining = (await getConclusionsToParse(100000)).length;
+      res.status(200).json({ ok: true, mode: 'outcomes', repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, remaining, done: remaining === 0 });
       return;
     }
 

@@ -145,6 +145,7 @@
       </div>
       <div class="chart-wrap" id="chart"></div>
     </div>
+    <div id="lifecycle"></div>
     <div class="dist-row">
       <div class="dist-col"><div class="stats-title">By Technology Area</div><div id="by-tc"></div></div>
       <div class="dist-col"><div class="stats-title">By Art Unit</div><div id="by-au"></div></div>
@@ -181,6 +182,8 @@ function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
 function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
 const has = (v) => !!(v && String(v).trim());
+function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const TC_NAMES = {
@@ -242,6 +245,28 @@ function outcomeKpiHtml(rows) {
     <p style="font-size:0.78rem;color:#a0aec0;margin:10px 0 0;line-height:1.45">Percentages are of certificates whose claim disposition has been parsed; a certificate may fall in more than one of the cancelled / amended / new buckets.</p>`;
 }
 function buildKpi(rows) { document.getElementById('kpi').innerHTML = outcomeKpiHtml(rows); }
+
+// ── Lifecycle pendency: median days per stage across the scoped set, plus the
+// total Order → Certificate. Office-action dates (nonf/finl) are merged in from
+// the actions feed; stages with no data show an em dash. ──
+function buildLifecycle(rows) {
+  const el = document.getElementById('lifecycle');
+  if (!el) return;
+  const stages = [
+    ['Filing → Order', 'filing_date', 'order_date'],
+    ['Order → First Office Action', 'order_date', 'nonf_date'],
+    ['First → Final Office Action', 'nonf_date', 'finl_date'],
+    ['Final Office Action → NIRC', 'finl_date', 'nirc_date'],
+    ['NIRC → Certificate', 'nirc_date', 'cert_date'],
+    ['Order → Certificate (total)', 'order_date', 'cert_date'],
+  ];
+  const card = (num, lbl, n) => `<div class="stat"><div class="stat-num" style="color:#1a3a6b">${num == null ? '—' : num}</div><div class="stat-label">${lbl}${n ? ' · median, n=' + n : ' · no data'}</div></div>`;
+  const cells = stages.map(([label, a, b]) => {
+    const ds = rows.map((r) => daysBetween(r[a], r[b])).filter((d) => d != null && d >= 0);
+    return card(median(ds), label, ds.length);
+  }).join('');
+  el.innerHTML = `<div class="stats-title">Lifecycle Pendency (median days per stage)</div><div class="stats">${cells}</div>`;
+}
 
 // "By Examiner" — dropdown of examiners (concluded proceedings in scope); on
 // selection, show that examiner's claim-outcome KPI cards.
@@ -504,6 +529,7 @@ function applyFilters() {
   note.textContent = 'Showing certificates issued ' + phrase + (oArtUnit ? ' · Art Unit ' + oArtUnit : '') + (oTc ? ' · TC ' + oTc : '') + ' (n = ' + _scoped.length + ')';
   buildKpi(_scoped);
   buildChart(_scoped, gran);
+  buildLifecycle(_scoped);
   buildBreakdowns(_scoped);
   buildExaminerSection(_scoped);
   render();
@@ -512,10 +538,17 @@ function applyFilters() {
 (async () => {
   const body = document.getElementById('body');
   try {
-    const res = await fetch('/api/reexam');
+    const [res, actRes] = await Promise.all([fetch('/api/reexam'), fetch('/api/reexam?actions=1').catch(() => null)]);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    _rows = (data.determinations || []).filter((d) => d.cert_doc_id);
+    // Office-action dates live in the actions feed; merge them in (by control no.)
+    // so the lifecycle pendency can show the Order→First/Final-action stages.
+    const actMap = new Map();
+    try { if (actRes && actRes.ok) for (const a of ((await actRes.json()).actions || [])) actMap.set(a.application_number, a); } catch { /* lifecycle just shows fewer stages */ }
+    _rows = (data.determinations || []).filter((d) => d.cert_doc_id).map((d) => {
+      const a = actMap.get(d.application_number);
+      return { ...d, order_date: d.official_date, nonf_date: a && a.nonf_date, finl_date: a && a.finl_date };
+    });
     if (!_rows.length) {
       document.getElementById('list-heading').textContent = 'Concluded Proceedings (Total: 0)';
       body.innerHTML = '<div class="state">No reexamination certificates recorded yet. They appear here as certificates issue.</div>';

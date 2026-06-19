@@ -139,7 +139,6 @@
     <div id="scope-note" class="sub" style="margin-bottom:14px"></div>
     <div id="stat"></div>
     <div id="trend"></div>
-    <div id="lifecycle"></div>
     <div id="dist"></div>
   </div>
 
@@ -504,30 +503,6 @@ function buildTrend(rows, gran) {
   wrap.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 }
 
-// Full-lifecycle pendency: median days per stage across the scoped set, plus the
-// total order -> certificate. Stages with no data show an em dash. Inherits the
-// period / art-unit / TC filters via the scoped set passed in.
-function buildLifecycle(rows) {
-  const el = document.getElementById('lifecycle');
-  if (!el) return;
-  const stages = [
-    ['Filing → Order', 'filing_date', 'order_date'],
-    ['Order → First Office Action', 'order_date', 'nonf_date'],
-    ['First → Final Office Action', 'nonf_date', 'finl_date'],
-    ['Final Office Action → NIRC', 'finl_date', 'nirc_date'],
-    ['NIRC → Certificate', 'nirc_date', 'cert_date'],
-  ];
-  const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'median days · n=' + n : 'no data yet'}</div></div>`;
-  const cells = stages.map(([label, a, b]) => {
-    const ds = rows.map((r) => daysBetween(r[a], r[b])).filter((d) => d != null && d >= 0);
-    return card(median(ds), label, ds.length);
-  }).join('');
-  const tot = rows.map((r) => daysBetween(r.order_date, r.cert_date)).filter((d) => d != null && d >= 0);
-  el.innerHTML = `<div class="stats-title">Lifecycle Pendency (median days per stage)</div>
-    <div class="kpi-strip">${cells}</div>
-    <div style="margin-top:12px;max-width:300px">${card(median(tot), 'Total: Order → Certificate', tot.length)}</div>`;
-}
-
 function applyFilters() {
   const { label, gran } = periodInfo(aPeriod);
   const s = scoped();
@@ -538,7 +513,6 @@ function applyFilters() {
   }
   document.getElementById('stat').innerHTML = statCards(s);
   buildTrend(s, gran);
-  buildLifecycle(s);
   buildDistribution(s);
   buildExaminerSection(s);
   render();

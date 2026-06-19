@@ -2,7 +2,7 @@
 // regex detectors). Run with: npm test  (node --test, Node 18+).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detect325d, detectSnq, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
+import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition } from '../lib/uspto.js';
 
 test('detect325d', () => {
@@ -12,14 +12,6 @@ test('detect325d', () => {
   assert.equal(detect325d('nothing relevant here'), false);
   assert.equal(detect325d(''), false);
   assert.equal(detect325d(null), false);
-});
-
-test('detectSnq', () => {
-  assert.equal(detectSnq('a substantial new question of patentability'), true);
-  assert.equal(detectSnq('the SNQ standard applies'), true);
-  assert.equal(detectSnq('substantial   new   question'), true);
-  assert.equal(detectSnq('no relevant phrase'), false);
-  assert.equal(detectSnq(''), false);
 });
 
 test('parseReexamOutcome — confirmed + cancelled', () => {

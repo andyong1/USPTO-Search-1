@@ -141,7 +141,6 @@
         <span><i style="background:#276749"></i> All claims confirmed</span>
         <span><i style="background:#1a3a6b"></i> Amended / new only</span>
         <span><i style="background:#c53030"></i> ≥1 claim cancelled</span>
-        <span><i style="background:#cbd5e0"></i> Outcome pending</span>
       </div>
       <div class="chart-wrap" id="chart"></div>
     </div>
@@ -303,8 +302,10 @@ function chartData(rows, gran) {
     if (gran === 'day') bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate());
     else if (gran === 'week') { const dow = (dt.getUTCDay() + 6) % 7; bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) - dow * 86400000; }
     else bMs = Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1);
-    if (!map.has(bMs)) map.set(bMs, { ms: bMs, confirmed: 0, amended: 0, cancelled: 0, pending: 0, total: 0 });
-    const e = map.get(bMs); e[outcomeClass(d)]++; e.total++;
+    const cls = outcomeClass(d);
+    if (cls === 'pending') continue; // exclude not-yet-parsed certificates from the chart
+    if (!map.has(bMs)) map.set(bMs, { ms: bMs, confirmed: 0, amended: 0, cancelled: 0, total: 0 });
+    const e = map.get(bMs); e[cls]++; e.total++;
   }
   return [...map.values()].sort((a, b) => a.ms - b.ms).map((e) => ({ ...e, label: chartLabel(e.ms, gran) }));
 }
@@ -316,12 +317,12 @@ function stackedBarSvg(data) {
   let grid = '';
   for (let i = 0; i <= 4; i++) { const v = Math.round(top / 4 * i), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
   const bw = Math.min(42, (pw / n) * 0.7);
-  const segs = [['confirmed', '#276749'], ['amended', '#1a3a6b'], ['cancelled', '#c53030'], ['pending', '#cbd5e0']];
+  const segs = [['confirmed', '#276749'], ['amended', '#1a3a6b'], ['cancelled', '#c53030']];
   let bars = '';
   data.forEach((d, i) => {
     const cx = mL + (pw / n) * (i + 0.5); let yAcc = yBase;
     for (const [k, color] of segs) { const v = d[k] || 0; if (!v) continue; const h = (v / top) * ph; yAcc -= h; bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${yAcc.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}"/>`; }
-    bars += `<rect class="pt" x="${(cx - bw / 2).toFixed(1)}" y="${mT}" width="${bw.toFixed(1)}" height="${ph}" fill="transparent" data-m="${esc(d.label)}" data-c="${d.confirmed}" data-a="${d.amended}" data-x="${d.cancelled}" data-p="${d.pending}" data-t="${d.total}"></rect>`;
+    bars += `<rect class="pt" x="${(cx - bw / 2).toFixed(1)}" y="${mT}" width="${bw.toFixed(1)}" height="${ph}" fill="transparent" data-m="${esc(d.label)}" data-c="${d.confirmed}" data-a="${d.amended}" data-x="${d.cancelled}" data-t="${d.total}"></rect>`;
   });
   const every = Math.max(1, Math.ceil(n / 12));
   const xl = data.map((d, i) => (i % every === 0 ? `<text x="${(mL + (pw / n) * (i + 0.5)).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(d.label)}</text>` : '')).join('');
@@ -338,7 +339,7 @@ function buildChart(rows, gran) {
     const t = e.target;
     if (t && t.classList && t.classList.contains('pt')) {
       const ds = t.dataset;
-      tip.innerHTML = `<strong>${esc(ds.m)}</strong> · ${ds.t} cert${ds.t === '1' ? '' : 's'}<br>Confirmed: ${ds.c}<br>Amended/new: ${ds.a}<br>Cancelled: ${ds.x}` + (ds.p !== '0' ? `<br>Pending: ${ds.p}` : '');
+      tip.innerHTML = `<strong>${esc(ds.m)}</strong> · ${ds.t} cert${ds.t === '1' ? '' : 's'}<br>Confirmed: ${ds.c}<br>Amended/new: ${ds.a}<br>Cancelled: ${ds.x}`;
       tip.style.display = 'block';
       const r = el.getBoundingClientRect();
       let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;

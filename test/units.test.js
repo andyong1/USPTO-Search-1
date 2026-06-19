@@ -74,6 +74,25 @@ test('parseReexamOutcome — garbled all-confirmed certificate (90015497)', () =
   assert.equal(o.cancelled, '');
 });
 
+test('parseReexamOutcome — verb dropped: patentability-is = confirmed, amended, new', () => {
+  // OCR dropped "confirmed"/"added" and mangled "of"; "previously cancelled" is
+  // NOT a current-reexam cancellation and must be ignored.
+  const o = parseReexamOutcome(
+    'AS A RESULT OF REEXAMINATION patentability or claims 8 and 12-15 is ' +
+    'Claims 10-11 were previously cancelled. Claims 5, 9, 16 and 19 are to as amended.');
+  assert.ok(o);
+  assert.equal(o.confirmed, '8 and 12-15');
+  assert.equal(o.amended, '5, 9, 16 and 19');
+  assert.equal(o.cancelled, '');
+});
+
+test('parseReexamOutcome — new claims with "claims"/"added" dropped by OCR', () => {
+  const o = parseReexamOutcome('patentability Of Claims 1-2 is New 29-122 are and determined to be patentable.');
+  assert.ok(o);
+  assert.equal(o.confirmed, '1-2');
+  assert.equal(o.added, '29-122');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

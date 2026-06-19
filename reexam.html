@@ -654,6 +654,7 @@ function renderTable() {
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
+        <a class="ext" href="/proceeding?app=${encodeURIComponent(num)}">Timeline ↗</a>
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span>${pdf}</td>

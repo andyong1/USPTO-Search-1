@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reexam Proceeding Timeline — USPTO</title>
+  <meta name="description" content="Full ex parte reexamination timeline for one control number: filing, pre-order submission, order/denial, office actions, NIRC, certificate, and petitions — with document links." />
+  <meta property="og:title" content="Reexam Proceeding Timeline — USPTO" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .site-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 16px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+    .site-nav a:hover { background: #cbd5e0; }
+    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 20px; }
+    .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 14px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input[type=text] { flex: 1; min-width: 220px; padding: 10px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.95rem; }
+    button { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 10px 18px; border-radius: 8px; }
+    button:hover { background: #15305a; }
+    .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 24px; font-size: 0.9rem; }
+    @media (max-width: 600px) { .meta-grid { grid-template-columns: 1fr; } }
+    .meta-grid div span { color: #718096; }
+    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; }
+    .ext:hover { text-decoration: underline; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    /* Milestone stepper */
+    .steps { list-style: none; display: flex; flex-direction: column; gap: 0; }
+    .step { display: flex; gap: 14px; align-items: flex-start; padding: 0 0 16px; position: relative; }
+    .step:not(:last-child)::before { content: ""; position: absolute; left: 9px; top: 22px; bottom: -2px; width: 2px; background: #e2e8f0; }
+    .dot { flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #cbd5e0; background: #fff; margin-top: 1px; }
+    .step.done .dot { background: #1a3a6b; border-color: #1a3a6b; }
+    .step .m-label { font-weight: 600; color: #2d3748; }
+    .step.pending .m-label { color: #a0aec0; font-weight: 500; }
+    .step .m-date { font-size: 0.85rem; color: #718096; }
+    /* Document timeline table */
+    .table-wrap { overflow: auto; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+    td { padding: 9px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr.key td { background: #f7fafc; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; background: #bee3f8; color: #2c5282; margin-left: 6px; }
+    .btn-view { cursor: pointer; font-size: 0.76rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 10px; border-radius: 4px; margin-right: 6px; }
+    .btn-view:hover { background: #15305a; }
+    .state { text-align: center; padding: 32px 20px; color: #718096; }
+    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
+    footer a { color: #1a3a6b; text-decoration: none; }
+    @media (max-width: 640px) {
+      .container { padding: 16px 10px 48px; }
+      header { padding: 12px 14px; }
+      header h1 { font-size: 1.05rem; }
+      .site-nav { gap: 6px; }
+      .site-nav a { padding: 8px 11px; font-size: 0.82rem; }
+      .card { padding: 16px 14px; }
+      table { font-size: 0.8rem; } th, td { padding: 8px 9px; }
+    }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+<div class="container">
+  <nav class="site-nav">
+    <a href="/uspto-search">Application Search &amp; Tracking</a>
+    <a href="/reexam">Reexam Determinations</a>
+    <a href="/reexam-actions">Reexam Office Action Timing</a>
+    <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+    <a href="/reexam-petitions">Post-Order Petitions</a>
+    <a href="/file-history">File History Print to PDF</a>  </nav>
+
+  <div class="card">
+    <h2>Reexamination Proceeding Timeline</h2>
+    <div class="sub">Enter an ex parte reexamination control number (90/…) to see its full timeline — filing, pre-order submission, order/denial, office actions, NIRC, certificate, and petitions — with links to every document.</div>
+    <div class="row">
+      <input type="text" id="appnum" placeholder="e.g., 90015403" inputmode="numeric" onkeydown="if(event.key==='Enter')goLookup()" aria-label="Control number" />
+      <button onclick="goLookup()">View timeline</button>
+    </div>
+  </div>
+
+  <div id="content"></div>
+
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
+
+function openDoc(appNum, docId) {
+  if (!docId) return;
+  window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(docId)}&format=PDF&disposition=inline`, '_blank', 'noopener');
+}
+function docLinks(appNum, docId) {
+  if (!docId) return '';
+  const dl = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(docId)}&format=PDF&disposition=attachment`;
+  return `<button class="btn-view" onclick="openDoc('${appNum}','${docId}')">View</button><a class="ext" href="${dl}" download>Download ⤓</a>`;
+}
+
+// Uppercase the raw USPTO documentCode (used while normalizing the bag).
+const up = (d) => (d.documentCode || '').toUpperCase();
+// Reexam classifiers operate on the NORMALIZED docs ({ code, desc, ... }).
+const isNonFinal = (d) => { const desc = (d.desc || '').toLowerCase(); return ['RXR.NF','NONF','CTNF'].includes(d.code) || (/non[\s-]*final/.test(desc) && /(action|rejection)/.test(desc)); };
+const isFinal = (d) => { const desc = (d.desc || '').toLowerCase(); if (/non[\s-]*final/.test(desc)) return false; return ['RXR.F','RXR.FN','FINL','CTFR'].includes(d.code) || (/\bfinal\b/.test(desc) && /(action|rejection)/.test(desc)); };
+const KEY_CODES = new Set(['RX.PRO.PO','RXREXO','RXREXD','RXR.NF','RXR.F','RXR.FN','RXNIRC','RXCERT','PET.OP','RXPET.','RXOPPPET','RXPTGR','RXPTDI']);
+
+function goLookup() {
+  const v = (document.getElementById('appnum').value || '').replace(/[^0-9A-Za-z]/g, '');
+  if (!v) return;
+  history.replaceState(null, '', '/proceeding?app=' + encodeURIComponent(v));
+  load(v);
+}
+
+async function getJson(section, appNum) {
+  const r = await fetch(`/api/application?appNum=${encodeURIComponent(appNum)}&section=${section}`);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function load(appNum) {
+  const c = document.getElementById('content');
+  c.innerHTML = '<div class="card"><div class="state">Loading ' + esc(appNum) + '…</div></div>';
+  try {
+    const [docData, metaData] = await Promise.all([getJson('documents', appNum), getJson('meta-data', appNum).catch(() => null)]);
+    const bag = docData.documentBag || docData.documents || (Array.isArray(docData) ? docData : []);
+    const docs = bag.map((d) => ({
+      code: up(d), desc: d.documentCodeDescriptionText || d.documentDescriptionText || '',
+      date: d.officialDate || d.officialDateTime || d.mailRoomDate || '',
+      id: d.documentIdentifier || d.documentId || '', raw: d,
+    })).filter((d) => d.date || d.code);
+    docs.sort((a, b) => (ms(a.date) || 0) - (ms(b.date) || 0));
+    const meta = ((metaData && (metaData.patentFileWrapperDataBag || [])[0]) || {}).applicationMetaData || {};
+    render(appNum, docs, meta);
+  } catch (e) {
+    c.innerHTML = '<div class="card"><div class="state">Could not load ' + esc(appNum) + ' (' + esc(e.message) + '). Check the control number.</div></div>';
+  }
+}
+
+function firstMatch(docs, pred) { return docs.find(pred) || null; }
+
+function render(appNum, docs, meta) {
+  const c = document.getElementById('content');
+  if (!docs.length) { c.innerHTML = '<div class="card"><div class="state">No documents found for ' + esc(appNum) + '.</div></div>'; return; }
+
+  // Milestones (docs are sorted ascending, so find() returns the earliest).
+  const order = firstMatch(docs, (d) => d.code === 'RXREXO');
+  const denial = firstMatch(docs, (d) => d.code === 'RXREXD');
+  const det = order || denial;
+  const steps = [
+    { label: 'Reexam request filed', date: meta.filingDate, done: !!meta.filingDate },
+    { label: 'Patent owner pre-order submission', date: (firstMatch(docs, (d) => d.code === 'RX.PRO.PO') || {}).date, optional: true },
+    { label: det ? (order ? 'Reexamination ordered' : 'Reexamination denied') : 'Determination (order / denial)', date: (det || {}).date },
+    { label: 'First office action', date: (firstMatch(docs, isNonFinal) || {}).date },
+    { label: 'Final office action', date: (firstMatch(docs, isFinal) || {}).date },
+    { label: 'Notice of intent to issue certificate (NIRC)', date: (firstMatch(docs, (d) => d.code === 'RXNIRC') || {}).date },
+    { label: 'Reexamination certificate', date: (firstMatch(docs, (d) => d.code === 'RXCERT') || {}).date },
+  ].filter((s) => !(s.optional && !s.date));
+
+  const stepHtml = steps.map((s) => {
+    const done = !!s.date || s.done;
+    return `<li class="step ${done ? 'done' : 'pending'}"><span class="dot"></span><div>
+      <div class="m-label">${esc(s.label)}</div>
+      <div class="m-date">${s.date ? fmtDate(s.date) : (s.done ? '' : 'Not yet')}</div></div></li>`;
+  }).join('');
+
+  const rows = docs.slice().reverse().map((d) => {
+    const key = KEY_CODES.has(d.code);
+    return `<tr class="${key ? 'key' : ''}">
+      <td style="white-space:nowrap">${fmtDate(d.date)}</td>
+      <td>${esc(d.desc || d.code || 'Document')}${key ? '<span class="badge">key</span>' : ''}</td>
+      <td style="white-space:nowrap">${docLinks(appNum, d.id)}</td>
+    </tr>`;
+  }).join('');
+
+  c.innerHTML = `
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <h2 style="margin:0">Control No. ${esc(appNum)}</h2>
+        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(appNum)}" target="_blank" rel="noopener">Patent Center ↗</a>
+      </div>
+      <div class="meta-grid" style="margin-top:12px">
+        <div><span>Title:</span> ${meta.inventionTitle ? esc(meta.inventionTitle) : '—'}</div>
+        <div><span>Status:</span> ${meta.applicationStatusDescriptionText ? esc(meta.applicationStatusDescriptionText) : '—'}</div>
+        <div><span>Request filed:</span> ${fmtDate(meta.filingDate)}</div>
+        <div><span>Group art unit:</span> ${meta.groupArtUnitNumber ? esc(meta.groupArtUnitNumber) : '—'}</div>
+        <div><span>Examiner:</span> ${meta.examinerNameText ? esc(meta.examinerNameText) : '—'}</div>
+        <div><span>Patent under reexam:</span> ${meta.firstInventorName ? esc(String(meta.firstInventorName).replace(/\s*\(Patent\)\s*/i, '')) : '—'}</div>
+      </div>
+      <p style="font-size:0.78rem;color:#a0aec0;margin:14px 0 0;line-height:1.45">Compiled automatically from USPTO Open Data Portal records — informational only, not legal advice; verify against official USPTO records.</p>
+    </div>
+    <div class="card">
+      <h2>Milestones</h2>
+      <ul class="steps" style="margin-top:12px">${stepHtml}</ul>
+    </div>
+    <div class="card">
+      <h2>All documents (${docs.length})</h2>
+      <div class="sub">Most recent first. Key reexamination events are shaded.</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Document</th><th>PDF</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+    </div>`;
+}
+
+(() => {
+  const app = new URLSearchParams(location.search).get('app');
+  if (app) { const v = app.replace(/[^0-9A-Za-z]/g, ''); document.getElementById('appnum').value = v; load(v); }
+})();
+</script>
+</body>
+</html>

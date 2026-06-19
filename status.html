@@ -81,12 +81,19 @@ async function go() {
   }
 }
 
+function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
 async function load(pw) {
-  const res = await fetch('/api/watchlist?status=1', { headers: { 'X-Admin-Password': pw } });
+  const [res, subRes] = await Promise.all([
+    fetch('/api/watchlist?status=1', { headers: { 'X-Admin-Password': pw } }),
+    fetch('/api/watchlist?subscribers=1', { headers: { 'X-Admin-Password': pw } }),
+  ]);
   if (res.status === 401) throw new Error('Incorrect or missing admin password.');
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = await res.json();
-  return data.status || {};
+  const status = data.status || {};
+  try { if (subRes.ok) status._subscribers = (await subRes.json()).subscribers || []; } catch { status._subscribers = []; }
+  return status;
 }
 
 function dueCard(n, label) {
@@ -121,12 +128,17 @@ function render(s) {
       <h2>Last activity &amp; emails</h2>
       <table>
         <tr><td>Last reexam enumeration</td><td>${ago(s.last_enumerated_at)} <span class="muted">(${fmtTs(s.last_enumerated_at)})</span></td></tr>
-        <tr><td>Last determination digest sent</td><td>${ago(s.last_determination_digest_at)} <span class="muted">(${fmtTs(s.last_determination_digest_at)})</span></td></tr>
-        <tr><td>Owner daily digest — last day handled</td><td>${fmtDate(s.owner_digest_date)}</td></tr>
-        <tr><td>Subscriber digest — last day handled</td><td>${fmtDate(s.subscriber_digest_date)}</td></tr>
+        <tr><td>Daily subscriber digest — last day handled</td><td>${fmtDate(s.subscriber_digest_date)}</td></tr>
         <tr><td>Most recent determination on file</td><td>${fmtDate(s.latest_determination)}</td></tr>
         <tr><td>Oldest not-yet-rescanned (undetermined)</td><td>${ago(s.oldest_scan)} <span class="muted">(${fmtTs(s.oldest_scan)})</span></td></tr>
       </table>
+    </div>
+    <div class="card">
+      <h2>Email subscribers (${(s._subscribers || []).length})</h2>
+      <div class="sub">Addresses receiving the daily comprehensive digest.</div>
+      ${(s._subscribers || []).length
+        ? s._subscribers.map((e) => `<div style="padding:6px 0;border-top:1px solid #e2e8f0;font-size:0.9rem">${escHtml(e)}</div>`).join('')
+        : '<div class="muted">No subscribers yet.</div>'}
     </div>
     <div class="card">
       <h2>Totals</h2>

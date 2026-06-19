@@ -11,7 +11,7 @@
 import {
   listWatched, addWatched, removeWatched, setRecipients,
   listFindings, acknowledgeFindings, acknowledgeFinding, syncApplication,
-  getStatusSnapshot,
+  getStatusSnapshot, listReexamSubscribers,
 } from '../lib/db.js';
 
 // Clean a recipient string into a normalized comma-separated list (or null).
@@ -36,6 +36,14 @@ export default async function handler(req, res) {
         if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
         res.setHeader('Cache-Control', 'no-store');
         res.status(200).json({ status: await getStatusSnapshot() });
+        return;
+      }
+      // Admin-only: the daily-email subscriber list (emails only, no tokens).
+      if (req.query && req.query.subscribers) {
+        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+        res.setHeader('Cache-Control', 'no-store');
+        const subs = await listReexamSubscribers();
+        res.status(200).json({ subscribers: subs.map((s) => s.email), count: subs.length });
         return;
       }
       const [watched, findings] = await Promise.all([listWatched(), listFindings()]);

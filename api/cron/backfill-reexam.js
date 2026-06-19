@@ -11,13 +11,14 @@ import {
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
-  getConclusionsToParse, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse,
+  getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectCertificateOutcome } from '../../lib/conclusions.js';
+import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -207,10 +208,28 @@ export default async function handler(req, res) {
       else if (req.query.retry === '1') repooled = await resetConclusionParse();
       const deadline = Date.now() + budgetMs;
       const remainMs = () => deadline - Date.now();
-      let checked = 0, parsedOut = 0, rejected = 0, failed = 0, rateLimited = false;
+      let checked = 0, parsedOut = 0, reparsed = 0, rejected = 0, failed = 0, rateLimited = false;
       const errors = [];
       const samples = [];
       const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
+
+      // Phase 1 — re-parse certificates whose OCR text is already cached. Instant
+      // (no download/OCR), so this drains the whole cached backlog in a call or two.
+      while (remainMs() > 3000) {
+        const batch = await getConclusionsToReparse(50);
+        if (!batch.length) break;
+        for (const r of batch) {
+          if (samples.length < 6) samples.push({ app: r.application_number, method: 'cache', textLen: r.cert_text ? r.cert_text.length : 0, belongs: certCitesProceeding(r.cert_text, r.application_number), parsed: !!parseReexamOutcome(r.cert_text) });
+          const belongs = certCitesProceeding(r.cert_text, r.application_number);
+          if (belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rejected++; }
+          else { const o = parseReexamOutcome(r.cert_text); await setConclusionOutcome(r.application_number, o, null); reparsed++; if (o) parsedOut++; }
+          if (remainMs() < 1500) break;
+        }
+      }
+
+      // Phase 2 — OCR certificates with no cached text yet. Slow (~30-40s each), so
+      // a new item only starts when ~40s of budget remains; caches the text for
+      // future instant re-parses. On a 429 we stop and leave the rest pending.
       while (remainMs() > 40000) {
         const todo = await getConclusionsToParse(1);
         if (!todo.length) break;
@@ -219,13 +238,13 @@ export default async function handler(req, res) {
           const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
           if (samples.length < 6) {
             const s = { app: r.application_number, method: x.method, textLen: x.textLen, belongs: x.belongs, parsed: !!x.outcome };
-            if (req.query.debug === '1' && samples.length === 0) s.textSample = String(x.text || '').replace(/\s+/g, ' ').slice(0, 9000);
+            if (req.query.debug === '1' && !samples.some((q) => q.textSample)) s.textSample = String(x.text || '').replace(/\s+/g, ' ').slice(0, 9000);
             samples.push(s);
           }
           // A certificate that cites a different proceeding (an exhibit filed under
           // the RXCERT code) is rejected: remembered and dropped, not concluded.
           if (x.belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rejected++; }
-          else { await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++; }
+          else { await setConclusionOutcome(r.application_number, x.outcome, x.text); checked++; if (x.outcome) parsedOut++; }
         } catch (e) {
           const msg = String(e && e.message || e);
           if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }
@@ -235,8 +254,8 @@ export default async function handler(req, res) {
           failed++; pushErr(r.application_number, e);
         }
       }
-      const remaining = (await getConclusionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
+      const remaining = await countConclusionsUnparsed();
+      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, reparsedFromCache: reparsed, ocrChecked: checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
       return;
     }
 

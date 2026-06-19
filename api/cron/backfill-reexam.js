@@ -19,7 +19,7 @@ import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/usp
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectCertificateOutcome } from '../../lib/conclusions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
-import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
+import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
 
 export const config = { maxDuration: 60 };
@@ -223,7 +223,7 @@ export default async function handler(req, res) {
         }
       }
       const remaining = (await getConclusionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'outcomes', repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, remaining, done: remaining === 0 });
       return;
     }
 

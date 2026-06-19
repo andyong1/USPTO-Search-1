@@ -151,10 +151,14 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="examiner-card" style="display:none">
     <h2>By Examiner</h2>
-    <div class="sub">Claim outcomes grouped by the examiner of record on the reexamination. Click a column to sort.</div>
-    <div id="by-examiner"></div>
+    <div class="sub">Select an examiner to see their claim-outcome KPIs at certificate. Only examiners with at least one concluded proceeding in the current scope are listed.</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:#4a5568">Examiner:</label>
+      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
+    </div>
+    <div id="examiner-stat"></div>
   </div>
 
   <div class="card">
@@ -215,18 +219,17 @@ function docLinks(num, docId, label) {
 let _rows = [];     // all concluded proceedings (cert on file)
 let _scoped = [];   // current period/art-unit/TC subset (drives stats + table)
 
-// ── Claim Outcomes at Certificate KPI cards (parsed certs in scope) ──
-function buildKpi(rows) {
-  const el = document.getElementById('kpi');
+// ── Claim Outcomes at Certificate KPI cards (parsed certs in a set) ──
+function outcomeKpiHtml(rows) {
   const parsed = rows.filter((d) => has(d.outcome_summary));
-  if (!parsed.length) { el.innerHTML = '<div class="sub">No parsed certificate outcomes in this scope yet.</div>'; return; }
+  if (!parsed.length) return '<div class="sub">No parsed certificate outcomes in this scope yet.</div>';
   const n = parsed.length;
   const allConfirmed = parsed.filter((d) => has(d.claims_confirmed) && !has(d.claims_cancelled) && !has(d.claims_amended) && !has(d.claims_new)).length;
   const anyCancelled = parsed.filter((d) => has(d.claims_cancelled)).length;
   const anyAmended = parsed.filter((d) => has(d.claims_amended)).length;
   const anyNew = parsed.filter((d) => has(d.claims_new)).length;
   const pct = (x) => (n ? (x / n * 100).toFixed(1) + '%' : '—');
-  el.innerHTML = `<div class="stats-title">Claim Outcomes at Certificate (n=${n})</div>
+  return `<div class="stats-title">Claim Outcomes at Certificate (n=${n})</div>
     <div class="stats">
       <div class="stat"><div class="stat-num" style="color:#276749">${pct(allConfirmed)}</div><div class="stat-label">All claims confirmed · ${allConfirmed} of ${n}</div></div>
       <div class="stat"><div class="stat-num" style="color:#c53030">${pct(anyCancelled)}</div><div class="stat-label">≥1 claim cancelled · ${anyCancelled} of ${n}</div></div>
@@ -234,6 +237,23 @@ function buildKpi(rows) {
       <div class="stat"><div class="stat-num" style="color:#6b46c1">${pct(anyNew)}</div><div class="stat-label">≥1 new claim added · ${anyNew} of ${n}</div></div>
     </div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:10px 0 0;line-height:1.45">Percentages are of certificates whose claim disposition has been parsed; a certificate may fall in more than one of the cancelled / amended / new buckets.</p>`;
+}
+function buildKpi(rows) { document.getElementById('kpi').innerHTML = outcomeKpiHtml(rows); }
+
+// "By Examiner" — dropdown of examiners (concluded proceedings in scope); on
+// selection, show that examiner's claim-outcome KPI cards.
+function buildExaminerSection(rows) {
+  const card = document.getElementById('examiner-card');
+  document.getElementById('examiner-stat').innerHTML = '';
+  const names = [...new Set(rows.map((d) => (d.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!names.length) { card.style.display = 'none'; return; }
+  const sel = document.getElementById('examiner-select');
+  sel.innerHTML = ['<option value="">Select an examiner…</option>'].concat(names.map((nm) => `<option value="${esc(nm)}">${esc(nm)}</option>`)).join('');
+  card.style.display = '';
+  sel.onchange = (e) => {
+    const name = e.target.value, target = document.getElementById('examiner-stat');
+    target.innerHTML = name ? outcomeKpiHtml(rows.filter((d) => (d.examiner_name || '').trim() === name)) : '';
+  };
 }
 
 // ── Monthly stacked-bar chart of certificates issued, by outcome ──
@@ -335,12 +355,10 @@ function renderBreakdown(elId, which, rows, keyFn, groupHdr, sortFn, labelFn) {
 function buildBreakdowns(rows) {
   renderBreakdown('by-tc', 'tc', rows, (d) => d.tech_center, 'Technology Area', 'sortTc', (k) => tcCell(k));
   renderBreakdown('by-au', 'au', rows, (d) => d.group_art_unit, 'Art Unit', 'sortAu', null);
-  renderBreakdown('by-examiner', 'ex', rows, (d) => d.examiner_name, 'Examiner', 'sortEx', null);
 }
 function bdToggle(which, key) { const s = bdSort[which]; if (s.key === key) s.dir = s.dir === 'asc' ? 'desc' : 'asc'; else bdSort[which] = { key, dir: key === 'key' ? 'asc' : 'desc' }; }
 function sortTc(key) { bdToggle('tc', key); renderBreakdown('by-tc', 'tc', _scoped, (d) => d.tech_center, 'Technology Area', 'sortTc', (k) => tcCell(k)); }
 function sortAu(key) { bdToggle('au', key); renderBreakdown('by-au', 'au', _scoped, (d) => d.group_art_unit, 'Art Unit', 'sortAu', null); }
-function sortEx(key) { bdToggle('ex', key); renderBreakdown('by-examiner', 'ex', _scoped, (d) => d.examiner_name, 'Examiner', 'sortEx', null); }
 
 // ── Main table (sortable / searchable / filterable) ──
 document.addEventListener('keydown', (e) => {
@@ -372,12 +390,14 @@ function render() {
   const arrow = (k) => (oSort.key === k ? (oSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const rows = items.map((d) => {
     const num = d.application_number || '';
-    const summary = has(d.outcome_summary) ? `<div class="summary">${esc(d.outcome_summary)}</div>` : '<div class="summary ext" style="margin-left:0">outcome pending</div>';
+    const outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
     return `<tr>
       <td>
-        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
+        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
+        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
-      <td><span class="badge">Certificate ${fmtDate(d.cert_date)}</span>${summary}${docLinks(num, d.cert_doc_id, 'Certificate')}</td>
+      <td><span class="badge">${fmtDate(d.cert_date)}</span>${docLinks(num, d.cert_doc_id, 'Certificate')}</td>
+      <td>${outcome}</td>
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td>${tcCell(d.tech_center)}</td>
@@ -386,7 +406,8 @@ function render() {
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('cert_date')">Reexam Outcome${arrow('cert_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('cert_date')">Reexam Certificate${arrow('cert_date')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('outcome_summary')">Reexam Outcome${arrow('outcome_summary')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('examiner_name')">Examiner${arrow('examiner_name')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortOutcomes('tech_center')">Technology Area${arrow('tech_center')}</th>
@@ -408,7 +429,7 @@ function exportCsv() {
 // ── Period / art-unit / TC scope (keyed on certificate date) ──
 let oPeriod = 'since2025', oArtUnit = '', oTc = '';
 const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
-const URL_SORT_KEYS = ['application_number', 'cert_date', 'examiner_name', 'group_art_unit', 'tech_center'];
+const URL_SORT_KEYS = ['application_number', 'cert_date', 'outcome_summary', 'examiner_name', 'group_art_unit', 'tech_center'];
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
   if (oPeriod && oPeriod !== 'since2025') p.set('period', oPeriod);
@@ -466,6 +487,7 @@ function applyFilters() {
   buildKpi(_scoped);
   buildChart(_scoped, gran);
   buildBreakdowns(_scoped);
+  buildExaminerSection(_scoped);
   render();
 }
 

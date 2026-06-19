@@ -191,6 +191,7 @@
       </div>
     </div>
     <div id="stats-kpi"></div>
+    <div class="stats-panel full" style="margin-bottom:18px"><div id="stats-prepost"></div></div>
     <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
     <div class="stats-grid">
       <div class="stats-panel"><div id="stats-au"></div></div>
@@ -315,6 +316,33 @@ function buildKpi(list) {
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
     ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
   </div>`;
+}
+
+// Effect of the April 5, 2026 pre-order rule: reexam denial rate for requests
+// filed before vs on/after the cutoff (over the full collected set; independent
+// of the period/art-unit filters). Hidden until some post-cutoff determinations
+// exist.
+function buildPrePost(list) {
+  const el = document.getElementById('stats-prepost');
+  if (!el) return;
+  const CUT = Date.UTC(2026, 3, 5); // Apr 5, 2026
+  const cohort = (pred) => {
+    const items = list.filter((d) => { const f = parseDate(d.filing_date); return !isNaN(f) && pred(f); });
+    const denied = items.filter((d) => /denied/i.test(d.determination_type || '')).length;
+    return { total: items.length, denied };
+  };
+  const before = cohort((f) => f < CUT);
+  const after = cohort((f) => f >= CUT);
+  const panel = el.closest('.stats-panel');
+  if (!after.total) { if (panel) panel.style.display = 'none'; return; }
+  if (panel) panel.style.display = '';
+  const rate = (c) => (c.total ? (c.denied / c.total * 100).toFixed(1) + '%' : '—');
+  el.innerHTML = `<div class="stats-title">Effect of the Apr 5, 2026 Pre-Order Rule — Reexam Denial Rate</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num" style="color:#c53030">${rate(before)}</div><div class="stat-label">Requests filed before Apr 5, 2026 · denied ${before.denied} of ${before.total}</div></div>
+      <div class="stat"><div class="stat-num" style="color:#c53030">${rate(after)}</div><div class="stat-label">Requests filed on/after Apr 5, 2026 · denied ${after.denied} of ${after.total}</div></div>
+    </div>
+    <p style="font-size:0.78rem;color:#a0aec0;margin:0;line-height:1.45">Denial = no substantial new question found. Post-rule requests are recent, so the on/after sample is still small.</p>`;
 }
 
 function statsHtml(label, items) {
@@ -760,6 +788,7 @@ function applyFilters() {
     _all = list;
     populateArtUnits(_all);
     populateTechCenters(_all);
+    buildPrePost(_all);
     document.getElementById('period-select').addEventListener('change', (e) => { fPeriod = e.target.value; applyFilters(); });
     document.getElementById('artunit-select').addEventListener('change', (e) => { fArtUnit = e.target.value; applyFilters(); });
     document.getElementById('tc-select').addEventListener('change', (e) => { fTc = e.target.value; applyFilters(); });

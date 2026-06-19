@@ -549,10 +549,10 @@ function filteredSorted() {
   });
 }
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit', 'Technology Area', 'Reexam Outcome'];
+  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit', 'Technology Area'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit,
-    d.tech_center || '', d.cert_doc_id ? (d.outcome_summary || 'Concluded') : '']);
+    d.tech_center || '']);
   const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -616,15 +616,6 @@ function renderTable() {
           + `<button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','Determination')">View</button>`
           + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
     }
-    let outcome = '<span class="ext">—</span>';
-    const cdoc = d.cert_doc_id;
-    if (cdoc) {
-      const cbase = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(cdoc)}&format=PDF`;
-      const summary = d.outcome_summary ? `<div style="font-size:0.8rem;color:#4a5568;margin-top:4px">${esc(d.outcome_summary)}</div>` : '';
-      outcome = `<span class="badge concluded">Concluded</span>${summary}`
-        + `<div style="margin-top:4px"><button class="btn-view" onclick="openDocViewer('${num}','${cdoc}','PDF','Certificate')">View Certificate</button>`
-        + `<a class="ext" href="${cbase}&disposition=attachment" download>Download ⤓</a></div>`;
-    }
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
@@ -634,7 +625,6 @@ function renderTable() {
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td>${tcCell(d.tech_center)}</td>
-      <td>${outcome}</td>
     </tr>`;
   }).join('');
 
@@ -646,7 +636,6 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
-      <th>Reexam Outcome</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

@@ -330,15 +330,17 @@ function buildOutcomes(list) {
   if (!parsed.length) { if (panel) panel.style.display = 'none'; return; }
   if (panel) panel.style.display = '';
   const n = parsed.length;
-  const allConfirmed = parsed.filter((d) => has(d.claims_confirmed) && !has(d.claims_cancelled) && !has(d.claims_amended)).length;
+  const allConfirmed = parsed.filter((d) => has(d.claims_confirmed) && !has(d.claims_cancelled) && !has(d.claims_amended) && !has(d.claims_new)).length;
   const anyCancelled = parsed.filter((d) => has(d.claims_cancelled)).length;
   const anyAmended = parsed.filter((d) => has(d.claims_amended)).length;
+  const anyNew = parsed.filter((d) => has(d.claims_new)).length;
   const pct = (x) => (n ? (x / n * 100).toFixed(1) + '%' : '—');
   el.innerHTML = `<div class="stats-title">Claim Outcomes at Certificate (n=${n})</div>
     <div class="stats">
       <div class="stat"><div class="stat-num" style="color:#276749">${pct(allConfirmed)}</div><div class="stat-label">All claims confirmed · ${allConfirmed} of ${n}</div></div>
       <div class="stat"><div class="stat-num" style="color:#c53030">${pct(anyCancelled)}</div><div class="stat-label">≥1 claim cancelled · ${anyCancelled} of ${n}</div></div>
       <div class="stat"><div class="stat-num" style="color:#1a3a6b">${pct(anyAmended)}</div><div class="stat-label">≥1 claim amended · ${anyAmended} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:#6b46c1">${pct(anyNew)}</div><div class="stat-label">≥1 new claim added · ${anyNew} of ${n}</div></div>
     </div>
     <p style="font-size:0.78rem;color:#a0aec0;margin:0;line-height:1.45">Parsed from certificate text (OCR) — heuristic; verify against the certificate. Only concluded proceedings with a readable certificate are counted.</p>`;
 }

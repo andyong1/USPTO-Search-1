@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>System Status — USPTO Reexam Tracker</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 20px; }
+    .card h2 { font-size: 1.05rem; color: #1a3a6b; margin-bottom: 4px; }
+    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.7rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
+    .kpi .num.zero { color: #276749; }
+    .kpi .num.busy { color: #c05621; }
+    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    td { padding: 8px 10px; border-top: 1px solid #e2e8f0; }
+    td:first-child { color: #4a5568; width: 55%; }
+    td:last-child { font-weight: 600; }
+    input { padding: 9px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.95rem; }
+    button { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 9px 16px; border-radius: 8px; }
+    button:hover { background: #15305a; }
+    .muted { color: #a0aec0; font-size: 0.8rem; }
+    .err { color: #c53030; font-weight: 600; margin-top: 10px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    a { color: #1a3a6b; }
+  </style>
+</head>
+<body>
+<header><h1>System Status — Reexam Tracker</h1></header>
+<div class="container">
+  <div class="card" id="gate">
+    <h2>Admin sign-in</h2>
+    <div class="sub">Enter the admin password to view operational status.</div>
+    <div class="row">
+      <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password" onkeydown="if(event.key==='Enter')go()" />
+      <button onclick="go()">View status</button>
+    </div>
+    <div id="gate-err" class="err" style="display:none"></div>
+  </div>
+  <div id="content" style="display:none"></div>
+</div>
+<script>
+const PW_KEY = 'reexamAdminPw';
+
+function ago(ts) {
+  if (!ts) return 'never';
+  const t = new Date(ts).getTime();
+  if (isNaN(t)) return String(ts);
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return hrs + ' hr ago';
+  return Math.round(hrs / 24) + ' days ago';
+}
+function fmtTs(ts) { if (!ts) return '—'; const d = new Date(ts); return isNaN(d) ? String(ts) : d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }) + ' PT'; }
+function fmtDate(s) { if (!s) return '—'; const m = String(s).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(s); }
+
+async function go() {
+  const pw = document.getElementById('pw').value.trim();
+  const err = document.getElementById('gate-err');
+  err.style.display = 'none';
+  try {
+    const s = await load(pw);
+    sessionStorage.setItem(PW_KEY, pw);
+    render(s);
+  } catch (e) {
+    err.textContent = e.message || 'Could not load status.';
+    err.style.display = '';
+  }
+}
+
+async function load(pw) {
+  const res = await fetch('/api/watchlist?status=1', { headers: { 'X-Admin-Password': pw } });
+  if (res.status === 401) throw new Error('Incorrect or missing admin password.');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  return data.status || {};
+}
+
+function dueCard(n, label) {
+  const v = n == null ? '—' : n;
+  const cls = n === 0 ? 'zero' : (n > 0 ? 'busy' : '');
+  return `<div class="kpi"><div class="num ${cls}">${v}</div><div class="lbl">${label}</div></div>`;
+}
+
+function render(s) {
+  document.getElementById('gate').style.display = 'none';
+  const c = document.getElementById('content');
+  c.style.display = '';
+  c.innerHTML = `
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><h2 style="margin:0">Backlog — proceedings due for a check now</h2>
+        <div class="sub" style="margin:4px 0 0">Green = caught up. Amber = waiting for the next scheduled run.</div></div>
+        <button onclick="go()">Refresh</button>
+      </div>
+      <div class="kpi-strip" style="margin-top:16px">
+        ${dueCard(s.undetermined, 'Reexams to scan (undetermined)')}
+        ${dueCard(s.actions_due, 'Office actions due')}
+        ${dueCard(s.petitions_due, 'Petition discovery due')}
+        ${dueCard(s.active_petitions_due, 'Active petitions to refresh')}
+        ${dueCard(s.conclusions_due, 'Certificate checks due')}
+        ${dueCard(s.petition325d_pending, '§325(d) petition OCR pending')}
+        ${dueCard(s.techcenter_due, 'Tech center to resolve')}
+        ${dueCard(s.preorder_due, 'Pre-order re-checks due')}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Last activity &amp; emails</h2>
+      <table>
+        <tr><td>Last reexam enumeration</td><td>${ago(s.last_enumerated_at)} <span class="muted">(${fmtTs(s.last_enumerated_at)})</span></td></tr>
+        <tr><td>Last determination digest sent</td><td>${ago(s.last_determination_digest_at)} <span class="muted">(${fmtTs(s.last_determination_digest_at)})</span></td></tr>
+        <tr><td>Owner daily digest — last day handled</td><td>${fmtDate(s.owner_digest_date)}</td></tr>
+        <tr><td>Subscriber digest — last day handled</td><td>${fmtDate(s.subscriber_digest_date)}</td></tr>
+        <tr><td>Most recent determination on file</td><td>${fmtDate(s.latest_determination)}</td></tr>
+        <tr><td>Oldest not-yet-rescanned (undetermined)</td><td>${ago(s.oldest_scan)} <span class="muted">(${fmtTs(s.oldest_scan)})</span></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Totals</h2>
+      <table>
+        <tr><td>Reexams tracked (watch list)</td><td>${s.watch_total ?? '—'}</td></tr>
+        <tr><td>— determined</td><td>${(s.watch_total != null && s.undetermined != null) ? (s.watch_total - s.undetermined) : '—'}</td></tr>
+        <tr><td>— never scanned yet</td><td>${s.never_scanned ?? '—'}</td></tr>
+        <tr><td>Tracked proceedings (alerts)</td><td>${s.watchlist_count ?? '—'}</td></tr>
+      </table>
+      <p class="muted" style="margin-top:12px"><a href="/uspto-search">← Back to the app</a></p>
+    </div>`;
+}
+
+// Auto-load if we already have the password this session.
+(() => {
+  const saved = sessionStorage.getItem(PW_KEY);
+  if (!saved) return;
+  load(saved).then(render).catch(() => { /* show gate */ });
+})();
+</script>
+</body>
+</html>

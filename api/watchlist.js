@@ -11,6 +11,7 @@
 import {
   listWatched, addWatched, removeWatched, setRecipients,
   listFindings, acknowledgeFindings, acknowledgeFinding, syncApplication,
+  getStatusSnapshot,
 } from '../lib/db.js';
 
 // Clean a recipient string into a normalized comma-separated list (or null).
@@ -30,6 +31,13 @@ function isAdmin(req) {
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
+      // Admin-only operational snapshot for the /status page.
+      if (req.query && req.query.status) {
+        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(200).json({ status: await getStatusSnapshot() });
+        return;
+      }
       const [watched, findings] = await Promise.all([listWatched(), listFindings()]);
       res.status(200).json({ watched, findings });
       return;

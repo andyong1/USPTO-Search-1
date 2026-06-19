@@ -25,6 +25,16 @@ import { detectActionsForApp } from '../../lib/actions.js';
 
 export const config = { maxDuration: 60 };
 
+// For debug: return the region of the certificate text around the claim
+// disposition (which sits near the end of a certificate, after the cover and the
+// full text of amended/new claims), so we can see the wording the parser missed.
+function dispositionWindow(txt) {
+  const t = String(txt || '').replace(/\s+/g, ' ');
+  const m = t.match(/(result of reexamin|been determined|patentab|no amendment|claim\(?s?\)?\s+(confirmed|cancel|amended|patentable))/i);
+  if (m) return t.slice(Math.max(0, m.index - 200), m.index + 2200);
+  return t.slice(-3000);
+}
+
 const CONCURRENCY = 5;
 const TIME_BUDGET_MS = 50000; // stop before the 60s function limit
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
@@ -219,7 +229,13 @@ export default async function handler(req, res) {
         const batch = await getConclusionsToReparse(50);
         if (!batch.length) break;
         for (const r of batch) {
-          if (samples.length < 6) samples.push({ app: r.application_number, method: 'cache', textLen: r.cert_text ? r.cert_text.length : 0, belongs: certCitesProceeding(r.cert_text, r.application_number), parsed: !!parseReexamOutcome(r.cert_text) });
+          if (samples.length < 6) {
+            const s = { app: r.application_number, method: 'cache', textLen: r.cert_text ? r.cert_text.length : 0, belongs: certCitesProceeding(r.cert_text, r.application_number), parsed: !!parseReexamOutcome(r.cert_text) };
+            // Under debug, surface the disposition region of the FIRST few certs
+            // that still don't parse, so the wording can be matched.
+            if (req.query.debug === '1' && !s.parsed && samples.filter((q) => q.textSample).length < 3) s.textSample = dispositionWindow(r.cert_text);
+            samples.push(s);
+          }
           const belongs = certCitesProceeding(r.cert_text, r.application_number);
           if (belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rejected++; }
           else { const o = parseReexamOutcome(r.cert_text); await setConclusionOutcome(r.application_number, o, null); reparsed++; if (o) parsedOut++; }

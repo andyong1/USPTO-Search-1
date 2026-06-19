@@ -325,7 +325,7 @@ function buildOutcomes(list) {
   const el = document.getElementById('stats-outcomes');
   if (!el) return;
   const has = (v) => !!(v && String(v).trim());
-  const parsed = list.filter((d) => (d.cert_doc_id || d.nirc_doc_id) && has(d.outcome_summary));
+  const parsed = list.filter((d) => d.cert_doc_id && has(d.outcome_summary));
   const panel = el.closest('.stats-panel');
   if (!parsed.length) { if (panel) panel.style.display = 'none'; return; }
   if (panel) panel.style.display = '';

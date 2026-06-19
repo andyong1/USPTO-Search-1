@@ -2,7 +2,7 @@
 // regex detectors). Run with: npm test  (node --test, Node 18+).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detect325d, detectSnq, parseReexamOutcome } from '../lib/reexamOutcome.js';
+import { detect325d, detectSnq, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition } from '../lib/uspto.js';
 
 test('detect325d', () => {
@@ -66,6 +66,17 @@ test('parseReexamOutcome — NIRC form with claims canceled, none confirmed', ()
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);
+});
+
+test('certCitesProceeding — control number present / absent / unreadable', () => {
+  // Control number appears (OCR spacing / slashes / commas are tolerated).
+  assert.equal(certCitesProceeding('REEXAMINATION CONTROL NO. 90/016,049 blah', '90016049'), true);
+  assert.equal(certCitesProceeding('Control No. 90/015 790 and more text', '90015790'), true);
+  // Readable certificate that cites a DIFFERENT proceeding -> not this one.
+  assert.equal(certCitesProceeding('Certificate for Control No. 90/012,345 ' + 'x'.repeat(400), '90016049'), false);
+  // Too little text to judge -> null (caller should not reject).
+  assert.equal(certCitesProceeding('blank', '90016049'), null);
+  assert.equal(certCitesProceeding('', '90016049'), null);
 });
 
 test('analyzePetition — petition (within 20d) + decision after', () => {

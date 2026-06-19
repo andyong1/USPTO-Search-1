@@ -10,7 +10,7 @@ import {
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed, countDecisionsOcrPending, resetFailedDecisionOcr,
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
-  getDeterminationsToCheckConclusion, recordConclusionDocs,
+  getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
   getConclusionsToParse, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
@@ -71,6 +71,10 @@ export default async function handler(req, res) {
     // than waiting for the hourly rolling scan (which checks only a few per run).
     // Resumable; run until done is true. No reset needed.
     if (req.query && req.query.conclusions === '1') {
+      // &reset=1 clears the certificate side of every conclusion (keeping NIRC
+      // dates) so detection re-finds RXCERTs and the parse step re-validates them.
+      let reset = 0;
+      if (req.query.reset === '1') reset = await resetConclusionCerts();
       const deadline = Date.now() + budgetMs;
       let checked = 0, concluded = 0;
       while (Date.now() < deadline) {
@@ -79,23 +83,23 @@ export default async function handler(req, res) {
         await Promise.all(rows.map(async (r) => {
           try {
             const docs = await fetchDocuments(r.application_number);
-            let nirc = null, cert = null;
+            let nirc = null; const certs = [];
             for (const d of docs) {
               const code = (d.documentCode || '').toUpperCase();
               if (code === 'RXNIRC' && !nirc) nirc = d;
-              if (code === 'RXCERT' && !cert) cert = d;
+              if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
             }
             await recordConclusionDocs(r.application_number, {
               nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
-              certDocId: cert && cert.documentIdentifier, certDate: cert && cert.officialDate,
+              certCandidates: certs,
             });
-            if (cert) concluded++;
+            if (certs.length) concluded++;
             checked++;
           } catch { /* leave for a later call */ }
         }));
       }
       const remaining = (await getDeterminationsToCheckConclusion(100000)).length;
-      res.status(200).json({ ok: true, mode: 'conclusions', checked, concluded, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'conclusions', reset, checked, concluded, remaining, done: remaining === 0 });
       return;
     }
 
@@ -203,7 +207,7 @@ export default async function handler(req, res) {
       else if (req.query.retry === '1') repooled = await resetConclusionParse();
       const deadline = Date.now() + budgetMs;
       const remainMs = () => deadline - Date.now();
-      let checked = 0, parsedOut = 0, failed = 0, rateLimited = false;
+      let checked = 0, parsedOut = 0, rejected = 0, failed = 0, rateLimited = false;
       const errors = [];
       const samples = [];
       const pushErr = (app, e) => { if (errors.length < 4) errors.push({ application: app, error: String(e && e.message || e) }); };
@@ -212,13 +216,16 @@ export default async function handler(req, res) {
         if (!todo.length) break;
         const r = todo[0];
         try {
-          const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, r.nirc_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
+          const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3 });
           if (samples.length < 6) {
-            const s = { app: r.application_number, method: x.method, textLen: x.textLen, parsed: !!x.outcome };
+            const s = { app: r.application_number, method: x.method, textLen: x.textLen, belongs: x.belongs, parsed: !!x.outcome };
             if (req.query.debug === '1' && samples.length === 0) s.textSample = String(x.text || '').replace(/\s+/g, ' ').slice(0, 9000);
             samples.push(s);
           }
-          await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++;
+          // A certificate that cites a different proceeding (an exhibit filed under
+          // the RXCERT code) is rejected: remembered and dropped, not concluded.
+          if (x.belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rejected++; }
+          else { await setConclusionOutcome(r.application_number, x.outcome); checked++; if (x.outcome) parsedOut++; }
         } catch (e) {
           const msg = String(e && e.message || e);
           if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }
@@ -229,7 +236,7 @@ export default async function handler(req, res) {
         }
       }
       const remaining = (await getConclusionsToParse(100000)).length;
-      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
+      res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), repooled, checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
       return;
     }
 

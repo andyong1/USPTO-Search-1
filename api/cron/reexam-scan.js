@@ -133,17 +133,17 @@ async function detectConclusionsStep(maxApps, deadline) {
     const app = r.application_number;
     try {
       const docs = await fetchDocuments(app);
-      let nirc = null, cert = null;
+      let nirc = null; const certs = [];
       for (const d of docs) {
         const code = (d.documentCode || '').toUpperCase();
         if (code === 'RXNIRC' && !nirc) nirc = d;
-        if (code === 'RXCERT' && !cert) cert = d;
+        if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
       }
       await recordConclusionDocs(app, {
         nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
-        certDocId: cert && cert.documentIdentifier, certDate: cert && cert.officialDate,
+        certCandidates: certs,
       });
-      if (nirc || cert) found++;
+      if (nirc || certs.length) found++;
     } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
   }
   return { checked: rows.length, concluded: found, errors };

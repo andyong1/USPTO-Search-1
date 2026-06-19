@@ -344,9 +344,7 @@ function render() {
     const num = p.application_number || '';
     return `<tr>
       <td>
-        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
-        <a class="ext" href="/proceeding?app=${encodeURIComponent(num)}">Timeline ↗</a>
-        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
+        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
       <td>${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>

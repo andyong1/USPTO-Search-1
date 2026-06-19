@@ -375,9 +375,7 @@ function render() {
     const summary = has(d.outcome_summary) ? `<div class="summary">${esc(d.outcome_summary)}</div>` : '<div class="summary ext" style="margin-left:0">outcome pending</div>';
     return `<tr>
       <td>
-        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
-        <a class="ext" href="/proceeding?app=${encodeURIComponent(num)}">Timeline ↗</a>
-        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
+        <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td><span class="badge">Certificate ${fmtDate(d.cert_date)}</span>${summary}${docLinks(num, d.cert_doc_id, 'Certificate')}</td>
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>

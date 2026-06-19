@@ -6,15 +6,16 @@
 //      reexam_watch (and prune ones older than ~9 months).
 //   2. Scan the next chunk of not-yet-determined reexams for RXREXO (reexam
 //      ordered) / RXREXD (reexam denied) documents; record any new ones.
-//   3. Once/day: email a digest of newly found determinations (REEXAM_DIGEST_TO).
+//   3. Once/day (8 AM PT): email subscribers a comprehensive digest of the prior
+//      day's relevant filings (determinations, office actions, certificates, petitions).
 //
 // Work is chunked across hourly runs (rolling, least-recently-scanned first) so
 // each invocation stays small enough for Vercel Hobby limits.
 
 import {
-  reexamState, setReexamEnumerated, setReexamDigestSent,
+  reexamState, setReexamEnumerated,
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
-  recordDetermination, getUnnotifiedDeterminations, markAllDeterminationsNotified,
+  recordDetermination,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
@@ -29,7 +30,7 @@ import {
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage } from '../../lib/uspto.js';
-import { sendReexamDigest, sendComprehensiveDigestTo } from '../../lib/email.js';
+import { sendComprehensiveDigestTo } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -255,17 +256,6 @@ export default async function handler(req, res) {
       await Promise.all(slice);
     }
 
-    // 3) Daily digest of newly found determinations.
-    let digest = { skipped: true };
-    if (hoursSince(state.last_digest_at) >= 23) {
-      const pending = await getUnnotifiedDeterminations();
-      if (pending.length) {
-        try { digest = await sendReexamDigest(pending); await markAllDeterminationsNotified(); }
-        catch (e) { digest = { error: String(e.message || e) }; }
-      }
-      await setReexamDigestSent();
-    }
-
     // 3b) Public subscriber digest (8:00 AM PT): comprehensive list of the prior
     // day's relevant filings, sent to every subscriber.
     let subscriberDigest = { skipped: true };
@@ -379,7 +369,6 @@ export default async function handler(req, res) {
       newDeterminations,
       backfilled,
       counts, // { total, remaining, determined }
-      digest,
       subscriberDigest,
       conclusions,
       petitions,

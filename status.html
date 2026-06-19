@@ -84,15 +84,18 @@ async function go() {
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 async function load(pw) {
-  const [res, subRes] = await Promise.all([
-    fetch('/api/watchlist?status=1', { headers: { 'X-Admin-Password': pw } }),
-    fetch('/api/watchlist?subscribers=1', { headers: { 'X-Admin-Password': pw } }),
+  const h = { 'X-Admin-Password': pw };
+  const [res, subRes, trackedRes] = await Promise.all([
+    fetch('/api/watchlist?status=1', { headers: h }),
+    fetch('/api/watchlist?subscribers=1', { headers: h }),
+    fetch('/api/watchlist?tracked=1', { headers: h }),
   ]);
   if (res.status === 401) throw new Error('Incorrect or missing admin password.');
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = await res.json();
   const status = data.status || {};
   try { if (subRes.ok) status._subscribers = (await subRes.json()).subscribers || []; } catch { status._subscribers = []; }
+  try { if (trackedRes.ok) status._tracked = (await trackedRes.json()).tracked || []; } catch { status._tracked = []; }
   return status;
 }
 
@@ -132,6 +135,16 @@ function render(s) {
         <tr><td>Most recent determination on file</td><td>${fmtDate(s.latest_determination)}</td></tr>
         <tr><td>Oldest not-yet-rescanned (undetermined)</td><td>${ago(s.oldest_scan)} <span class="muted">(${fmtTs(s.oldest_scan)})</span></td></tr>
       </table>
+    </div>
+    <div class="card">
+      <h2>Tracked proceedings &amp; alert recipients (${(s._tracked || []).length})</h2>
+      <div class="sub">Applications monitored for new filings and the email(s) alerted for each.</div>
+      ${(s._tracked || []).length
+        ? s._tracked.map((t) => `<div style="padding:8px 0;border-top:1px solid #e2e8f0">
+            <div style="font-weight:600">${escHtml(t.application_number)}${t.label ? ` <span class="muted">— ${escHtml(t.label)}</span>` : ''}</div>
+            <div style="font-size:0.85rem;color:#4a5568;margin-top:2px">${t.recipients ? escHtml(t.recipients) : '<span class="muted">no recipients</span>'}</div>
+          </div>`).join('')
+        : '<div class="muted">No tracked proceedings.</div>'}
     </div>
     <div class="card">
       <h2>Email subscribers (${(s._subscribers || []).length})</h2>

@@ -46,6 +46,14 @@ export default async function handler(req, res) {
         res.status(200).json({ subscribers: subs.map((s) => s.email), count: subs.length });
         return;
       }
+      // Admin-only: tracked proceedings + the alert recipients for each.
+      if (req.query && req.query.tracked) {
+        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+        res.setHeader('Cache-Control', 'no-store');
+        const watched = await listWatched();
+        res.status(200).json({ tracked: watched.map((w) => ({ application_number: w.application_number, label: w.label, recipients: w.recipients })) });
+        return;
+      }
       const [watched, findings] = await Promise.all([listWatched(), listFindings()]);
       res.status(200).json({ watched, findings });
       return;

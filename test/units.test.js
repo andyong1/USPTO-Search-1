@@ -109,6 +109,23 @@ test('parseReexamOutcome — two-column OCR interleaving splits "as amended" (90
   assert.equal(o.confirmed, '');
 });
 
+test('parseReexamOutcome — OCR confusions: footnote degree, 1->I, are->arc', () => {
+  // 90019971: a footnote "1°" injected into the confirmed claim list.
+  const a = parseReexamOutcome(
+    'NO AMENDMENTS HAVE BEEN MADE TO THE PATENT AS A RESULT OF REEXAMINATION, ' +
+    'IT HAS BEEN DETERMINED THAT: The patentability of claims 38, 39, 43, 47, ' +
+    '49-54, 56 and 1° 57 is confirmed. Claims 40-42 were not reexamined.');
+  assert.equal(a.confirmed, '38, 39, 43, 47, 49-54, 56 and 57');
+  // 90019715: "claim I is cancelled" (1 read as I).
+  const b = parseReexamOutcome('AS A RESULT OF REEXAMINATION, IT HAS BEEN DETERMINED claim I is cancelled, 2');
+  assert.equal(b.cancelled, '1');
+  // 90019767: "01'" for of, "I -6" for 1-6, "arc" for are.
+  const c = parseReexamOutcome(
+    'patentability 01\' claims I -6, 8 and 16 is confirmed. Claims 7, 9 and 10 arc cancelled.');
+  assert.equal(c.confirmed, '1-6, 8 and 16');
+  assert.equal(c.cancelled, '7, 9 and 10');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

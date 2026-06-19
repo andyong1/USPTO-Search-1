@@ -12,6 +12,7 @@ import {
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
   getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText, getConclusionText,
+  getCertsNeedingEngine2, countCertsNeedingEngine2, markCertEngine2,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
@@ -222,6 +223,7 @@ export default async function handler(req, res) {
         res.status(200).json({
           ok: true, mode: 'outcomes-inspect', app: String(req.query.app),
           cert_doc_id: (info && info.cert_doc_id) || null,
+          ocrEngine: (info && info.cert_ocr_engine) || null,
           textLen: text.replace(/\s/g, '').length,
           storedOutcome: (info && info.outcome_summary) || null,
           parsedNow: parseReexamOutcome(text),
@@ -230,6 +232,36 @@ export default async function handler(req, res) {
         });
         return;
       }
+
+      // ?outcomes=1&engine2all=1 — sweep EVERY certificate through Engine-2 OCR,
+      // skipping ones already at engine 2 (resumable). Upgrades text+outcome in
+      // place: a good engine-1 outcome is preserved if engine 2 yields none, so the
+      // page never shows a gap. ~1 cert/call (OCR is slow) — run repeatedly/schedule.
+      if (req.query.engine2all === '1') {
+        const deadline2 = Date.now() + budgetMs;
+        let ocrd = 0, parsed2 = 0, rej2 = 0, fail2 = 0, rl2 = false;
+        const errs = [], samp = [];
+        while (deadline2 - Date.now() > 40000) {
+          const todo = await getCertsNeedingEngine2(1);
+          if (!todo.length) break;
+          const r = todo[0];
+          try {
+            const x = await detectCertificateOutcome(r.application_number, r.cert_doc_id, { allowOcr: true, downloadMs: 20000, ocrChunks: 3, ocrEngine: '2' });
+            if (samp.length < 6) samp.push({ app: r.application_number, textLen: x.textLen, belongs: x.belongs, parsed: !!x.outcome });
+            if (x.belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rej2++; }
+            else if (x.outcome) { await setConclusionOutcome(r.application_number, x.outcome, x.text, '2'); ocrd++; parsed2++; }
+            else { await markCertEngine2(r.application_number, x.text); ocrd++; }
+          } catch (e) {
+            const msg = String(e && e.message || e);
+            if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rl2 = true; if (errs.length < 4) errs.push({ application: r.application_number, error: msg }); break; }
+            fail2++; if (errs.length < 4) errs.push({ application: r.application_number, error: msg });
+          }
+        }
+        const eng2remaining = await countCertsNeedingEngine2();
+        res.status(200).json({ ok: true, mode: 'engine2-sweep', ocrConfigured: ocrTextConfigured(), ocrd, parsedOutcomes: parsed2, rejected: rej2, failed: fail2, rateLimited: rl2, errors: errs, samples: samp, remaining: eng2remaining, done: eng2remaining === 0 });
+        return;
+      }
+
       let repooled = 0;
       if (req.query.reparse === '1') repooled = await resetAllConclusionParse();
       else if (req.query.reocr === '1') repooled = await clearUnparsedCertText();
@@ -281,7 +313,7 @@ export default async function handler(req, res) {
           // A certificate that cites a different proceeding (an exhibit filed under
           // the RXCERT code) is rejected: remembered and dropped, not concluded.
           if (x.belongs === false) { await markCertRejected(r.application_number, r.cert_doc_id); rejected++; }
-          else { await setConclusionOutcome(r.application_number, x.outcome, x.text); checked++; if (x.outcome) parsedOut++; }
+          else { await setConclusionOutcome(r.application_number, x.outcome, x.text, ocrEngine); checked++; if (x.outcome) parsedOut++; }
         } catch (e) {
           const msg = String(e && e.message || e);
           if (/\b429\b/.test(msg) || /too many requests|rate ?limit/i.test(msg)) { rateLimited = true; pushErr(r.application_number, e); break; }

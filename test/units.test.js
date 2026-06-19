@@ -29,6 +29,17 @@ test('parseReexamOutcome — confirmed + cancelled', () => {
   assert.equal(o.cancelled, '6 and 7');
 });
 
+test('parseReexamOutcome — OCR periods, cancelled, and a new claim (90019766)', () => {
+  const o = parseReexamOutcome(
+    'The patentability of claims 10, 14-19, 22-27 and 30-43 is confirmed. ' +
+    'Claims 1-9. 11-13, 20. 21. 28 and 29 are cancelled. ' +
+    'New claim 44 is added and determined to be patentable.');
+  assert.ok(o);
+  assert.equal(o.confirmed, '10, 14-19, 22-27 and 30-43');
+  assert.equal(o.cancelled, '1-9, 11-13, 20, 21, 28 and 29');
+  assert.equal(o.added, '44');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

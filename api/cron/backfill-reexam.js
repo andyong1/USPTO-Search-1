@@ -11,7 +11,7 @@ import {
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
-  getConclusionsToParse, setConclusionOutcome, resetConclusionParse,
+  getConclusionsToParse, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
@@ -199,7 +199,8 @@ export default async function handler(req, res) {
     // outcome (e.g. an image-only cert an earlier OCR pass missed).
     if (req.query && req.query.outcomes === '1') {
       let repooled = 0;
-      if (req.query.retry === '1') repooled = await resetConclusionParse();
+      if (req.query.reparse === '1') repooled = await resetAllConclusionParse();
+      else if (req.query.retry === '1') repooled = await resetConclusionParse();
       const deadline = Date.now() + budgetMs;
       const remainMs = () => deadline - Date.now();
       let checked = 0, parsedOut = 0, failed = 0, rateLimited = false;

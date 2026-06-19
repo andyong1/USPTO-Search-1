@@ -158,16 +158,6 @@
     <div id="asof" class="sub" style="font-weight:bold"></div>
   </div>
 
-  <div class="card" style="margin-top:24px">
-    <h2>Subscribe to Daily Email Alerts</h2>
-    <div class="sub">Get a once-daily email (8:00&nbsp;AM Pacific) listing every ex parte reexamination determination issued the previous day. Nothing is sent on days with no new determinations, and every email has a one-click unsubscribe link.</div>
-    <div class="subscribe-row">
-      <input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address for daily alerts" onkeydown="if(event.key==='Enter'){event.preventDefault();subscribeReexam();}" />
-      <button class="btn-primary" id="sub-btn" onclick="subscribeReexam()">Subscribe</button>
-    </div>
-    <div id="sub-status" class="subscribe-status" role="status" aria-live="polite"></div>
-    <div class="sub" style="margin:8px 0 0">We use your email only to send these alerts — see our <a href="/privacy" style="color:#1a3a6b">Privacy Policy</a>. Unsubscribe anytime via the link in every email.</div>
-  </div>
 
   <div class="card" style="margin-top:24px">
     <h2 id="stats-heading">Statistics — Since Jan 1, 2025</h2>
@@ -260,22 +250,6 @@ document.addEventListener('keydown', (e) => {
 
 // ── Daily email subscription ───────────────────────────────────────
 const SUB_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-async function subscribeReexam() {
-  const input = document.getElementById('sub-email');
-  const status = document.getElementById('sub-status');
-  const btn = document.getElementById('sub-btn');
-  const email = (input.value || '').trim();
-  status.className = 'subscribe-status';
-  if (!SUB_EMAIL_RE.test(email)) { status.classList.add('err'); status.textContent = 'Please enter a valid email address.'; return; }
-  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Subscribing…';
-  try {
-    const res = await fetch('/api/reexam-subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) { status.classList.add('ok'); status.textContent = data.message || 'Subscribed.'; }
-    else { status.classList.add('err'); status.textContent = data.error || 'Could not subscribe.'; }
-  } catch (e) { status.classList.add('err'); status.textContent = 'Network error. Please try again.'; }
-  finally { btn.disabled = false; btn.textContent = old; }
-}
 function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -762,5 +736,6 @@ function applyFilters() {
   }
 })();
 </script>
+<script src="/subscribe.js" defer></script>
 </body>
 </html>

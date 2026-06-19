@@ -161,7 +161,7 @@ export default async function handler(req, res) {
       existed: sub.existed,
       message: sub.existed
         ? 'This address is already subscribed.'
-        : 'Subscribed. You will receive an email the morning after any new determinations issue.',
+        : 'Subscribed. You will receive a daily email the morning after any new relevant filings issue.',
     });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'Request failed.', detail: String(err.message || err) });

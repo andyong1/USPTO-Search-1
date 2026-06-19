@@ -18,8 +18,8 @@ import {
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
-  listDeterminationsByOfficialDate, listReexamSubscribers, getSubDigestDate, setSubDigestDate,
-  getDocEventsByOfficialDate, getOwnerDigestDate, setOwnerDigestDate,
+  listReexamSubscribers, getSubDigestDate, setSubDigestDate,
+  getDocEventsByOfficialDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getOrderedReexamsToCheckPetitions,
@@ -29,7 +29,7 @@ import {
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage } from '../../lib/uspto.js';
-import { sendReexamDigest, sendReexamSubscriberDigest, sendOwnerDigest } from '../../lib/email.js';
+import { sendReexamDigest, sendComprehensiveDigestTo } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -61,10 +61,11 @@ function baseUrl(req) {
   return host ? `https://${host}` : '';
 }
 
-// Send the once-daily subscriber digest of determinations issued the previous PT
-// day. Only the scan run that lands in the 8 AM PT hour sends it (so the hourly
-// scan does not email every run); other hours are skipped. Skips entirely when
-// no determinations issued. ?forceSubEmail=1 (with date optional) bypasses the gate.
+// Send the once-daily subscriber digest — every relevant document (determinations,
+// office actions, certificates, petitions) whose USPTO date was the previous PT
+// day — to all subscribers, each with a personal one-click unsubscribe link. Only
+// the scan run in the 8 AM PT hour sends (so the hourly scan doesn't email every
+// run); skips entirely when nothing issued. ?forceSubEmail=1 bypasses the gate.
 async function maybeSendSubscriberDigest(req) {
   const force = req.query && req.query.forceSubEmail === '1';
   const now = new Date();
@@ -77,49 +78,24 @@ async function maybeSendSubscriberDigest(req) {
     if (lastSent === targetDate) return { skipped: 'already handled today' };
   }
 
-  const determinations = await listDeterminationsByOfficialDate(targetDate);
+  const events = await getDocEventsByOfficialDate(targetDate);
   // Mark the day handled even when empty, so we check at most once per day.
   if (!force) await setSubDigestDate(targetDate);
 
-  if (!determinations.length) return { date: targetDate, determinations: 0, sent: 0 };
+  if (!events.length) return { date: targetDate, newDocs: 0, sent: 0 };
 
   const subscribers = await listReexamSubscribers();
   const base = baseUrl(req);
   const dateLabel = prettyDate(targetDate);
   let sent = 0; const errors = [];
   for (const s of subscribers) {
-    const r = await sendReexamSubscriberDigest(s.email, determinations, {
+    const r = await sendComprehensiveDigestTo(s.email, events, {
       dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`,
     });
     if (r && r.sent) sent++;
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
-  return { date: targetDate, determinations: determinations.length, subscribers: subscribers.length, sent, errors };
-}
-
-// Owner daily digest (8 AM PT): every relevant document whose official USPTO date
-// was the prior day, grouped by category. Only the 8 AM PT run sends, at most once
-// per target day. ?forceOwnerEmail=1 bypasses the gate; ?ownerDate=YYYY-MM-DD picks
-// a specific day (for testing).
-async function maybeSendOwnerDigest(req) {
-  const force = req.query && req.query.forceOwnerEmail === '1';
-  const now = new Date();
-  const todayPT = ymdInTZ(now, SUB_TZ);
-  const targetDate = (req.query && req.query.ownerDate) ? String(req.query.ownerDate) : previousDay(todayPT);
-
-  if (!force) {
-    if (hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
-    const last = await getOwnerDigestDate();
-    if (last === targetDate) return { skipped: 'already handled today' };
-  }
-
-  const events = await getDocEventsByOfficialDate(targetDate);
-  // Mark the day handled even when empty, so we check at most once per day.
-  if (!force) await setOwnerDigestDate(targetDate);
-  if (!events.length) return { date: targetDate, newDocs: 0 };
-
-  const r = await sendOwnerDigest(events, { dateLabel: prettyDate(targetDate) });
-  return { date: targetDate, newDocs: events.length, send: r };
+  return { date: targetDate, newDocs: events.length, subscribers: subscribers.length, sent, errors };
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we
@@ -290,15 +266,11 @@ export default async function handler(req, res) {
       await setReexamDigestSent();
     }
 
-    // 3b) Public subscriber digest (8:00 AM PT, only on days with determinations).
+    // 3b) Public subscriber digest (8:00 AM PT): comprehensive list of the prior
+    // day's relevant filings, sent to every subscriber.
     let subscriberDigest = { skipped: true };
     try { subscriberDigest = await maybeSendSubscriberDigest(req); }
     catch (e) { subscriberDigest = { error: String(e.message || e) }; }
-
-    // 3b-ii) Owner daily digest (8 AM PT) of all newly-detected relevant docs.
-    let ownerDigest = { skipped: true };
-    try { ownerDigest = await maybeSendOwnerDigest(req); }
-    catch (e) { ownerDigest = { error: String(e.message || e) }; }
 
     // 3c) Detect the reexamination certificate (RXCERT) for ordered reexams so we
     // can flag concluded proceedings. Rolling and capped per run. We no longer
@@ -409,7 +381,6 @@ export default async function handler(req, res) {
       counts, // { total, remaining, determined }
       digest,
       subscriberDigest,
-      ownerDigest,
       conclusions,
       petitions,
       actions,

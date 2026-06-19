@@ -157,6 +157,7 @@
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:#4a5568">Examiner:</label>
       <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
+      <button id="examiner-clear" onclick="clearExaminer()" style="display:none;cursor:pointer;background:#e2e8f0;color:#1a3a6b;border:none;font-weight:600;font-size:0.82rem;padding:7px 12px;border-radius:8px">✕ Show all examiners</button>
     </div>
     <div id="examiner-stat"></div>
   </div>
@@ -212,7 +213,7 @@ function docLinks(num, docId, label) {
   if (!docId) return '';
   const lbl = (label || 'Document').replace(/'/g, '');
   const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-  return `<div class="doclinks"><button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View Certificate</button>`
+  return `<div class="doclinks"><button class="btn-view" onclick="openDocViewer('${num}','${docId}','PDF','${lbl}')">View</button>`
     + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
 }
 
@@ -245,6 +246,7 @@ function buildKpi(rows) { document.getElementById('kpi').innerHTML = outcomeKpiH
 function buildExaminerSection(rows) {
   const card = document.getElementById('examiner-card');
   document.getElementById('examiner-stat').innerHTML = '';
+  document.getElementById('examiner-clear').style.display = 'none';
   oExaminer = '';
   const names = [...new Set(rows.map((d) => (d.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (!names.length) { card.style.display = 'none'; return; }
@@ -254,9 +256,17 @@ function buildExaminerSection(rows) {
   sel.onchange = (e) => {
     const name = e.target.value;
     document.getElementById('examiner-stat').innerHTML = name ? outcomeKpiHtml(rows.filter((d) => (d.examiner_name || '').trim() === name)) : '';
+    document.getElementById('examiner-clear').style.display = name ? '' : 'none';
     // Also filter the proceedings table below to the selected examiner.
     oExaminer = name; render();
   };
+}
+// Reset the examiner selection — show all examiners / unfilter the table.
+function clearExaminer() {
+  document.getElementById('examiner-select').value = '';
+  document.getElementById('examiner-stat').innerHTML = '';
+  document.getElementById('examiner-clear').style.display = 'none';
+  oExaminer = ''; render();
 }
 
 // ── Monthly stacked-bar chart of certificates issued, by outcome ──

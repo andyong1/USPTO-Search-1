@@ -40,6 +40,29 @@ test('parseReexamOutcome — OCR periods, cancelled, and a new claim (90019766)'
   assert.equal(o.added, '44');
 });
 
+test('parseReexamOutcome — NIRC PTOL-465 form layout (list follows the label)', () => {
+  const o = parseReexamOutcome(
+    '(c) Status Of the Claim(s): (1) patent claim(s) confirmed: 1-20, ' +
+    '(2) Patent claim(s) amended (including dependent on amended claim(s)): ' +
+    '(3) Patent claim(s) canceled: (4) Newly presented claim(s) patentable: ' +
+    'STATEMENT OF REASONS FOR CONFIRMATION reexamination of Patent Claims 1-20 ' +
+    'the Request proposed that claims 1-17 and 19 are obvious');
+  assert.ok(o);
+  assert.equal(o.confirmed, '1-20');
+  assert.equal(o.cancelled, '');
+  assert.equal(o.amended, '');
+  assert.equal(o.added, '');
+});
+
+test('parseReexamOutcome — NIRC form with claims canceled, none confirmed', () => {
+  const o = parseReexamOutcome(
+    '(1) patent claim(s) confirmed: (2) Patent claim(s) amended: ' +
+    '(3) Patent claim(s) canceled: 1-15 (4) Newly presented claim(s) patentable:');
+  assert.ok(o);
+  assert.equal(o.confirmed, '');
+  assert.equal(o.cancelled, '1-15');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

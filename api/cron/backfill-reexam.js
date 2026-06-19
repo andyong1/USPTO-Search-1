@@ -11,7 +11,7 @@ import {
   getPetitionsToCheck325d, getPetitionsPendingOcr, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed, countPetitions325dPending, resetFailedPetition325d, resetDonePetition325dFalse,
   getOrderedReexamsToCheckActions, countActionsToCheck, resetReexamActions,
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
-  getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText,
+  getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText, getConclusionText,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
@@ -213,6 +213,23 @@ export default async function handler(req, res) {
     // (or large) ?maxSeconds. &retry=1 re-pools certificates that parsed to no
     // outcome (e.g. an image-only cert an earlier OCR pass missed).
     if (req.query && req.query.outcomes === '1') {
+      // Read-only inspector: ?outcomes=1&app=<num> returns one proceeding's cached
+      // certificate text (disposition region) and how it currently parses — for
+      // debugging the parser without mutating anything.
+      if (req.query.app) {
+        const info = await getConclusionText(String(req.query.app));
+        const text = (info && info.cert_text) || '';
+        res.status(200).json({
+          ok: true, mode: 'outcomes-inspect', app: String(req.query.app),
+          cert_doc_id: (info && info.cert_doc_id) || null,
+          textLen: text.replace(/\s/g, '').length,
+          storedOutcome: (info && info.outcome_summary) || null,
+          parsedNow: parseReexamOutcome(text),
+          belongs: certCitesProceeding(text, String(req.query.app)),
+          textSample: dispositionWindow(text),
+        });
+        return;
+      }
       let repooled = 0;
       if (req.query.reparse === '1') repooled = await resetAllConclusionParse();
       else if (req.query.reocr === '1') repooled = await clearUnparsedCertText();

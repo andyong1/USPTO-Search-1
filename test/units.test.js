@@ -63,6 +63,17 @@ test('parseReexamOutcome — NIRC form with claims canceled, none confirmed', ()
   assert.equal(o.cancelled, '1-15');
 });
 
+test('parseReexamOutcome — garbled all-confirmed certificate (90015497)', () => {
+  // OCR mangled "OF"->"OT" and dropped the trailing "confirmed"; the
+  // "NO AMENDMENTS ... MADE TO THE PATENT" boilerplate marks a full confirmation.
+  const o = parseReexamOutcome(
+    'EX PARTE REEXAMINATION CERTIFICATE NO AMENDMENTS IIAVF MADE TO THE PATENT ' +
+    'AS A RESULT OF REEXAMINMON, IT HAS BEEN DETERMINED Tl patentability OT claims 1-18 is 2');
+  assert.ok(o);
+  assert.equal(o.confirmed, '1-18');
+  assert.equal(o.cancelled, '');
+});
+
 test('parseReexamOutcome — none recognized returns null', () => {
   assert.equal(parseReexamOutcome('no claim disposition language'), null);
   assert.equal(parseReexamOutcome(''), null);

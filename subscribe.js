@@ -8,9 +8,10 @@
     var container = document.querySelector('.container');
     if (!container || document.getElementById('subscribe-card')) return;
     var card = document.createElement('div');
-    card.className = 'card';
     card.id = 'subscribe-card';
-    card.style.marginBottom = '24px';
+    // Self-contained styling (not the page's .card class) so the widget looks
+    // identical on every page, including ones that don't define .card.
+    card.style.cssText = 'background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);padding:24px;margin-bottom:24px';
     card.innerHTML =
       '<h2 style="font-size:1.15rem;color:#1a3a6b;margin:0 0 6px">Subscribe to Daily Email Alerts</h2>' +
       '<div style="color:#718096;font-size:0.85rem;margin-bottom:14px">Get a once-daily email (8:00&nbsp;AM Pacific) listing relevant filings (determinations, office actions, certificates, petitions) issued the previous day. Every email has a one-click unsubscribe link.</div>' +

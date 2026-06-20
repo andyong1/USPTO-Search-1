@@ -1194,7 +1194,14 @@ function clearAdminPassword() { sessionStorage.removeItem('adminPw'); }
 async function editRecipients(appNum, current) {
   const pw = await getAdminPassword();
   if (pw === null) return; // cancelled / incorrect
-  const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, current || '');
+  // Recipient emails aren't in the public list (PII); fetch the current value as
+  // an admin so the prompt is pre-filled and editing doesn't clobber it.
+  let cur = current || '';
+  try {
+    const r = await fetch('/api/watchlist?tracked=1', { headers: { 'X-Admin-Password': pw } });
+    if (r.ok) { const d = await r.json(); const m = (d.tracked || []).find((t) => t.application_number === appNum); if (m) cur = m.recipients || ''; }
+  } catch { /* fall back to whatever was passed */ }
+  const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, cur);
   if (v === null) return; // cancelled
   try {
     const res = await fetch('/api/watchlist', {

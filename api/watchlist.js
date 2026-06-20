@@ -28,6 +28,14 @@ function isAdmin(req) {
   return (req.headers['x-admin-password'] || '') === required;
 }
 
+// Recipient emails are PII — strip them for non-admin callers so the public
+// /api/watchlist response can't be scraped for addresses. Admins (valid
+// X-Admin-Password) still get them, which powers the recipient-edit flow.
+function maskWatched(watched, req) {
+  if (isAdmin(req)) return watched;
+  return watched.map((w) => { const { recipients, ...rest } = w; return rest; });
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
@@ -55,7 +63,7 @@ export default async function handler(req, res) {
         return;
       }
       const [watched, findings] = await Promise.all([listWatched(), listFindings()]);
-      res.status(200).json({ watched, findings });
+      res.status(200).json({ watched: maskWatched(watched, req), findings });
       return;
     }
 
@@ -87,7 +95,7 @@ export default async function handler(req, res) {
         if (!num) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
         await setRecipients(num, normalizeRecipients(body.recipients));
         const watched = await listWatched();
-        res.status(200).json({ ok: true, watched });
+        res.status(200).json({ ok: true, watched: maskWatched(watched, req) });
         return;
       }
 
@@ -102,7 +110,7 @@ export default async function handler(req, res) {
       catch (e) { baseline = { error: String(e.message || e) }; }
 
       const watched = await listWatched();
-      res.status(200).json({ ok: true, watched, baseline, existed: addResult.existed });
+      res.status(200).json({ ok: true, watched: maskWatched(watched, req), baseline, existed: addResult.existed });
       return;
     }
 

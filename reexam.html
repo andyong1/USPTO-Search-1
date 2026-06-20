@@ -509,7 +509,7 @@ function filteredSorted() {
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
   let items = allDeterminations;
   if (q) {
-    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type, d.outcome_summary]
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const { key, dir } = tableSort;

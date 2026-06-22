@@ -153,10 +153,15 @@ export default async function handler(req, res) {
 
       const addResult = await addWatched(appNum, body.label, normalizeRecipients(body.recipients));
 
-      // Baseline existing documents so only FUTURE filings count as "new".
+      // Baseline existing documents so only FUTURE filings count as "new". Only a
+      // brand-new entry needs this; an already-tracked proceeding was baselined
+      // when first added, so re-syncing on a plain email-list edit is redundant
+      // (and would surface USPTO API errors for what isn't a tracking change).
       let baseline = null;
-      try { baseline = await syncApplication(appNum, false); }
-      catch (e) { baseline = { error: String(e.message || e) }; }
+      if (!addResult.existed) {
+        try { baseline = await syncApplication(appNum, false); }
+        catch (e) { baseline = { error: String(e.message || e) }; }
+      }
 
       const watched = await listWatched();
       res.status(200).json({ ok: true, watched: maskWatched(watched, req), baseline, existed: addResult.existed });

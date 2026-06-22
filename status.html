@@ -82,6 +82,47 @@ async function go() {
 }
 
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+// Escape a value for safe embedding inside a single-quoted JS string in an onclick attribute.
+function jsq(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+// Re-fetch and re-render using the password stored this session (the gate input
+// may be empty after an auto-load, so don't rely on go() here).
+function refresh() {
+  const pw = sessionStorage.getItem(PW_KEY);
+  if (pw) load(pw).then(render).catch(() => location.reload());
+}
+
+// Edit/remove run with the already-entered admin password — no re-prompt. The
+// server still enforces the password header; the UI just reuses the stored one.
+async function statusEditRecipients(appNum, current) {
+  const pw = sessionStorage.getItem(PW_KEY);
+  if (!pw) { location.reload(); return; }
+  const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, current || '');
+  if (v === null) return;
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+      body: JSON.stringify({ action: 'updateRecipients', applicationNumber: appNum, recipients: v }),
+    });
+    if (res.status === 401) { sessionStorage.removeItem(PW_KEY); alert('Session expired — please sign in again.'); location.reload(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    refresh();
+  } catch (e) { alert('Could not update recipients: ' + e.message); }
+}
+
+async function statusRemoveWatch(appNum) {
+  const pw = sessionStorage.getItem(PW_KEY);
+  if (!pw) { location.reload(); return; }
+  if (!confirm('Stop tracking ' + appNum + '?')) return;
+  try {
+    const res = await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), { method: 'DELETE', headers: { 'X-Admin-Password': pw } });
+    if (res.status === 401) { sessionStorage.removeItem(PW_KEY); alert('Session expired — please sign in again.'); location.reload(); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || ('HTTP ' + res.status)); }
+    refresh();
+  } catch (e) { alert('Could not remove: ' + e.message); }
+}
 
 async function load(pw) {
   const h = { 'X-Admin-Password': pw };
@@ -140,12 +181,26 @@ function render(s) {
     </div>
     <div class="card">
       <h2>Tracked proceedings &amp; alert recipients (${(s._tracked || []).length})</h2>
-      <div class="sub">Applications monitored for new filings and the email(s) alerted for each.</div>
+      <div class="sub">Applications monitored for new filings and the email(s) alerted for each. Edits apply immediately.</div>
       ${(s._tracked || []).length
-        ? s._tracked.map((t) => `<div style="padding:8px 0;border-top:1px solid #e2e8f0">
-            <div style="font-weight:600">${escHtml(t.application_number)}${t.label ? ` <span class="muted">— ${escHtml(t.label)}</span>` : ''}</div>
-            <div style="font-size:0.85rem;color:#4a5568;margin-top:2px">${t.recipients ? escHtml(t.recipients) : '<span class="muted">no recipients</span>'}</div>
-          </div>`).join('')
+        ? `<table><thead><tr>
+            <th style="text-align:left;font-weight:600;color:#718096;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px">Application</th>
+            <th style="text-align:left;font-weight:600;color:#718096;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px">Label</th>
+            <th style="text-align:left;font-weight:600;color:#718096;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px">Latest filing</th>
+            <th style="text-align:left;font-weight:600;color:#718096;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px">Recipients</th>
+            <th style="text-align:left;font-weight:600;color:#718096;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px">Actions</th>
+          </tr></thead><tbody>
+          ${s._tracked.map((t) => `<tr>
+            <td style="width:auto;font-weight:600">${escHtml(t.application_number)}</td>
+            <td style="font-weight:400">${t.label ? escHtml(t.label) : '<span class="muted">—</span>'}</td>
+            <td style="font-weight:400">${fmtDate(t.latest_date)}</td>
+            <td style="font-weight:400;font-size:0.85rem">${t.recipients ? escHtml(t.recipients) : '<span class="muted">no recipients</span>'}</td>
+            <td style="font-weight:400;white-space:nowrap">
+              <button style="padding:5px 10px;font-size:0.8rem" onclick="statusEditRecipients('${jsq(t.application_number)}','${jsq(t.recipients || '')}')">✎ Edit emails</button>
+              <button style="padding:5px 10px;font-size:0.8rem;background:#c53030" onclick="statusRemoveWatch('${jsq(t.application_number)}')">× Remove</button>
+            </td>
+          </tr>`).join('')}
+          </tbody></table>`
         : '<div class="muted">No tracked proceedings.</div>'}
     </div>
     <div class="card">

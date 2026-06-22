@@ -4,9 +4,9 @@
 // `Authorization: Bearer <CRON_SECRET>`. See the README for setup.
 //
 // Email behavior:
-//   - New filings → grouped by each application's recipient set; one email per
-//     recipient set covering all their applications. Applications with NO
-//     recipients listed send nothing.
+//   - New filings → one email per individual recipient covering all of their
+//     applications, each with a personal "unsubscribe from all" link.
+//     Applications with NO recipients listed send nothing.
 //   - No email is sent when there are no new filings.
 
 import { listWatched, syncApplication } from '../../lib/db.js';
@@ -14,6 +14,12 @@ import { sendDigestTo, parseRecipients } from '../../lib/email.js';
 
 // Give the job more time than the default (in case of many tracked applications).
 export const config = { maxDuration: 60 };
+
+function baseUrl(req) {
+  if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
+  return host ? `https://${host}` : '';
+}
 
 export default async function handler(req, res) {
   // Accept the secret from the Authorization header (with or without "Bearer ")
@@ -29,7 +35,7 @@ export default async function handler(req, res) {
   try {
     const watched = await listWatched();
     const results = [];
-    const groups = new Map(); // recipientSetKey -> { recipients: [...], docs: [...] }
+    const byRecipient = new Map(); // email (lowercased) -> { email, docs: [...] }
     let totalNew = 0;
 
     // Check applications with limited concurrency so total time is bounded by the
@@ -50,21 +56,23 @@ export default async function handler(req, res) {
       results.push({ application: w.application_number, total: r.total, added: r.added });
 
       if (r.added > 0) {
-        const recipients = parseRecipients(w.recipients);
-        if (recipients.length) {
-          // Group by the exact recipient set so shared recipients get one email.
-          const key = recipients.map((e) => e.toLowerCase()).sort().join(',');
-          if (!groups.has(key)) groups.set(key, { recipients, docs: [] });
-          groups.get(key).docs.push(...r.addedDocs);
+        // One email per individual recipient (covering all their apps), so each
+        // carries a personal unsubscribe link.
+        for (const email of parseRecipients(w.recipients)) {
+          const key = email.toLowerCase();
+          if (!byRecipient.has(key)) byRecipient.set(key, { email, docs: [] });
+          byRecipient.get(key).docs.push(...r.addedDocs);
         }
         // No recipients listed → send nothing for this application.
       }
     }
 
-    // Send one digest per recipient set. No email when there's nothing new.
+    // Send one digest per recipient, each with a personal unsubscribe link.
+    const base = baseUrl(req);
     const emails = [];
-    for (const g of groups.values()) {
-      try { emails.push(await sendDigestTo(g.recipients, g.docs)); }
+    for (const g of byRecipient.values()) {
+      const unsubscribeUrl = base ? `${base}/api/watchlist?unsubscribeAlerts=${encodeURIComponent(g.email)}` : '';
+      try { emails.push(await sendDigestTo([g.email], g.docs, { unsubscribeUrl })); }
       catch (e) { emails.push({ error: String(e.message || e) }); }
     }
 

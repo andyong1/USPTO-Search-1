@@ -9,7 +9,7 @@
 // ADMIN_PASSWORD env var (enforced only if ADMIN_PASSWORD is set).
 
 import {
-  listWatched, addWatched, removeWatched, setRecipients,
+  listWatched, addWatched, removeWatched, setRecipients, removeRecipientFromAllWatched,
   listFindings, acknowledgeFindings, acknowledgeFinding, syncApplication,
   getStatusSnapshot, listReexamSubscribers,
 } from '../lib/db.js';
@@ -18,6 +18,14 @@ import {
 function normalizeRecipients(s) {
   const list = String(s || '').split(/[,;]/).map((x) => x.trim()).filter(Boolean);
   return list.length ? list.join(', ') : null;
+}
+
+function esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+// Minimal standalone page for the email-link unsubscribe confirm/result.
+function unsubPage(title, inner) {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${esc(title)}</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f4f8;color:#2d3748;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}.box{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);padding:32px 28px;max-width:460px;text-align:center}h1{font-size:1.25rem;color:#1a3a6b;margin:0 0 10px}p{font-size:0.95rem;line-height:1.5;margin:0 0 18px}.btn{display:inline-block;background:#1a3a6b;color:#fff;border:none;cursor:pointer;text-decoration:none;font-weight:600;font-size:0.95rem;padding:10px 18px;border-radius:8px}.btn:hover{background:#15305a}.btn.muted{background:#e2e8f0;color:#1a3a6b;margin-left:8px}</style></head><body><div class="box"><h1>${esc(title)}</h1>${inner}</div></body></html>`;
 }
 
 // True if admin protection passes. If ADMIN_PASSWORD isn't set, protection is
@@ -39,6 +47,23 @@ function maskWatched(watched, req) {
 export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
+      // Unsubscribe-from-all-tracked-proceedings (from an alert email's link):
+      // GET shows a confirmation page only — no state change — so email security
+      // scanners that pre-fetch the link don't unsubscribe anyone. Removal happens
+      // on the POST below.
+      if (req.query && req.query.unsubscribeAlerts) {
+        const email = String(req.query.unsubscribeAlerts);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.status(200).send(unsubPage('Unsubscribe',
+          `<p>Stop sending <strong>${esc(email)}</strong> new-filing alerts for <strong>all</strong> tracked proceedings?</p>
+           <form method="POST" action="/api/watchlist" style="margin:0">
+             <input type="hidden" name="action" value="unsubscribeAlerts" />
+             <input type="hidden" name="email" value="${esc(email)}" />
+             <button class="btn" type="submit">Unsubscribe</button>
+             <a class="btn muted" href="/uspto-search">Cancel</a>
+           </form>`));
+        return;
+      }
       // Admin-only operational snapshot for the /status page.
       if (req.query && req.query.status) {
         if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
@@ -59,7 +84,7 @@ export default async function handler(req, res) {
         if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
         res.setHeader('Cache-Control', 'no-store');
         const watched = await listWatched();
-        res.status(200).json({ tracked: watched.map((w) => ({ application_number: w.application_number, label: w.label, recipients: w.recipients })) });
+        res.status(200).json({ tracked: watched.map((w) => ({ application_number: w.application_number, label: w.label, recipients: w.recipients, latest_date: w.latest_date })) });
         return;
       }
       const [watched, findings] = await Promise.all([listWatched(), listFindings()]);
@@ -69,8 +94,32 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       let body = req.body;
-      if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+      if (typeof body === 'string') {
+        // JSON (on-site fetch) or x-www-form-urlencoded (the unsubscribe form / one-click).
+        try { body = JSON.parse(body); }
+        catch { body = Object.fromEntries(new URLSearchParams(body)); }
+      }
       body = body || {};
+
+      // Unsubscribe an email from ALL tracked proceedings. Public + self-service:
+      // the on-site box (JSON), the email confirm-page form (urlencoded → HTML
+      // result), or an RFC 8058 one-click POST (List-Unsubscribe=One-Click).
+      const oneClick = body['List-Unsubscribe'] === 'One-Click';
+      if (body.action === 'unsubscribeAlerts' || oneClick) {
+        const email = String(body.email || (req.query && req.query.unsubscribeAlerts) || '').trim();
+        const removed = email ? await removeRecipientFromAllWatched(email) : 0;
+        const wantsHtml = !oneClick && !String(req.headers['content-type'] || '').includes('application/json');
+        if (wantsHtml) {
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.status(200).send(unsubPage(removed ? 'Unsubscribed' : 'Nothing to remove',
+            removed
+              ? `<p><strong>${esc(email)}</strong> was removed from ${removed} tracked proceeding${removed === 1 ? '' : 's'} and will no longer receive new-filing alerts.</p><a class="btn" href="/uspto-search">Back to the app</a>`
+              : `<p>No tracked proceedings were sending alerts to <strong>${esc(email)}</strong> (it may already have been removed).</p><a class="btn" href="/uspto-search">Back to the app</a>`));
+          return;
+        }
+        res.status(200).json({ ok: true, email, removed });
+        return;
+      }
 
       if (body.action === 'verifyAdmin') {
         if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }

@@ -320,7 +320,7 @@
         <div class="spinner" id="track-spinner"></div>
       </button>
     </div>
-    <p class="hint" style="margin:-4px 0 16px">Added tracked proceedings will appear in the "Tracked Proceedings" list below.</p>
+    <p class="hint" style="margin:-4px 0 16px">We email the addresses above whenever a new document is filed on a tracked application.</p>
 
     <div class="results-header" style="margin-bottom:10px">
       <h2 style="border:none;padding:0;margin:0">New Filings (daily check) <span id="new-count"></span></h2>
@@ -330,6 +330,16 @@
     </div>
     <p class="hint" style="margin:0 0 10px"><strong>Note:</strong> Documents with tomorrow's date will not be accessible until tomorrow.</p>
     <div id="findings-list"></div>
+
+    <div style="border-top:1px solid #e2e8f0;margin-top:18px;padding-top:16px">
+      <h2 style="border:none;padding:0;margin:0 0 4px;font-size:1.05rem">Unsubscribe from Alerts</h2>
+      <p class="hint" style="margin:0 0 10px">Enter an email to stop its new-filing alerts for every tracked proceeding.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="email" id="unsub-email" placeholder="you@example.com" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #cbd5e0;border-radius:8px;font-size:0.95rem" onkeydown="if(event.key==='Enter'){event.preventDefault();unsubscribeAlerts();}" />
+        <button class="btn btn-secondary" id="unsub-btn" onclick="unsubscribeAlerts()">Unsubscribe from all tracked proceedings</button>
+      </div>
+      <div id="unsub-status" class="hint" style="margin-top:8px" role="status" aria-live="polite"></div>
+    </div>
   </div>
   </aside>
 
@@ -462,12 +472,6 @@
   </div>
   </main>
 
- </div>
-
- <!-- TRACKED PROCEEDINGS LIST (full width, below) -->
- <div class="search-card" id="tracked-list-card">
-   <h2 id="tracked-heading">Tracked Proceedings</h2>
-   <div id="watched-list"></div>
  </div>
 
  <footer style="text-align:center;padding:24px 16px 8px;color:#718096;font-size:0.8rem">
@@ -1073,70 +1077,33 @@ document.addEventListener('keydown', e => {
 
 // ── Tracked proceedings + new filings ──────────────────────────────
 async function loadWatchlist() {
-  renderWatched([]);   // show friendly empty states immediately
   renderFindings([]);
   try {
     const res = await fetch('/api/watchlist');
     if (!res.ok) return; // proxy/DB not configured yet (e.g. local static preview)
     const data = await res.json();
-    renderWatched(data.watched || []);
     renderFindings(data.findings || []);
   } catch { /* not deployed / offline — keep empty states */ }
 }
 
-let watchedData = [];
-let watchedSort = { key: 'application_number', dir: 'asc' };
-
-function sortWatched(key) {
-  if (watchedSort.key === key) watchedSort.dir = watchedSort.dir === 'asc' ? 'desc' : 'asc';
-  // First click on the filing-date column shows the most recent first; other
-  // columns start ascending.
-  else watchedSort = { key, dir: key === 'latest_date' ? 'desc' : 'asc' };
-  renderWatched(watchedData);
-}
-
-function renderWatched(list) {
-  watchedData = list || [];
-  const heading = document.getElementById('tracked-heading');
-  if (heading) heading.textContent = `Tracked Proceedings (Total: ${watchedData.length})`;
-  const el = document.getElementById('watched-list');
-  if (!watchedData.length) {
-    el.innerHTML = '<span class="hint">No proceedings tracked yet. Add an application number above to start monitoring it daily.</span>';
-    return;
-  }
-
-  const { key, dir } = watchedSort;
-  const sorted = [...watchedData].sort((a, b) => {
-    const av = (a[key] || '').toString();
-    const bv = (b[key] || '').toString();
-    const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
-    return dir === 'asc' ? cmp : -cmp;
-  });
-  const arrow = (k) => (watchedSort.key === k ? (watchedSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
-
-  const rows = sorted.map((w) => {
-    const appJs = jsq(w.application_number);
-    const recips = w.recipients || '';
-    return `<tr>
-      <td><a class="app-link" href="#" onclick="openInAppLookup('${appJs}');return false;" title="View full record in this app">${esc(w.application_number)}</a></td>
-      <td>${w.label ? esc(w.label) : '<span class="hint">—</span>'}</td>
-      <td>${w.latest_date ? fmtDate(w.latest_date) : '<span class="hint">—</span>'}</td>
-      <td style="white-space:nowrap">
-        <button class="dl-link" style="cursor:pointer" onclick="editRecipients('${appJs}','${jsq(recips)}')">✎ Edit emails</button>
-        <button class="dl-link" style="cursor:pointer;color:#c53030" onclick="removeWatch('${appJs}')">× Remove</button>
-      </td>
-    </tr>`;
-  }).join('');
-
-  el.innerHTML = `<div class="result-table-wrap sticky-head"><table>
-    <thead><tr>
-      <th style="cursor:pointer" onclick="sortWatched('application_number')" title="Sort by application number">Application${arrow('application_number')}</th>
-      <th style="cursor:pointer" onclick="sortWatched('label')" title="Sort by label">Label${arrow('label')}</th>
-      <th style="cursor:pointer" onclick="sortWatched('latest_date')" title="Sort by most recent filing">Date of Latest Filing${arrow('latest_date')}</th>
-      <th>Actions</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+// Unsubscribe an email from new-filing alerts on ALL tracked proceedings.
+async function unsubscribeAlerts() {
+  const input = document.getElementById('unsub-email');
+  const status = document.getElementById('unsub-status');
+  const btn = document.getElementById('unsub-btn');
+  const email = (input.value || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.style.color = '#c53030'; status.textContent = 'Please enter a valid email address.'; return; }
+  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Unsubscribing…';
+  try {
+    const res = await fetch('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsubscribeAlerts', email }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      status.style.color = '#276749';
+      status.textContent = data.removed ? `Unsubscribed — removed from ${data.removed} tracked proceeding${data.removed === 1 ? '' : 's'}.` : 'That email was not on any tracked proceeding.';
+      input.value = '';
+    } else { status.style.color = '#c53030'; status.textContent = data.error || 'Could not unsubscribe.'; }
+  } catch (e) { status.style.color = '#c53030'; status.textContent = 'Network error. Please try again.'; }
+  finally { btn.disabled = false; btn.textContent = old; }
 }
 
 function renderFindings(list) {
@@ -1190,9 +1157,10 @@ async function addWatch() {
     document.getElementById('tr-appnum').value = '';
     document.getElementById('tr-label').value = '';
     document.getElementById('tr-recipients').value = '';
-    renderWatched(data.watched || []);
     if (data.existed) {
       alert(appNum + ' is already tracked — any new notification email(s) were added to its existing list.');
+    } else {
+      alert('Now tracking ' + appNum + '. New filings will be emailed to the addresses you listed.');
     }
     if (data.baseline && data.baseline.error) {
       alert('Tracking started, but the initial document sync failed:\n' + data.baseline.error);
@@ -1202,74 +1170,6 @@ async function addWatch() {
   } finally {
     trackLoading(false);
   }
-}
-
-// Admin password for protected actions (Edit / Remove), cached for the session.
-// Verifies the password with the server before caching, so an incorrect entry
-// is reported immediately (not after the next prompt).
-async function getAdminPassword() {
-  const cached = sessionStorage.getItem('adminPw');
-  if (cached) return cached;
-
-  const pw = prompt('Enter the admin password to edit or remove tracked proceedings:');
-  if (pw === null || pw === '') return null; // cancelled / empty
-
-  try {
-    const res = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
-      body: JSON.stringify({ action: 'verifyAdmin' }),
-    });
-    if (res.status === 401) { alert('Incorrect admin password.'); return null; }
-    if (!res.ok) { alert('Could not verify password (HTTP ' + res.status + ').'); return null; }
-  } catch (e) {
-    alert('Could not verify password: ' + e.message);
-    return null;
-  }
-  sessionStorage.setItem('adminPw', pw);
-  return pw;
-}
-function clearAdminPassword() { sessionStorage.removeItem('adminPw'); }
-
-async function editRecipients(appNum, current) {
-  const pw = await getAdminPassword();
-  if (pw === null) return; // cancelled / incorrect
-  // Recipient emails aren't in the public list (PII); fetch the current value as
-  // an admin so the prompt is pre-filled and editing doesn't clobber it.
-  let cur = current || '';
-  try {
-    const r = await fetch('/api/watchlist?tracked=1', { headers: { 'X-Admin-Password': pw } });
-    if (r.ok) { const d = await r.json(); const m = (d.tracked || []).find((t) => t.application_number === appNum); if (m) cur = m.recipients || ''; }
-  } catch { /* fall back to whatever was passed */ }
-  const v = prompt(`Notification emails for ${appNum} (comma-separated).\nLeave blank to send no alert for this application:`, cur);
-  if (v === null) return; // cancelled
-  try {
-    const res = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
-      body: JSON.stringify({ action: 'updateRecipients', applicationNumber: appNum, recipients: v }),
-    });
-    if (res.status === 401) { clearAdminPassword(); alert('Incorrect admin password. Please try again.'); return; }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
-    renderWatched(data.watched || []);
-  } catch (e) {
-    alert('Could not update recipients: ' + e.message);
-  }
-}
-
-async function removeWatch(appNum) {
-  const pw = await getAdminPassword();
-  if (pw === null) return; // cancelled / incorrect
-  if (!confirm('Stop tracking ' + appNum + '?')) return;
-  try {
-    const res = await fetch('/api/watchlist?applicationNumber=' + encodeURIComponent(appNum), {
-      method: 'DELETE',
-      headers: { 'X-Admin-Password': pw },
-    });
-    if (res.status === 401) { clearAdminPassword(); alert('Incorrect admin password. Please try again.'); return; }
-    loadWatchlist();
-  } catch (e) { alert('Could not remove: ' + e.message); }
 }
 
 async function ackFindings() {

@@ -320,7 +320,7 @@
         <div class="spinner" id="track-spinner"></div>
       </button>
     </div>
-    <p class="hint" style="margin:-4px 0 16px">We email the addresses above whenever a new document is filed on a tracked application.</p>
+    <p class="hint" style="margin:-4px 0 16px">We email the addresses above whenever a new document is filed on a tracked application. Unsubscribe anytime via the link in every email.</p>
 
     <div class="results-header" style="margin-bottom:10px">
       <h2 style="border:none;padding:0;margin:0">New Filings (daily check) <span id="new-count"></span></h2>
@@ -330,16 +330,6 @@
     </div>
     <p class="hint" style="margin:0 0 10px"><strong>Note:</strong> Documents with tomorrow's date will not be accessible until tomorrow.</p>
     <div id="findings-list"></div>
-
-    <div style="border-top:1px solid #e2e8f0;margin-top:18px;padding-top:16px">
-      <h2 style="border:none;padding:0;margin:0 0 4px;font-size:1.05rem">Unsubscribe from Alerts</h2>
-      <p class="hint" style="margin:0 0 10px">Enter an email to stop its new-filing alerts for every tracked proceeding.</p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input type="email" id="unsub-email" placeholder="you@example.com" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #cbd5e0;border-radius:8px;font-size:0.95rem" onkeydown="if(event.key==='Enter'){event.preventDefault();unsubscribeAlerts();}" />
-        <button class="btn btn-secondary" id="unsub-btn" onclick="unsubscribeAlerts()">Unsubscribe from all tracked proceedings</button>
-      </div>
-      <div id="unsub-status" class="hint" style="margin-top:8px" role="status" aria-live="polite"></div>
-    </div>
   </div>
   </aside>
 
@@ -1084,26 +1074,6 @@ async function loadWatchlist() {
     const data = await res.json();
     renderFindings(data.findings || []);
   } catch { /* not deployed / offline — keep empty states */ }
-}
-
-// Unsubscribe an email from new-filing alerts on ALL tracked proceedings.
-async function unsubscribeAlerts() {
-  const input = document.getElementById('unsub-email');
-  const status = document.getElementById('unsub-status');
-  const btn = document.getElementById('unsub-btn');
-  const email = (input.value || '').trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { status.style.color = '#c53030'; status.textContent = 'Please enter a valid email address.'; return; }
-  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Unsubscribing…';
-  try {
-    const res = await fetch('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unsubscribeAlerts', email }) });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.ok) {
-      status.style.color = '#276749';
-      status.textContent = data.removed ? `Unsubscribed — removed from ${data.removed} tracked proceeding${data.removed === 1 ? '' : 's'}.` : 'That email was not on any tracked proceeding.';
-      input.value = '';
-    } else { status.style.color = '#c53030'; status.textContent = data.error || 'Could not unsubscribe.'; }
-  } catch (e) { status.style.color = '#c53030'; status.textContent = 'Network error. Please try again.'; }
-  finally { btn.disabled = false; btn.textContent = old; }
 }
 
 function renderFindings(list) {

@@ -304,7 +304,7 @@
     <div class="track-row" style="margin-bottom:16px">
       <div class="form-group" style="flex:1 1 100%; min-width:180px">
         <label>Application Number</label>
-        <input type="text" id="tr-appnum" placeholder="e.g. 16123456" />
+        <input type="text" id="tr-appnum" placeholder="e.g. 16/123,456 or 16123456" />
       </div>
       <div class="form-group" style="flex:1 1 100%; min-width:160px">
         <label>Label (optional)</label>
@@ -417,10 +417,14 @@
 
     <!-- LOOKUP -->
     <div class="tab-panel" id="tab-lookup">
-      <div class="form-group" style="max-width:360px">
-        <label>Application Number</label>
-        <input type="text" id="lk-appnum" placeholder="16123456" />
-        <span class="hint">Pulls the full record: overview, documents, continuity, and more.</span>
+      <div class="form-group" style="max-width:420px">
+        <label>Application or Patent Number</label>
+        <div style="display:flex;gap:18px;margin:2px 0 8px;font-size:0.9rem">
+          <label style="font-weight:normal;display:inline-flex;align-items:center;gap:5px"><input type="radio" name="lk-kind" value="application" checked onchange="lkKind()"> Application / control no.</label>
+          <label style="font-weight:normal;display:inline-flex;align-items:center;gap:5px"><input type="radio" name="lk-kind" value="patent" onchange="lkKind()"> Patent no.</label>
+        </div>
+        <input type="text" id="lk-appnum" placeholder="e.g. 16/123,456 or 16123456" onkeydown="if(event.key==='Enter'){event.preventDefault();run();}" />
+        <span class="hint">Pulls the full record: overview, documents, continuity, and more. Any common format works.</span>
       </div>
     </div>
 
@@ -731,9 +735,45 @@ function openInAppLookup(appNum) {
   doLookup(appNum);
 }
 
+// Update the lookup input placeholder to match the selected number kind.
+function lkKind() {
+  const kind = (document.querySelector('input[name="lk-kind"]:checked') || {}).value;
+  const el = document.getElementById('lk-appnum');
+  if (el) el.placeholder = kind === 'patent' ? 'e.g. 10,123,456 or 10123456' : 'e.g. 16/123,456 or 16123456';
+}
+
+// Resolve the lookup input to an application/control number. For a patent number,
+// find the corresponding application via the search proxy first. Tolerant of any
+// common format (slashes, commas, spaces) — only the alphanumerics matter.
+async function resolveLookupNumber(kind, raw) {
+  if (kind === 'patent') {
+    const pn = String(raw || '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+    if (!pn) throw new Error('Enter a patent number.');
+    const res = await fetch('/api/search', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: `applicationMetaData.patentNumber:${pn}`,
+        fields: ['applicationNumberText', 'applicationMetaData.patentNumber'],
+        pagination: { offset: 0, limit: 1 },
+      }),
+    });
+    if (!res.ok) throw new Error('Patent lookup failed (HTTP ' + res.status + ').');
+    const data = await res.json().catch(() => ({}));
+    const rec = (data.patentFileWrapperDataBag || [])[0];
+    const appNum = rec && (rec.applicationNumberText || (rec.applicationMetaData && rec.applicationMetaData.applicationNumberText));
+    if (!appNum) throw new Error('No application found for patent ' + pn + '.');
+    return appNum;
+  }
+  const n = String(raw || '').replace(/[^0-9A-Za-z]/g, '');
+  if (!n) throw new Error('Enter an application or control number.');
+  return n;
+}
+
 async function runLookup() {
-  const appNum = val('lk-appnum').replace(/[^0-9A-Za-z/]/g, '');
-  if (!appNum) { alert('Enter an application number.'); return; }
+  const kind = (document.querySelector('input[name="lk-kind"]:checked') || {}).value || 'application';
+  let appNum;
+  try { appNum = await resolveLookupNumber(kind, val('lk-appnum')); }
+  catch (e) { alert(e.message || 'Lookup failed.'); return; }
   pushView({ view: 'record', appNum });
   await doLookup(appNum);
 }
@@ -1133,7 +1173,7 @@ function renderFindings(list) {
 }
 
 async function addWatch() {
-  const appNum = document.getElementById('tr-appnum').value.trim().replace(/[^0-9A-Za-z/]/g, '');
+  const appNum = document.getElementById('tr-appnum').value.replace(/[^0-9A-Za-z]/g, '');
   const label  = document.getElementById('tr-label').value.trim();
   const recipients = document.getElementById('tr-recipients').value.trim();
   if (!appNum) { alert('Enter an application number to track.'); return; }

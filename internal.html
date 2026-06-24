@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Internal — Patent File Wrapper Search</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='4'%20fill='%230a0a0a'/%3E%3Crect%20x='6'%20y='6'%20width='20'%20height='20'%20rx='2'%20fill='%23ff5100'/%3E%3C/svg%3E" />
+  <style>
+    /* ── Goodwin-style palette: vivid orange on near-black, warm neutrals ── */
+    :root {
+      --ink: #0a0a0a;          /* near-black: header, headings, body text */
+      --ink-soft: #3a3a3a;
+      --accent: #ff5100;       /* Goodwin orange */
+      --accent-dark: #d94500;  /* hover */
+      --bg: #f5f3f0;           /* warm off-white page */
+      --surface: #ffffff;
+      --line: #e3ded7;
+      --muted: #6f6a63;
+      --field-border: #cfc8bf;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* ── Header: black bar, orange accent rule under it ── */
+    header {
+      background: var(--ink);
+      color: #fff;
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      border-bottom: 4px solid var(--accent);
+    }
+    .mark {
+      width: 40px; height: 40px; border-radius: 4px;
+      background: var(--accent); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.25rem; color: var(--ink); letter-spacing: -0.04em;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+    header h1 .accent { color: var(--accent); }
+    header p { font-size: 0.78rem; opacity: 0.7; margin-top: 3px; letter-spacing: 0.02em; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 18px 64px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      padding: 28px;
+    }
+    .card + .card { margin-top: 22px; }
+
+    .card h2 {
+      font-size: 1.05rem; font-weight: 700; color: var(--ink);
+      margin-bottom: 18px; padding-bottom: 12px;
+      border-bottom: 2px solid var(--ink);
+      display: inline-block;
+    }
+    .eyebrow {
+      display: inline-block; font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; border-bottom: 2px solid var(--line); }
+    .tab-btn {
+      padding: 9px 20px; border: none; background: none; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+    }
+    .tab-btn:hover { color: var(--ink); }
+    .tab-btn.active { color: var(--ink); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Form ── */
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px; margin-bottom: 18px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.74rem; font-weight: 700; color: var(--ink-soft);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    input, select {
+      padding: 10px 12px; border: 1.5px solid var(--field-border); border-radius: 3px;
+      font-size: 0.9rem; color: var(--ink); background: #fff; transition: all 0.15s;
+    }
+    input::placeholder { color: #b3aca2; }
+    input:focus, select:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(255,81,0,0.15);
+    }
+
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+
+    /* ── Buttons ── */
+    .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+    .btn {
+      padding: 12px 26px; border-radius: 3px; border: none; cursor: pointer;
+      font-size: 0.92rem; font-weight: 700; letter-spacing: 0.01em; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+    .btn-ghost:hover { background: var(--ink); color: #fff; }
+
+    .preview-note {
+      margin-top: 22px; padding: 14px 16px; border-left: 3px solid var(--accent);
+      background: #fff7f2; color: var(--ink-soft); font-size: 0.85rem; border-radius: 0 3px 3px 0;
+    }
+
+    /* ── Admin gate ── */
+    .gate-wrap { max-width: 440px; margin: 64px auto 0; }
+    .gate-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    .gate-row input { flex: 1; min-width: 200px; }
+    .err { color: #c53030; font-weight: 600; margin-top: 12px; font-size: 0.9rem; }
+    .lead { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="mark">G</div>
+  <div>
+    <h1>Patent File Wrapper <span class="accent">Search</span></h1>
+    <p>Internal workspace · USPTO Open Data Portal</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ADMIN GATE -->
+  <div class="gate-wrap" id="gate">
+    <div class="card">
+      <span class="eyebrow">Restricted</span>
+      <h2>Admin sign-in</h2>
+      <p class="lead">This internal workspace is private. Enter the admin password to continue.</p>
+      <div class="gate-row">
+        <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password" onkeydown="if(event.key==='Enter')go()" />
+        <button class="btn btn-primary" onclick="go()">Enter</button>
+      </div>
+      <div id="gate-err" class="err" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- APP (revealed after sign-in) -->
+  <div id="app" style="display:none">
+    <div class="card">
+      <span class="eyebrow">Patent Search</span>
+      <h2>Search Parameters</h2>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="basic">Basic Search</button>
+        <button class="tab-btn" data-tab="lookup">Application Lookup</button>
+      </div>
+
+      <!-- BASIC SEARCH -->
+      <div class="tab-panel active" id="tab-basic">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Invention Title Keywords</label>
+            <input type="text" placeholder="e.g. machine learning image classification" />
+          </div>
+          <div class="form-group">
+            <label>Application Number</label>
+            <input type="text" placeholder="e.g. 16/123,456 or 16123456" />
+          </div>
+          <div class="form-group">
+            <label>Patent Number</label>
+            <input type="text" placeholder="e.g. 10,123,456 or 10123456" />
+          </div>
+          <div class="form-group">
+            <label>Inventor Name</label>
+            <input type="text" placeholder="e.g. Smith" />
+          </div>
+          <div class="form-group">
+            <label>Applicant / Assignee</label>
+            <input type="text" placeholder="e.g. Google LLC" />
+          </div>
+          <div class="form-group">
+            <label>Application Type</label>
+            <select>
+              <option value="">All Types</option>
+              <option>Utility</option>
+              <option>Design</option>
+              <option>Plant</option>
+              <option>Reissue</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select>
+              <option value="">All Statuses</option>
+              <option>Patented Case</option>
+              <option>Docketed New Case</option>
+              <option>Abandoned</option>
+              <option>Final Rejection Mailed</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Filing Date From</label>
+            <input type="date" />
+          </div>
+          <div class="form-group">
+            <label>Filing Date To</label>
+            <input type="date" />
+          </div>
+          <div class="form-group">
+            <label>Results per Page</label>
+            <select>
+              <option>10</option>
+              <option selected>25</option>
+              <option>50</option>
+              <option>100</option>
+            </select>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="previewSearch()">Search</button>
+          <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+        </div>
+      </div>
+
+      <!-- LOOKUP -->
+      <div class="tab-panel" id="tab-lookup">
+        <div class="form-group" style="max-width:440px">
+          <label>Application or Patent Number</label>
+          <div style="display:flex;gap:18px;margin:4px 0 8px;font-size:0.9rem">
+            <label style="font-weight:500;text-transform:none;letter-spacing:0;display:inline-flex;align-items:center;gap:6px"><input type="radio" name="lk-kind" value="application" checked style="padding:0"> Application / control no.</label>
+            <label style="font-weight:500;text-transform:none;letter-spacing:0;display:inline-flex;align-items:center;gap:6px"><input type="radio" name="lk-kind" value="patent" style="padding:0"> Patent no.</label>
+          </div>
+          <input type="text" placeholder="e.g. 16/123,456 or 16123456" />
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="previewSearch()">Look up</button>
+        </div>
+      </div>
+
+      <div class="preview-note" id="preview-note" style="display:none"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const PW_KEY = 'reexamAdminPw';
+
+// Verify the admin password against the same server gate the /status page uses.
+// (If ADMIN_PASSWORD isn't configured server-side, the gate passes — matching /status.)
+async function verify(pw) {
+  const res = await fetch('/api/watchlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+    body: JSON.stringify({ action: 'verifyAdmin' }),
+  });
+  if (res.status === 401) throw new Error('Incorrect admin password.');
+  if (!res.ok) throw new Error('Could not verify (HTTP ' + res.status + ').');
+  return true;
+}
+
+async function go() {
+  const pw = document.getElementById('pw').value.trim();
+  const err = document.getElementById('gate-err');
+  err.style.display = 'none';
+  try { await verify(pw); sessionStorage.setItem(PW_KEY, pw); reveal(); }
+  catch (e) { err.textContent = e.message || 'Could not verify.'; err.style.display = ''; }
+}
+
+function reveal() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+// Tab switching (visual).
+document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab-btn').forEach((x) => x.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach((x) => x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+}));
+
+// This page is a design preview of the Goodwin theme — search is not wired here.
+function previewSearch() {
+  const n = document.getElementById('preview-note');
+  n.style.display = '';
+  n.innerHTML = '<strong>Design preview.</strong> This page previews the Goodwin color scheme on the search landing — live results are served by the main tool.';
+}
+function clearForm() {
+  document.querySelectorAll('#tab-basic input, #tab-basic select').forEach((el) => {
+    if (el.tagName === 'SELECT') el.selectedIndex = 0; else el.value = '';
+  });
+  document.getElementById('preview-note').style.display = 'none';
+}
+
+// Auto-reveal if the admin password is already stored this session.
+(() => {
+  const saved = sessionStorage.getItem(PW_KEY);
+  if (!saved) return;
+  verify(saved).then(reveal).catch(() => { /* show gate */ });
+})();
+</script>
+</body>
+</html>

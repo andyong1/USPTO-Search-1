@@ -186,7 +186,7 @@
         <label for="requester-select">Requester:</label>
         <select id="requester-select">
           <option value="">All Requesters</option>
-          <option value="third_party">Third-party</option>
+          <option value="third_party">Third party</option>
           <option value="patent_owner">Patent owner</option>
           <option value="unknown">Unknown</option>
         </select>
@@ -583,7 +583,7 @@ function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : t
 // event/document codes (see classifyRequester in lib/uspto.js): third-party from
 // the RXOSUB.R "requested by third party requester" transaction event, patent
 // owner from a request receipt with no third-party code, else unknown.
-const REQUESTER_LABEL = { patent_owner: 'Patent owner', third_party: 'Third-party', unknown: 'Unknown' };
+const REQUESTER_LABEL = { patent_owner: 'Patent owner', third_party: 'Third party', unknown: 'Unknown' };
 function requesterKey(d) {
   const r = String(d.requester_type || '').toLowerCase();
   return (r === 'patent_owner' || r === 'third_party') ? r : 'unknown';
@@ -591,7 +591,7 @@ function requesterKey(d) {
 function requesterCell(d) {
   const k = requesterKey(d);
   if (k === 'patent_owner') return '<span class="badge po">Patent owner</span>';
-  if (k === 'third_party') return '<span class="badge tp">Third-party</span>';
+  if (k === 'third_party') return '<span class="badge tp">Third party</span>';
   return '<span class="ext">—</span>';
 }
 

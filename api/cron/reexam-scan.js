@@ -46,7 +46,7 @@ const PRUNE_MONTHS = 24;      // drop reexams older than this (wide enough to ke
                              // the Jan 2025+ determination set in the watch table)
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
-const REQUESTER_LOGIC_V = 2; // bump to force a one-time requester-type reclassification
+const REQUESTER_LOGIC_V = 3; // bump to force a one-time requester-type reclassification
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);
@@ -273,15 +273,19 @@ export default async function handler(req, res) {
     }
 
     // 2c) Backfill requester type (patent owner vs third-party) for determinations
-    // missing it — one transactions fetch per application (where the RXOSUB.R
-    // request-type event reliably lives); self-completes over runs.
+    // missing it — union the documents + transactions feeds (third-party markers
+    // can appear in either: RXOSUB.R in transactions, RXC/SR in documents, etc.).
+    // Self-completes over runs.
     let requesterBackfilled = 0;
-    const reqApps = await getAppsMissingRequesterType(15);
+    const reqApps = await getAppsMissingRequesterType(12);
     for (let i = 0; i < reqApps.length; i += CONCURRENCY) {
       const slice = reqApps.slice(i, i + CONCURRENCY).map(async (appNum) => {
         try {
-          const txnCodes = await fetchTransactions(appNum);
-          await setRequesterType(appNum, classifyRequester(txnCodes));
+          const [docCodes, txnCodes] = await Promise.all([
+            fetchDocuments(appNum).then((d) => d.map((x) => x.documentCode)).catch(() => []),
+            fetchTransactions(appNum), // throws on error → retry next run
+          ]);
+          await setRequesterType(appNum, classifyRequester([...docCodes, ...txnCodes]));
           requesterBackfilled++;
         } catch { /* network/HTTP error — leave NULL and retry next run */ }
       });

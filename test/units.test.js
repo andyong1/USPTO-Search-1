@@ -21,6 +21,10 @@ test('classifyRequester — third party via 3rd-party IDS/affidavit/petition', (
   assert.equal(classifyRequester(['RXPET']), 'third_party');
   assert.equal(classifyRequester(['rxosub.r']), 'third_party'); // case-insensitive
 });
+test('classifyRequester — third party via certificate of service (no RXOSUB.R)', () => {
+  // 90015445: only bare RXOSUB, but RXC/SR (cert of service) ⇒ another party served.
+  assert.equal(classifyRequester(['RXOSUB', 'RXC/SR', 'RXREXO', 'TRNA']), 'third_party');
+});
 test('classifyRequester — generic IDS/affidavit are NOT third-party markers', () => {
   // RXIDS. / RXAF/D (no trailing R) are generic; only RXOSUB → patent_owner.
   assert.equal(classifyRequester(['RXOSUB', 'RXIDS.', 'RXAF/D', 'RXREXO']), 'patent_owner');

@@ -41,6 +41,8 @@
     .ordered { background: #c6f6d5; color: #276749; }
     .denied { background: #fed7d7; color: #c53030; }
     .badge.concluded { background: #e2e8f0; color: #2d3748; }
+    .badge.po { background: #bee3f8; color: #2c5282; }
+    .badge.tp { background: #feebc8; color: #9c4221; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     th.sortable { cursor: pointer; user-select: none; }
@@ -179,6 +181,15 @@
       <div class="fb-group">
         <label for="tc-select">Technology Area:</label>
         <select id="tc-select"><option value="">All Technology Areas</option></select>
+      </div>
+      <div class="fb-group">
+        <label for="requester-select">Requester:</label>
+        <select id="requester-select">
+          <option value="">All Requesters</option>
+          <option value="third_party">Third-party</option>
+          <option value="patent_owner">Patent owner</option>
+          <option value="unknown">Unknown</option>
+        </select>
       </div>
     </div>
     <div id="stats-kpi"></div>
@@ -509,7 +520,7 @@ function filteredSorted() {
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
   let items = allDeterminations;
   if (q) {
-    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type]
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const { key, dir } = tableSort;
@@ -523,10 +534,10 @@ function filteredSorted() {
   });
 }
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit', 'Technology Area'];
+  const header = ['Control No.', 'Determination', 'Date', 'Examiner Name', 'Group Art Unit', 'Technology Area', 'Requester'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit,
-    d.tech_center || '']);
+    d.tech_center || '', REQUESTER_LABEL[requesterKey(d)]]);
   const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -568,6 +579,21 @@ const TC_SHORT = {
 };
 function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
 
+// Requester type (patent owner vs third-party requester) — derived from USPTO
+// document codes (see classifyRequester in lib/uspto.js). Patent-owner is inferred
+// from the absence of any third-party filing, so treat it as a best estimate.
+const REQUESTER_LABEL = { patent_owner: 'Patent owner', third_party: 'Third-party', unknown: 'Unknown' };
+function requesterKey(d) {
+  const r = String(d.requester_type || '').toLowerCase();
+  return (r === 'patent_owner' || r === 'third_party') ? r : 'unknown';
+}
+function requesterCell(d) {
+  const k = requesterKey(d);
+  if (k === 'patent_owner') return '<span class="badge po">Patent owner</span>';
+  if (k === 'third_party') return '<span class="badge tp">Third-party</span>';
+  return '<span class="ext">—</span>';
+}
+
 function renderTable() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
@@ -599,6 +625,7 @@ function renderTable() {
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td>${tcCell(d.tech_center)}</td>
+      <td>${requesterCell(d)}</td>
     </tr>`;
   }).join('');
 
@@ -610,6 +637,7 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
+      <th class="sortable" tabindex="0" role="button" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -618,16 +646,19 @@ let _all = [];               // full collected list (since Jan 1, 2025)
 let fPeriod = 'since2025';   // period selector
 let fArtUnit = '';           // '' = all art units
 let fTc = '';                // '' = all technology areas
+let fRequester = '';         // '' = all requesters ('third_party'|'patent_owner'|'unknown')
 
 // Deep-linkable filter state: reflect the period / art-unit / TC / text filter /
 // sort into the URL query so a filtered view can be shared or bookmarked.
 const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
-const URL_SORT_KEYS = ['application_number', 'official_date', 'examiner_name', 'group_art_unit', 'tech_center'];
+const URL_SORT_KEYS = ['application_number', 'official_date', 'examiner_name', 'group_art_unit', 'tech_center', 'requester_type'];
+const URL_REQUESTERS = ['third_party', 'patent_owner', 'unknown'];
 function writeFiltersToUrl() {
   const p = new URLSearchParams();
   if (fPeriod && fPeriod !== 'since2025') p.set('period', fPeriod);
   if (fArtUnit) p.set('au', fArtUnit);
   if (fTc) p.set('tc', fTc);
+  if (fRequester) p.set('req', fRequester);
   const q = ((document.getElementById('table-filter') || {}).value || '').trim();
   if (q) p.set('q', q);
   if (tableSort.key !== 'official_date' || tableSort.dir !== 'desc') { p.set('sort', tableSort.key); p.set('dir', tableSort.dir); }
@@ -646,6 +677,9 @@ function readFiltersFromUrl() {
   document.getElementById('period-select').value = fPeriod;
   const auSel = document.getElementById('artunit-select'); auSel.value = params.get('au') || ''; fArtUnit = auSel.value;
   const tcSel = document.getElementById('tc-select'); tcSel.value = params.get('tc') || ''; fTc = tcSel.value;
+  const reqSel = document.getElementById('requester-select');
+  reqSel.value = URL_REQUESTERS.includes(params.get('req')) ? params.get('req') : '';
+  fRequester = reqSel.value;
 }
 
 function periodInfo(p) {
@@ -681,6 +715,7 @@ function applyFilters() {
     return fArtUnit === '(Unknown)' ? !au : au === fArtUnit;
   });
   if (fTc) subset = subset.filter((d) => String(d.tech_center || '').trim() === fTc);
+  if (fRequester) subset = subset.filter((d) => requesterKey(d) === fRequester);
   const h = document.getElementById('stats-heading');
   if (h) h.textContent = 'Statistics — ' + label + (fArtUnit ? ' · Art Unit ' + fArtUnit : '') + (fTc ? ' · TC ' + fTc : '');
   buildKpi(subset);
@@ -727,6 +762,7 @@ function applyFilters() {
     document.getElementById('period-select').addEventListener('change', (e) => { fPeriod = e.target.value; applyFilters(); });
     document.getElementById('artunit-select').addEventListener('change', (e) => { fArtUnit = e.target.value; applyFilters(); });
     document.getElementById('tc-select').addEventListener('change', (e) => { fTc = e.target.value; applyFilters(); });
+    document.getElementById('requester-select').addEventListener('change', (e) => { fRequester = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
     document.getElementById('table-filter').style.display = '';
     readFiltersFromUrl();

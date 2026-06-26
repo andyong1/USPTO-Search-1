@@ -17,6 +17,7 @@ import {
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
+  setRequesterType, getAppsMissingRequesterType,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate,
@@ -29,7 +30,7 @@ import {
   getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
@@ -191,6 +192,9 @@ async function scanOne(appNum, filingDate) {
     });
     if (isNew) found++;
   }
+  // Requester type (patent owner vs third-party) from the same docs list.
+  const requesterType = classifyRequester(docs);
+  if (requesterType !== 'unknown') await setRequesterType(appNum, requesterType);
   await markReexamScanned(appNum, true);
   return found;
 }
@@ -251,6 +255,21 @@ export default async function handler(req, res) {
           const m = await fetchMetaData(appNum);
           await updateDeterminationMeta(appNum, m.groupArtUnit, m.examiner);
           backfilled++;
+        } catch { /* leave for a later run */ }
+      });
+      await Promise.all(slice);
+    }
+
+    // 2c) Backfill requester type (patent owner vs third-party) for determinations
+    // missing it — one documents fetch per application; self-completes over runs.
+    let requesterBackfilled = 0;
+    const reqApps = await getAppsMissingRequesterType(10);
+    for (let i = 0; i < reqApps.length; i += CONCURRENCY) {
+      const slice = reqApps.slice(i, i + CONCURRENCY).map(async (appNum) => {
+        try {
+          const docs = await fetchDocuments(appNum);
+          await setRequesterType(appNum, classifyRequester(docs));
+          requesterBackfilled++;
         } catch { /* leave for a later run */ }
       });
       await Promise.all(slice);
@@ -368,6 +387,7 @@ export default async function handler(req, res) {
       scanned: batch.length,
       newDeterminations,
       backfilled,
+      requesterBackfilled,
       counts, // { total, remaining, determined }
       subscriberDigest,
       conclusions,

@@ -3,7 +3,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
-import { analyzePetition } from '../lib/uspto.js';
+import { analyzePetition, classifyRequester } from '../lib/uspto.js';
+
+test('classifyRequester — third party via RXOSUB.R', () => {
+  assert.equal(classifyRequester([{ documentCode: 'BIB' }, { documentCode: 'RXOSUB.R' }, { documentCode: 'RXREXO' }]), 'third_party');
+});
+test('classifyRequester — third party via 3rd-party IDS / affidavit', () => {
+  assert.equal(classifyRequester([{ documentCode: 'RXIDS.R' }]), 'third_party');
+  assert.equal(classifyRequester([{ documentCode: 'RXAF/DR' }]), 'third_party');
+});
+test('classifyRequester — third party via requestor petition prefix', () => {
+  assert.equal(classifyRequester([{ documentCode: 'RXPET' }]), 'third_party');
+  assert.equal(classifyRequester([{ documentCode: 'rx.pro.po' }]), 'third_party'); // case-insensitive
+});
+test('classifyRequester — patent owner when no third-party markers', () => {
+  assert.equal(classifyRequester([{ documentCode: 'RXREXO' }, { documentCode: 'BIB' }, { documentCode: 'RXCERT' }]), 'patent_owner');
+});
+test('classifyRequester — unknown when no document data', () => {
+  assert.equal(classifyRequester([]), 'unknown');
+  assert.equal(classifyRequester(null), 'unknown');
+});
 
 test('detect325d', () => {
   assert.equal(detect325d('discusses 35 U.S.C. 325(d) here'), true);

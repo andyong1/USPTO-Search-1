@@ -21,6 +21,12 @@ test('classifyRequester — third party via 3rd-party IDS/affidavit/petition', (
   assert.equal(classifyRequester(['RXPET']), 'third_party');
   assert.equal(classifyRequester(['rxosub.r']), 'third_party'); // case-insensitive
 });
+test('classifyRequester — director-initiated via RXDOR (no request receipt)', () => {
+  // 90020162: Director Initiated Order, no RXOSUB request receipt.
+  assert.equal(classifyRequester(['RXREXO', 'RXDOR', 'BIB', 'RXR.NF']), 'director');
+  // RXDOR takes precedence even if a stray third-party-ish code appears.
+  assert.equal(classifyRequester(['RXDOR', 'RXC/SR']), 'director');
+});
 test('classifyRequester — third party via certificate of service (no RXOSUB.R)', () => {
   // 90015445: only bare RXOSUB, but RXC/SR (cert of service) ⇒ another party served.
   assert.equal(classifyRequester(['RXOSUB', 'RXC/SR', 'RXREXO', 'TRNA']), 'third_party');

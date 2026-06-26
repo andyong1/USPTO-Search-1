@@ -46,7 +46,7 @@ const PRUNE_MONTHS = 24;      // drop reexams older than this (wide enough to ke
                              // the Jan 2025+ determination set in the watch table)
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
-const REQUESTER_LOGIC_V = 3; // bump to force a one-time requester-type reclassification
+const REQUESTER_LOGIC_V = 4; // bump to force a one-time requester-type reclassification
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);

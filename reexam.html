@@ -196,7 +196,10 @@
     <div class="stats-panel" style="margin-bottom:18px"><div id="stats-trend"></div></div>
     <div class="stats-grid">
       <div class="stats-panel"><div id="stats-au"></div></div>
-      <div class="stats-panel"><div id="stats-pendency"></div></div>
+      <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+        <div class="stats-panel"><div id="stats-pendency"></div></div>
+        <div class="stats-panel"><div id="stats-requester"></div></div>
+      </div>
       <div class="stats-panel full"><div id="stats-examiner"></div></div>
     </div>
   </div>
@@ -502,6 +505,20 @@ function buildPendency(list) {
       <tbody>${brows}</tbody></table></div>`;
 }
 
+// ── Identity of Requester: how many determinations were filed by the patent
+// owner vs a third-party requester (derived from USPTO codes; see requesterKey). ──
+function buildRequester(list) {
+  const el = document.getElementById('stats-requester');
+  if (!el) return;
+  const po = list.filter((d) => requesterKey(d) === 'patent_owner').length;
+  const tp = list.filter((d) => requesterKey(d) === 'third_party').length;
+  el.innerHTML = `<div class="stats-title">Identity of Requester</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num" style="color:#2c5282">${po}</div><div class="stat-label">Patent Owner Filed</div></div>
+      <div class="stat"><div class="stat-num" style="color:#9c4221">${tp}</div><div class="stat-label">Third Party Filed</div></div>
+    </div>`;
+}
+
 // ── Sortable determinations table ──────────────────────────────────
 let allDeterminations = [];
 let tableSort = { key: 'official_date', dir: 'desc' };
@@ -724,6 +741,7 @@ function applyFilters() {
   buildExaminerSection(subset);
   buildTrend(subset, gran);
   buildPendency(subset);
+  buildRequester(subset);
   allDeterminations = subset; // scopes the detailed listing + CSV export
   renderTable();
 }

@@ -17,7 +17,7 @@ import {
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
-  setRequesterType, getAppsMissingRequesterType,
+  setRequesterType, getAppsMissingRequesterType, resetRequesterTypes, setRequesterLogicVersion,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate,
@@ -30,7 +30,7 @@ import {
   getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
@@ -46,6 +46,7 @@ const PRUNE_MONTHS = 24;      // drop reexams older than this (wide enough to ke
                              // the Jan 2025+ determination set in the watch table)
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
+const REQUESTER_LOGIC_V = 2; // bump to force a one-time requester-type reclassification
 
 const isoMonthsAgo = (m) => { const d = new Date(); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10); };
 const hoursSince = (ts) => (ts ? (Date.now() - new Date(ts).getTime()) / 3.6e6 : Infinity);
@@ -192,8 +193,10 @@ async function scanOne(appNum, filingDate) {
     });
     if (isNew) found++;
   }
-  // Requester type (patent owner vs third-party) from the same docs list.
-  const requesterType = classifyRequester(docs);
+  // Requester type (patent owner vs third-party): the reliable signal is the
+  // RXOSUB.R transaction event, so union the documents with the transactions feed.
+  const txnCodes = await fetchTransactions(appNum).catch(() => []);
+  const requesterType = classifyRequester([...docs.map((d) => d.documentCode), ...txnCodes]);
   if (requesterType !== 'unknown') await setRequesterType(appNum, requesterType);
   await markReexamScanned(appNum, true);
   return found;
@@ -212,6 +215,15 @@ export default async function handler(req, res) {
 
   try {
     const state = await reexamState();
+
+    // 0) One-time: when the requester-type logic version changes, clear every
+    // stored requester_type so the rolling backfill (step 2c) recomputes it with
+    // the current transaction-based detection.
+    let requesterReset = null;
+    if ((state.requester_logic_v || 0) < REQUESTER_LOGIC_V) {
+      try { requesterReset = await resetRequesterTypes(); await setRequesterLogicVersion(REQUESTER_LOGIC_V); }
+      catch (e) { requesterReset = { error: String(e.message || e) }; }
+    }
 
     // 1) Enumerate once/day.
     let enumerated = null;
@@ -261,16 +273,17 @@ export default async function handler(req, res) {
     }
 
     // 2c) Backfill requester type (patent owner vs third-party) for determinations
-    // missing it — one documents fetch per application; self-completes over runs.
+    // missing it — one transactions fetch per application (where the RXOSUB.R
+    // request-type event reliably lives); self-completes over runs.
     let requesterBackfilled = 0;
-    const reqApps = await getAppsMissingRequesterType(10);
+    const reqApps = await getAppsMissingRequesterType(15);
     for (let i = 0; i < reqApps.length; i += CONCURRENCY) {
       const slice = reqApps.slice(i, i + CONCURRENCY).map(async (appNum) => {
         try {
-          const docs = await fetchDocuments(appNum);
-          await setRequesterType(appNum, classifyRequester(docs));
+          const txnCodes = await fetchTransactions(appNum);
+          await setRequesterType(appNum, classifyRequester(txnCodes));
           requesterBackfilled++;
-        } catch { /* leave for a later run */ }
+        } catch { /* network/HTTP error — leave NULL and retry next run */ }
       });
       await Promise.all(slice);
     }
@@ -387,6 +400,7 @@ export default async function handler(req, res) {
       scanned: batch.length,
       newDeterminations,
       backfilled,
+      requesterReset,
       requesterBackfilled,
       counts, // { total, remaining, determined }
       subscriberDigest,

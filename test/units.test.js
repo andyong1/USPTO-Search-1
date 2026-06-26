@@ -5,21 +5,31 @@ import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition, classifyRequester } from '../lib/uspto.js';
 
-test('classifyRequester — third party via RXOSUB.R', () => {
-  assert.equal(classifyRequester([{ documentCode: 'BIB' }, { documentCode: 'RXOSUB.R' }, { documentCode: 'RXREXO' }]), 'third_party');
+// classifyRequester takes a flat list of USPTO code strings (union of document +
+// transaction codes). Third-party requires a positive third-party code; patent
+// owner requires a request receipt (RXOSUB*) with no third-party code.
+test('classifyRequester — third party via RXOSUB.R (transaction event)', () => {
+  assert.equal(classifyRequester(['BIB', 'RXOSUB', 'RXOSUB.R', 'RXREXO']), 'third_party');
 });
-test('classifyRequester — third party via 3rd-party IDS / affidavit', () => {
-  assert.equal(classifyRequester([{ documentCode: 'RXIDS.R' }]), 'third_party');
-  assert.equal(classifyRequester([{ documentCode: 'RXAF/DR' }]), 'third_party');
+test('classifyRequester — third party via length variants', () => {
+  assert.equal(classifyRequester(['RXOSUB', 'RXOSUB.R.40']), 'third_party'); // <40-page variant
+  assert.equal(classifyRequester(['RXO_40.R']), 'third_party');
 });
-test('classifyRequester — third party via requestor petition prefix', () => {
-  assert.equal(classifyRequester([{ documentCode: 'RXPET' }]), 'third_party');
-  assert.equal(classifyRequester([{ documentCode: 'rx.pro.po' }]), 'third_party'); // case-insensitive
+test('classifyRequester — third party via 3rd-party IDS/affidavit/petition', () => {
+  assert.equal(classifyRequester(['RXIDS.R']), 'third_party');
+  assert.equal(classifyRequester(['RXAF/DR']), 'third_party');
+  assert.equal(classifyRequester(['RXPET']), 'third_party');
+  assert.equal(classifyRequester(['rxosub.r']), 'third_party'); // case-insensitive
 });
-test('classifyRequester — patent owner when no third-party markers', () => {
-  assert.equal(classifyRequester([{ documentCode: 'RXREXO' }, { documentCode: 'BIB' }, { documentCode: 'RXCERT' }]), 'patent_owner');
+test('classifyRequester — generic IDS/affidavit are NOT third-party markers', () => {
+  // RXIDS. / RXAF/D (no trailing R) are generic; only RXOSUB → patent_owner.
+  assert.equal(classifyRequester(['RXOSUB', 'RXIDS.', 'RXAF/D', 'RXREXO']), 'patent_owner');
 });
-test('classifyRequester — unknown when no document data', () => {
+test('classifyRequester — patent owner when request received with no third-party code', () => {
+  assert.equal(classifyRequester(['RXOSUB', 'RXREXO', 'BIB']), 'patent_owner');
+});
+test('classifyRequester — unknown when no request/transaction codes', () => {
+  assert.equal(classifyRequester(['BIB', 'RXREXO']), 'unknown'); // determination but no RXOSUB seen
   assert.equal(classifyRequester([]), 'unknown');
   assert.equal(classifyRequester(null), 'unknown');
 });

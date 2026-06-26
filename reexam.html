@@ -580,8 +580,9 @@ const TC_SHORT = {
 function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
 
 // Requester type (patent owner vs third-party requester) — derived from USPTO
-// document codes (see classifyRequester in lib/uspto.js). Patent-owner is inferred
-// from the absence of any third-party filing, so treat it as a best estimate.
+// event/document codes (see classifyRequester in lib/uspto.js): third-party from
+// the RXOSUB.R "requested by third party requester" transaction event, patent
+// owner from a request receipt with no third-party code, else unknown.
 const REQUESTER_LABEL = { patent_owner: 'Patent owner', third_party: 'Third-party', unknown: 'Unknown' };
 function requesterKey(d) {
   const r = String(d.requester_type || '').toLowerCase();

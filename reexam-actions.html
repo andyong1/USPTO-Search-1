@@ -213,12 +213,14 @@ function statCards(rows) {
   const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
   const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
   const avgActions = counts.length ? (counts.reduce((s, x) => s + x, 0) / counts.length).toFixed(1) : null;
-  const card = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
+  const card = (num, lbl, n, months) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${months != null ? `<div class="sub2" style="color:#718096;font-weight:600">≈ ${months} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  const aNonf = avg(nonfDays), mNonf = median(nonfDays), aFinl = avg(finlDays), mFinl = median(finlDays);
   return `<div class="kpi-strip">
-    ${card(avg(nonfDays), 'Avg Days: Grant → First Office Action', nonfDays.length)}
-    ${card(median(nonfDays), 'Median Days: Grant → First Office Action', nonfDays.length)}
-    ${card(avg(finlDays), 'Avg Days: Grant → Final Office Action', finlDays.length)}
-    ${card(median(finlDays), 'Median Days: Grant → Final Office Action', finlDays.length)}
+    ${card(aNonf, 'Avg Days: Grant → First Office Action', nonfDays.length, mo(aNonf))}
+    ${card(mNonf, 'Median Days: Grant → First Office Action', nonfDays.length, mo(mNonf))}
+    ${card(aFinl, 'Avg Days: Grant → Final Office Action', finlDays.length, mo(aFinl))}
+    ${card(mFinl, 'Median Days: Grant → Final Office Action', finlDays.length, mo(mFinl))}
     ${card(avgActions, 'Avg Office Actions per Reexam', counts.length)}
   </div>`;
 }

@@ -267,7 +267,8 @@ function buildLifecycle(rows) {
     ['NIRC → Certificate', 'nirc_date', 'cert_date'],
     ['Order → Certificate (total)', 'order_date', 'cert_date'],
   ];
-  const card = (num, lbl, n) => `<div class="stat"><div class="stat-num" style="color:#1a3a6b">${num == null ? '—' : num}</div><div class="stat-label">${lbl}${n ? ' · median, n=' + n : ' · no data'}</div></div>`;
+  const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
+  const card = (num, lbl, n) => `<div class="stat"><div class="stat-num" style="color:#1a3a6b">${num == null ? '—' : num}</div><div class="stat-label">${lbl}${n ? ' · median, n=' + n : ' · no data'}</div>${num != null ? `<div class="stat-label" style="color:#718096;font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}</div>`;
   const cells = stages.map(([label, a, b]) => {
     const ds = rows.map((r) => daysBetween(r[a], r[b])).filter((d) => d != null && d >= 0);
     return card(median(ds), label, ds.length);

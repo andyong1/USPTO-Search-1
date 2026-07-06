@@ -298,13 +298,14 @@ function buildKpi(list) {
   }
   days.sort((a, b) => a - b);
   const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
+  const mo = (d) => (d / 30.44).toFixed(1); // days → months (avg month ≈ 30.44 days)
 
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
     ${card(pct(ordered) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
-    ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days (n=' + days.length + ')' : 'no data')}
+    ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days · ≈ ' + mo(medPend) + ' months (n=' + days.length + ')' : 'no data')}
   </div>`;
 }
 
@@ -493,14 +494,15 @@ function buildPendency(list) {
   days.sort((a, b) => a - b);
   const avg = Math.round(days.reduce((s, x) => s + x, 0) / days.length);
   const median = Math.round(days[Math.floor(days.length / 2)]);
+  const mo = (d) => (d / 30.44).toFixed(1); // days → months (avg month ≈ 30.44 days)
   const buckets = [['< 60 days', 0], ['60–90 days', 0], ['91–120 days', 0], ['> 120 days', 0]];
   for (const x of days) { if (x < 60) buckets[0][1]++; else if (x <= 90) buckets[1][1]++; else if (x <= 120) buckets[2][1]++; else buckets[3][1]++; }
   const pct = (n) => (n / days.length * 100).toFixed(1);
   const brows = buckets.map(([lab, c]) => `<tr><td>${lab}</td><td>${c}</td><td>${pct(c)}%</td></tr>`).join('');
   el.innerHTML = `<div class="stats-title">Pendency — filing to determination (n=${days.length})</div>
     <div class="stats">
-      <div class="stat"><div class="stat-num" style="color:#1a3a6b">${avg}</div><div class="stat-label">Avg days</div></div>
-      <div class="stat"><div class="stat-num" style="color:#1a3a6b">${median}</div><div class="stat-label">Median days</div></div>
+      <div class="stat"><div class="stat-num" style="color:#1a3a6b">${avg}</div><div class="stat-label">Avg days</div><div class="stat-label" style="color:#718096;font-weight:600;margin-top:2px">≈ ${mo(avg)} months</div></div>
+      <div class="stat"><div class="stat-num" style="color:#1a3a6b">${median}</div><div class="stat-label">Median days</div><div class="stat-label" style="color:#718096;font-weight:600;margin-top:2px">≈ ${mo(median)} months</div></div>
     </div>
     <div class="table-wrap" style="margin-bottom:18px;max-width:380px"><table>
       <thead><tr><th>Time to determination</th><th>Count</th><th>%</th></tr></thead>

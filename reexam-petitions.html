@@ -299,7 +299,8 @@ function buildStats() {
   // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
   const toPet = _rows.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);
   const toDec = _rows.map((p) => p.decision_doc_id ? daysBetween(p.petition_date, p.decision_date) : null).filter((d) => d != null);
-  const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div><div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
+  const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${num != null ? `<div class="sub" style="font-size:0.72rem;color:#718096;font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
   document.getElementById('timing').innerHTML = `<div class="stats-title">Petition Timing</div><div class="kpi-strip four">
     ${tcard(avg(toPet), 'Avg Days: Reexam Ordered → Petition', toPet.length)}
     ${tcard(median(toPet), 'Median Days: Reexam Ordered → Petition', toPet.length)}

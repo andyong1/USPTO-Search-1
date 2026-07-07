@@ -305,7 +305,7 @@ function buildKpi(list) {
     ${card(list.length, 'Total Determinations')}
     ${card(pct(ordered) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
     ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
-    ${card(medPend != null ? medPend : '—', 'Median Pendency to Determination', medPend != null ? 'days · ≈ ' + mo(medPend) + ' months (n=' + days.length + ')' : 'no data')}
+    ${`<div class="kpi"><div class="num">${medPend != null ? medPend : '—'}</div>${medPend != null ? `<div class="sub" style="color:#718096;font-weight:600">≈ ${mo(medPend)} months</div>` : ''}<div class="lbl">Median Pendency to Determination</div><div class="sub">${medPend != null ? 'days (n=' + days.length + ')' : 'no data'}</div></div>`}
   </div>`;
 }
 

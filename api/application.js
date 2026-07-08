@@ -39,15 +39,22 @@ export default async function handler(req, res) {
   const path = section ? `/${section}` : '';
   const url = `${BASE}/${encodeURIComponent(appNum)}${path}`;
 
+  // Hard timeout so a slow/hung USPTO response returns a clean 502 fast rather
+  // than tying up the function until the platform kills it.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const upstream = await fetch(url, {
       headers: { 'X-API-KEY': apiKey, 'Accept': 'application/json' },
+      signal: controller.signal,
     });
     const text = await upstream.text();
     res.status(upstream.status);
     res.setHeader('Content-Type', 'application/json');
     res.send(text);
   } catch (err) {
-    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: String(err) });
+    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : String(err) });
+  } finally {
+    clearTimeout(timer);
   }
 }

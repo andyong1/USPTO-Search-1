@@ -22,6 +22,10 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
 
+  // Hard timeout so a slow/hung USPTO response returns a clean 502 fast rather
+  // than tying up the function until the platform kills it.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const upstream = await fetch(UPSTREAM, {
       method: 'POST',
@@ -31,6 +35,7 @@ export default async function handler(req, res) {
         'Accept': 'application/json',
       },
       body: JSON.stringify(body || {}),
+      signal: controller.signal,
     });
 
     const text = await upstream.text();
@@ -38,6 +43,8 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'application/json');
     res.send(text);
   } catch (err) {
-    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: String(err) });
+    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : String(err) });
+  } finally {
+    clearTimeout(timer);
   }
 }

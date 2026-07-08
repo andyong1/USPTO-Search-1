@@ -214,6 +214,11 @@ export default async function handler(req, res) {
   }
 
   try {
+    // One shared deadline for the whole run. Each step below caps its own budget
+    // against this, so later steps shrink (or skip) when earlier ones run long,
+    // keeping the function under its maxDuration instead of summing independent
+    // per-step deadlines.
+    const runDeadline = Date.now() + 55000;
     const state = await reexamState();
 
     // 0) One-time: when the requester-type logic version changes, clear every
@@ -305,7 +310,7 @@ export default async function handler(req, res) {
     // certificate document.
     let conclusions = { skipped: true };
     try {
-      const detect = await detectConclusionsStep(5, Date.now() + 8000);
+      const detect = await detectConclusionsStep(5, Math.min(Date.now() + 8000, runDeadline));
       conclusions = { detect };
     } catch (e) { conclusions = { error: String(e.message || e) }; }
 
@@ -314,7 +319,7 @@ export default async function handler(req, res) {
     let petitions = { skipped: true };
     try {
       const apps = await getOrderedReexamsToCheckPetitions(12);
-      const pDeadline = Date.now() + 10000;
+      const pDeadline = Math.min(Date.now() + 10000, runDeadline);
       let detected = 0;
       for (let i = 0; i < apps.length && Date.now() < pDeadline; i += 4) {
         await Promise.all(apps.slice(i, i + 4).map(async (a) => {
@@ -327,7 +332,7 @@ export default async function handler(req, res) {
       if (ocrConfigured()) {
         const todo = await getDecisionsToStartOcr(1);
         for (const r of todo) {
-          if (Date.now() > pDeadline + 25000) break;
+          if (Date.now() > Math.min(pDeadline + 25000, runDeadline)) break;
           try { const res = await ocrDecision(r.application_number, r.decision_doc_id); await setDecisionOcrDone(r.application_number, res.is325d, res.blobUrl); ocrDone++; }
           catch { await setDecisionOcrFailed(r.application_number); }
         }
@@ -342,7 +347,7 @@ export default async function handler(req, res) {
     let actions = { skipped: true };
     try {
       const aApps = await getOrderedReexamsToCheckActions(12);
-      const aDeadline = Date.now() + 12000;
+      const aDeadline = Math.min(Date.now() + 12000, runDeadline);
       let aChecked = 0;
       for (let i = 0; i < aApps.length && Date.now() < aDeadline; i += 4) {
         await Promise.all(aApps.slice(i, i + 4).map(async (a) => {
@@ -357,7 +362,7 @@ export default async function handler(req, res) {
     let techCenters = { skipped: true };
     try {
       const tRows = await getDeterminationsToCheckTechCenter(3);
-      const tDeadline = Date.now() + 8000;
+      const tDeadline = Math.min(Date.now() + 8000, runDeadline);
       let resolved = 0;
       for (const r of tRows) { if (Date.now() > tDeadline) break; try { const x = await detectTechCenterForApp(r.application_number); if (x.found) resolved++; } catch { /* retry next run */ } }
       techCenters = { checked: tRows.length, resolved };
@@ -369,7 +374,7 @@ export default async function handler(req, res) {
     let petition325d = { skipped: true };
     try {
       const prows = await getPetitionsToCheck325d(3);
-      const pDeadline = Date.now() + 6000;
+      const pDeadline = Math.min(Date.now() + 6000, runDeadline);
       let resolved = 0, deferred = 0;
       for (const r of prows) {
         if (Date.now() > pDeadline) break;
@@ -388,7 +393,7 @@ export default async function handler(req, res) {
     let petitionRefresh = { skipped: true };
     try {
       const apps = await getActivePetitionsToRefresh(8);
-      const rDeadline = Date.now() + 8000;
+      const rDeadline = Math.min(Date.now() + 8000, runDeadline);
       let refreshed = 0;
       for (const a of apps) { if (Date.now() > rDeadline) break; try { await detectPostOrderPetitionForApp(a.application_number, a.order_date); refreshed++; } catch { /* retry next run */ } }
       petitionRefresh = { checked: apps.length, refreshed };

@@ -62,7 +62,9 @@ export default async function handler(req, res) {
       if (!up.ok) { res.status(up.status).json({ error: 'PDF not available.' }); return; }
       let fname = String(q.name || 'final-written-decision.pdf').replace(/[^A-Za-z0-9._-]/g, '') || 'final-written-decision.pdf';
       if (!/\.pdf$/i.test(fname)) fname += '.pdf';
-      res.setHeader('Content-Type', up.headers.get('content-type') || 'application/pdf');
+      // Force application/pdf — the ptab-files endpoint serves a generic type
+      // (octet-stream), which makes browsers download instead of rendering inline.
+      res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `${q.dl ? 'attachment' : 'inline'}; filename="${fname}"`);
       res.setHeader('Cache-Control', 'private, max-age=3600');
       res.status(200).send(Buffer.from(await up.arrayBuffer()));

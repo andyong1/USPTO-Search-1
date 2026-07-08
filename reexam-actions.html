@@ -160,7 +160,7 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
-      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, or art unit…" oninput="render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, or art unit…" oninput="tablePage=1;render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
       <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:#fed7d7;color:#9b2c2c">✕ Reset to show all rows</button>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
@@ -268,7 +268,7 @@ function buildExaminerSection(rows) {
     const name = e.target.value;
     document.getElementById('examiner-stat').innerHTML = name ? statCards(rows.filter((p) => (p.examiner_name || '').trim() === name)) : '';
     // Also filter the proceedings table below to the selected examiner.
-    aExaminer = name; render();
+    aExaminer = name; tablePage = 1; render();
   };
   // Restore the examiner from the URL once, if it is a valid option in this scope.
   if (pendingExaminer && names.includes(pendingExaminer)) {
@@ -282,7 +282,7 @@ function buildExaminerSection(rows) {
 function clearExaminer() {
   document.getElementById('examiner-select').value = '';
   document.getElementById('examiner-stat').innerHTML = '';
-  aExaminer = ''; render();
+  aExaminer = ''; tablePage = 1; render();
 }
 function openDocViewer(appNum, documentId, format, label) {
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
@@ -329,6 +329,9 @@ function filtered() {
 
 // Table sort: default by first office action date, most recent first.
 let aSort = { key: 'nonf_date', dir: 'desc' };
+// Client-side pagination for the proceedings table only (stats/charts/CSV use the full set).
+const TABLE_PAGE_SIZE = 100;
+let tablePage = 1;
 // Keyboard support for sortable column headers (Enter/Space activates the sort).
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
@@ -336,6 +339,7 @@ document.addEventListener('keydown', (e) => {
 function sortActions(key) {
   if (aSort.key === key) aSort.dir = aSort.dir === 'asc' ? 'desc' : 'asc';
   else aSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
+  tablePage = 1;
   render();
 }
 function sortedItems(items) {
@@ -361,12 +365,20 @@ function render() {
   document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${items.length})` + (aExaminer ? ` · Examiner: ${aExaminer}` : '');
   const resetBtn = document.getElementById('examiner-reset'); if (resetBtn) resetBtn.style.display = aExaminer ? '' : 'none';
   if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  // Client-side pagination: clamp the current page, then render only that slice.
+  const total = items.length;
+  const pageCount = Math.ceil(total / TABLE_PAGE_SIZE);
+  if (tablePage < 1) tablePage = 1;
+  if (tablePage > pageCount) tablePage = pageCount;
+  const start = (tablePage - 1) * TABLE_PAGE_SIZE;
+  const end = Math.min(start + TABLE_PAGE_SIZE, total);
+  const pageItems = items.slice(start, end);
   const arrow = (k) => (aSort.key === k ? (aSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const ariaSort = (k) => (aSort.key === k ? (aSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const cell = (num, date, n, docId, label) => date
     ? `${fmtDate(date)} <span class="days">(${n} days)</span>${docLinks(num, docId, label)}`
     : '<span class="ext">—</span>';
-  const rows = items.map((p) => {
+  const rows = pageItems.map((p) => {
     const num = p.application_number || '';
     return `<tr>
       <td>
@@ -388,8 +400,19 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('finl_date')}" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
       <th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th>
     </tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
+    <tbody>${rows}</tbody></table></div>`
+    + (total > TABLE_PAGE_SIZE
+      ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn-csv" onclick="gotoTablePage(-1)"${tablePage <= 1 ? ' disabled style="opacity:0.5;cursor:default"' : ''}>‹ Prev</button>
+            <button class="btn-csv" onclick="gotoTablePage(1)"${tablePage >= pageCount ? ' disabled style="opacity:0.5;cursor:default"' : ''}>Next ›</button>
+          </div>
+        </div>`
+      : '');
 }
+// Page the proceedings table without disturbing stats/charts/CSV (does not reset tablePage).
+function gotoTablePage(delta) { tablePage += delta; render(); }
 
 // ── Period + art-unit filtering and the grant→first-action trend ──
 // The period keys on the FIRST OFFICE ACTION date (so a window contains
@@ -545,6 +568,7 @@ function applyFilters() {
   buildTrend(s, gran);
   buildDistribution(s);
   buildExaminerSection(s);
+  tablePage = 1;
   render();
 }
 

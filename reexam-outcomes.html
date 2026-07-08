@@ -170,7 +170,7 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
-      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or outcome…" oninput="render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or outcome…" oninput="tablePage=1;render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
       <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:#fed7d7;color:#9b2c2c">✕ Reset to show all rows</button>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
@@ -293,7 +293,7 @@ function buildExaminerSection(rows) {
     const name = e.target.value;
     document.getElementById('examiner-stat').innerHTML = name ? outcomeKpiHtml(rows.filter((d) => (d.examiner_name || '').trim() === name)) : '';
     // Also filter the proceedings table below to the selected examiner.
-    oExaminer = name; render();
+    oExaminer = name; tablePage = 1; render();
   };
   // Restore an examiner selection carried in the URL (validated in readFiltersFromUrl).
   if (_urlExaminer && names.includes(_urlExaminer)) {
@@ -307,7 +307,7 @@ function buildExaminerSection(rows) {
 function clearExaminer() {
   document.getElementById('examiner-select').value = '';
   document.getElementById('examiner-stat').innerHTML = '';
-  oExaminer = ''; render();
+  oExaminer = ''; tablePage = 1; render();
 }
 
 // ── Monthly stacked-bar chart of certificates issued, by outcome ──
@@ -431,7 +431,11 @@ function filtered() {
 }
 let oExaminer = '';
 let oSort = { key: 'cert_date', dir: 'desc' };
+const TABLE_PAGE_SIZE = 100;
+let tablePage = 1;
+function gotoTablePage(delta) { tablePage += delta; render(); }
 function sortOutcomes(key) {
+  tablePage = 1;
   if (oSort.key === key) oSort.dir = oSort.dir === 'asc' ? 'desc' : 'asc';
   else oSort = { key, dir: key === 'application_number' ? 'asc' : 'desc' };
   render();
@@ -450,7 +454,14 @@ function render() {
   if (!items.length) { body.innerHTML = '<div class="state">No matching concluded proceedings.</div>'; return; }
   const arrow = (k) => (oSort.key === k ? (oSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
   const ariaSort = (k) => (oSort.key === k ? (oSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
-  const rows = items.map((d) => {
+  const total = items.length;
+  const pageCount = Math.max(1, Math.ceil(total / TABLE_PAGE_SIZE));
+  if (tablePage < 1) tablePage = 1;
+  if (tablePage > pageCount) tablePage = pageCount;
+  const start = (tablePage - 1) * TABLE_PAGE_SIZE;
+  const end = Math.min(start + TABLE_PAGE_SIZE, total);
+  const pageItems = items.slice(start, end);
+  const rows = pageItems.map((d) => {
     const num = d.application_number || '';
     const outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
     return `<tr>
@@ -476,7 +487,13 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('group_art_unit')}" onclick="sortOutcomes('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortOutcomes('tech_center')">Technology Area${arrow('tech_center')}</th>
     </tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
+    <tbody>${rows}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px">
+    <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
+    <span style="display:flex;gap:8px">
+      <button class="btn-csv" onclick="gotoTablePage(-1)"${tablePage <= 1 ? ' disabled' : ''}>‹ Prev</button>
+      <button class="btn-csv" onclick="gotoTablePage(1)"${tablePage >= pageCount ? ' disabled' : ''}>Next ›</button>
+    </span>
+  </div>` : '');
 }
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -550,6 +567,7 @@ function populateTechCenters() {
   document.getElementById('tc-select').innerHTML = ['<option value="">All Technology Areas</option>'].concat(tcs.map((t) => `<option value="${esc(t)}">${esc(tcOptionLabel(t))}</option>`)).join('');
 }
 function applyFilters() {
+  tablePage = 1;
   const { label, gran } = periodInfo(oPeriod);
   _scoped = scoped();
   const note = document.getElementById('scope-note');

@@ -207,7 +207,7 @@
       <h2 style="margin:0">Detailed Listing of Reexamination Determinations</h2>
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
     </div>
-    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
+    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="tablePage=1;renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
@@ -487,12 +487,15 @@ function buildRequester(list) {
 // ── Sortable determinations table ──────────────────────────────────
 let allDeterminations = [];
 let tableSort = { key: 'official_date', dir: 'desc' };
+const TABLE_PAGE_SIZE = 100;
+let tablePage = 1;
 // Keyboard support for sortable column headers (Enter/Space activates the sort).
 document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
 });
 
 function sortReexam(key) {
+  tablePage = 1;
   if (tableSort.key === key) tableSort.dir = tableSort.dir === 'asc' ? 'desc' : 'asc';
   else tableSort = { key, dir: key === 'official_date' ? 'desc' : 'asc' };
   renderTable();
@@ -590,7 +593,16 @@ function renderTable() {
     return;
   }
 
-  const rows = items.map((d) => {
+  // Client-side pagination: stats/KPIs/charts operate on the full filtered set
+  // (via applyFilters); only this detailed listing is paged.
+  const total = items.length;
+  const pageCount = Math.ceil(total / TABLE_PAGE_SIZE);
+  tablePage = Math.min(Math.max(tablePage, 1), pageCount);
+  const start = (tablePage - 1) * TABLE_PAGE_SIZE;
+  const end = Math.min(start + TABLE_PAGE_SIZE, total);
+  const pageItems = items.slice(start, end);
+
+  const rows = pageItems.map((d) => {
     const num = d.application_number || '';
     const docId = d.document_identifier || '';
     const denied = /denied/i.test(d.determination_type || '');
@@ -624,7 +636,17 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester_type')}" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  if (total > TABLE_PAGE_SIZE) {
+    body.innerHTML += `<div class="table-pager" style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px">
+      <button class="btn-csv" onclick="gotoTablePage(-1)"${tablePage <= 1 ? ' disabled' : ''}>‹ Prev</button>
+      <span>Showing ${start + 1}–${end} of ${total}</span>
+      <button class="btn-csv" onclick="gotoTablePage(1)"${tablePage >= pageCount ? ' disabled' : ''}>Next ›</button>
+    </div>`;
+  }
 }
+
+function gotoTablePage(delta) { tablePage += delta; renderTable(); }
 
 // ── Period + art-unit filtering (scopes the stats card and the listing) ──
 let _all = [];               // full collected list (since Jan 1, 2025)
@@ -710,6 +732,7 @@ function applyFilters() {
   buildPendency(subset);
   buildRequester(subset);
   allDeterminations = subset; // scopes the detailed listing + CSV export
+  tablePage = 1;
   renderTable();
 }
 

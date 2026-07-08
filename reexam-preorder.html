@@ -8,6 +8,7 @@
   <meta property="og:title" content="Patent Owner Pre-Order SNQ Submissions — USPTO Reexam" />
   <meta property="og:description" content="Ex parte reexamination pre-order SNQ submissions, requestor petitions, and determinations since April 5, 2026." />
   <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/reexam-preorder" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,11 +19,6 @@
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
-    .back-link { display: inline-block; margin-bottom: 18px; color: #1a3a6b; text-decoration: none; font-weight: 600; font-size: 0.9rem; }
-    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
-    .reexam-cta { display: inline-block; background: #1a3a6b; color: #fff; text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 12px 20px; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
-    .reexam-cta:hover { background: #15305a; }
-    .back-link:hover { text-decoration: underline; }
     .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 24px; }
     .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
@@ -32,7 +28,7 @@
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
-    .kpi .sub { font-size: 0.72rem; color: #a0aec0; margin-top: 2px; }
+    .kpi .sub { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
     .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
@@ -80,7 +76,7 @@
     .btn-csv:hover { background: #cbd5e0; }
     .effect-callout { margin-top: 16px; background: #ebf4ff; border: 1px solid #c3dafe; border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; line-height: 1.55; color: #2d3748; }
     .effect-callout .effect-note { color: #718096; font-size: 0.85em; }
-    .freshness { margin-top: 12px; font-size: 0.78rem; color: #a0aec0; }
+    .freshness { margin-top: 12px; font-size: 0.78rem; color: #64748b; }
     /* Mobile / small-screen polish */
     @media (max-width: 640px) {
       .container { padding: 16px 10px 48px; }
@@ -130,7 +126,7 @@
     <div class="explainer">
       <p><strong>What changed on April 5, 2026.</strong> The USPTO added a <a href="https://www.uspto.gov/sites/default/files/documents/og-preorder-snq-apr2026.pdf" target="_blank" rel="noopener">pre-order procedure</a> for ex parte reexamination. For any request filed on or after April 5, 2026, a patent owner may file a paper — no petition, no fee — arguing that the request's cited teachings do not raise a substantial new question of patentability under 35 U.S.C. § 303(a), before the Office decides whether to order reexamination. The paper is capped at 30 pages, due within 30 days of service (not extendable), and should not address § 325(d) discretion. A requestor generally cannot respond unless it first obtains leave by petition under 37 CFR § 1.182; any permitted response is capped at 10 pages and due within 15 calendar days of service of the pre-order paper. This page tracks those submissions, petitions, and determinations.</p>
     </div>
-    <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <p style="font-size:0.78rem;color:#64748b;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
     <div id="stat"></div>
     <div id="trend"></div>
   </div>
@@ -150,22 +146,6 @@
   </div>
 
   <footer><a href="/privacy">Privacy Policy</a></footer>
-</div>
-
-<div class="modal-overlay" id="viewer-modal" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onclick="if(event.target===this)closeDocViewer()">
-  <div class="modal-box">
-    <div class="modal-bar">
-      <span class="title" id="viewer-title">Document</span>
-      <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
-      <a id="viewer-download" href="#" download>Download ⤓</a>
-      <button id="viewer-close" onclick="closeDocViewer()">Close ✕</button>
-    </div>
-    <div class="modal-content">
-      <div class="viewer-status" id="viewer-loading"><div class="spin"></div><span>Loading document…</span></div>
-      <div class="viewer-status" id="viewer-error">This document couldn't be displayed. It may not be available yet.</div>
-      <iframe id="viewer-frame" title="Document viewer"></iframe>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -263,6 +243,7 @@ function renderTable() {
   const items = sortedSubs(filteredSubs());
   if (!items.length) { body.innerHTML = '<div class="state">No matching rows.</div>'; return; }
   const arrow = (k) => (sSort.key === k ? (sSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const ariaSort = (k) => (sSort.key === k ? (sSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const docLinks = (num, docId, label) => {
     if (!docId) return '';
     const lbl = (label || 'Document').replace(/'/g, '');
@@ -306,41 +287,20 @@ function renderTable() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPreorder('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPreorder('official_date')">Pre-Order Submission${arrow('official_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPreorder('petition_date')">Requestor Petition${arrow('petition_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPreorder('decision_date')">Petition Decision${arrow('decision_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPreorder('det_date')">Reexam Determination${arrow('det_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('application_number')}" onclick="sortPreorder('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('official_date')}" onclick="sortPreorder('official_date')">Pre-Order Submission${arrow('official_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('petition_date')}" onclick="sortPreorder('petition_date')">Requestor Petition${arrow('petition_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('decision_date')}" onclick="sortPreorder('decision_date')">Petition Decision${arrow('decision_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('det_date')}" onclick="sortPreorder('det_date')">Reexam Determination${arrow('det_date')}</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
-let _viewerLastFocus = null;
-let _viewerReq = 0;
 function openDocViewer(appNum, documentId, format, label) {
   // Open the document inline in a new browser tab.
   const url = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`;
   window.open(url, '_blank', 'noopener');
 }
-function closeDocViewer() {
-  document.getElementById('viewer-modal').style.display = 'none';
-  document.getElementById('viewer-frame').src = 'about:blank';
-  document.body.style.overflow = '';
-  _viewerReq++;
-  if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
-}
-document.addEventListener('keydown', (e) => {
-  const modal = document.getElementById('viewer-modal');
-  if (modal.style.display !== 'flex') return;
-  if (e.key === 'Escape') { closeDocViewer(); return; }
-  if (e.key === 'Tab') {
-    const f = modal.querySelectorAll('a[href], button');
-    if (!f.length) return;
-    const first = f[0], last = f[f.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-});
 
 // Build the KPI strip + pre-order effect callout (all collected submissions).
 function buildStats() {

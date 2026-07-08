@@ -8,6 +8,7 @@
   <meta property="og:title" content="Post-Order Patent Owner Petitions — USPTO Reexam" />
   <meta property="og:description" content="Petitions to the Office of Petitions filed after a reexam grant, with opposition and decision." />
   <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/reexam-petitions" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -110,7 +111,8 @@
     <div class="explainer">
       <p>After a reexamination is ordered (a substantial new question of patentability was found), patent owners recently have been petitioning the Patent Office to reconsider that grant or terminate the proceeding pursuant to 35 U.S.C. § 325(d). This page tracks such motions and the Office's decisions. Where a proceeding has multiple petition documents (the petition plus exhibits), the shortest is treated as the petition itself. The requester opposition and the Office's petition decision are shown where on file.</p>
     </div>
-    <p style="font-size:0.78rem;color:#a0aec0;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <p id="freshness" class="sub" style="margin:0 0 12px"></p>
+    <p style="font-size:0.78rem;color:#64748b;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
     <div id="stat"></div>
     <div id="timing"></div>
     <div id="trend"></div>
@@ -239,6 +241,7 @@ function render() {
   const items = sortedRows(filtered());
   if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; return; }
   const arrow = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const ariaSort = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const rows = items.map((p) => {
     const num = p.application_number || '';
     const petCell = p.petition_doc_id ? `${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
@@ -264,12 +267,12 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('order_date')">Reexam Ordered${arrow('order_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('petition_date')">Patent Owner Petition${arrow('petition_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('opposition_date')">Requestor Opposition${arrow('opposition_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('decision_date')">Petition Decision Citing § 325(d)${arrow('decision_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortPetitions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('application_number')}" onclick="sortPetitions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('order_date')}" onclick="sortPetitions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('petition_date')}" onclick="sortPetitions('petition_date')">Patent Owner Petition${arrow('petition_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('opposition_date')}" onclick="sortPetitions('opposition_date')">Requestor Opposition${arrow('opposition_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('decision_date')}" onclick="sortPetitions('decision_date')">Petition Decision Citing § 325(d)${arrow('decision_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('nonf_date')}" onclick="sortPetitions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
@@ -293,14 +296,14 @@ function buildStats() {
     <div class="kpi-strip three">
       <div class="kpi"><div class="num">${granting}</div><div class="lbl">Decisions Granting Petition Citing § 325(d)</div></div>
       <div class="kpi"><div class="num">${dismissing}</div><div class="lbl">Decisions Dismissing Petition Citing § 325(d)</div></div>
-      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
+      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Petition Grant Rate</div>${decided ? `<div class="sub" style="font-size:0.72rem;color:#64748b;margin-top:2px">${granting} of ${decided} decided</div>` : ''}</div>
     </div>`;
 
   // Petition timing: order → petition (owner speed) and petition → decision (Office turnaround).
   const toPet = _rows.map((p) => daysBetween(p.order_date, p.petition_date)).filter((d) => d != null);
   const toDec = _rows.map((p) => p.decision_doc_id ? daysBetween(p.petition_date, p.decision_date) : null).filter((d) => d != null);
   const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
-  const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${num != null ? `<div class="sub" style="font-size:0.72rem;color:#718096;font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#a0aec0;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  const tcard = (num, lbl, n) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${num != null ? `<div class="sub" style="font-size:0.72rem;color:#718096;font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub" style="font-size:0.72rem;color:#64748b;margin-top:2px">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
   document.getElementById('timing').innerHTML = `<div class="stats-title">Petition Timing</div><div class="kpi-strip four">
     ${tcard(avg(toPet), 'Avg Days: Reexam Ordered → Petition', toPet.length)}
     ${tcard(median(toPet), 'Median Days: Reexam Ordered → Petition', toPet.length)}
@@ -363,6 +366,12 @@ function buildTrend() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.petitions || [];
+    const fr = document.getElementById('freshness');
+    if (fr) {
+      let maxMs = NaN, maxRaw = null;
+      for (const p of _rows) { const t = ms(p.petition_date); if (!isNaN(t) && (isNaN(maxMs) || t > maxMs)) { maxMs = t; maxRaw = p.petition_date; } }
+      fr.textContent = 'Data refreshed daily from the USPTO Open Data Portal.' + (maxRaw ? ` Most recent petition on file: ${fmtDate(maxRaw)}.` : '');
+    }
     buildStats();
     buildTrend();
     document.getElementById('list-heading').textContent = `Petitions (Total: ${_rows.length})`;

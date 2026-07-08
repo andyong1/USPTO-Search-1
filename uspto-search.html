@@ -8,6 +8,7 @@
   <meta property="og:title" content="USPTO Patent File Wrapper Search" />
   <meta property="og:description" content="Search USPTO patent applications, view/download file-wrapper documents, and track proceedings for new filings." />
   <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/uspto-search" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,14 +30,6 @@
       flex-wrap: wrap;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
-    .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
-    .reexam-cta {
-      display: inline-block; background: #1a3a6b; color: #fff;
-      text-decoration: none; font-weight: 700; font-size: 0.9rem;
-      padding: 12px 20px; border-radius: 10px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.12); letter-spacing: 0.01em;
-    }
-    .reexam-cta:hover { background: #15305a; }
 
     header svg { flex-shrink: 0; }
     header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
@@ -467,23 +460,6 @@
  <footer style="text-align:center;padding:24px 16px 8px;color:#718096;font-size:0.8rem">
    <a href="/privacy" style="color:#1a3a6b;text-decoration:none">Privacy Policy</a>
  </footer>
-</div>
-
-<!-- DOCUMENT VIEWER MODAL -->
-<div class="modal-overlay" id="viewer-modal" role="dialog" aria-modal="true" aria-labelledby="viewer-title" onclick="if(event.target===this)closeDocViewer()">
-  <div class="modal-box">
-    <div class="modal-bar">
-      <span class="title" id="viewer-title">Document</span>
-      <a id="viewer-newtab" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
-      <a id="viewer-download" href="#" download>Download ⤓</a>
-      <button id="viewer-close" onclick="closeDocViewer()">Close ✕</button>
-    </div>
-    <div class="modal-content">
-      <div class="viewer-status" id="viewer-loading"><div class="spin"></div><span>Loading document…</span></div>
-      <div class="viewer-status" id="viewer-error">This document couldn't be displayed. It may not be available yet.</div>
-      <iframe id="viewer-frame" title="Document viewer"></iframe>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -1744,34 +1720,10 @@ function docTableInner() {
     <tbody>${rows}</tbody></table></div>`;
 }
 
-// ── In-page document viewer ────────────────────────────────────────
-let _viewerLastFocus = null;
-let _viewerReq = 0;
+// Open a document inline in a new browser tab.
 function openDocViewer(appNum, documentId, format, label) {
-  // Open the document inline in a new browser tab.
   window.open(docUrl(appNum, documentId, format, 'inline'), '_blank', 'noopener');
 }
-
-function closeDocViewer() {
-  document.getElementById('viewer-modal').style.display = 'none';
-  document.getElementById('viewer-frame').src = 'about:blank';
-  document.body.style.overflow = '';
-  _viewerReq++;
-  if (_viewerLastFocus && _viewerLastFocus.focus) _viewerLastFocus.focus();
-}
-
-document.addEventListener('keydown', e => {
-  const modal = document.getElementById('viewer-modal');
-  if (modal.style.display !== 'flex') return;
-  if (e.key === 'Escape') { closeDocViewer(); return; }
-  if (e.key === 'Tab') {
-    const f = modal.querySelectorAll('a[href], button');
-    if (!f.length) return;
-    const first = f[0], last = f[f.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
-});
 
 // Restore view from the URL (shared links) and set the initial history entry.
 restoreFromUrl();

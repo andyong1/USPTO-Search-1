@@ -8,6 +8,7 @@
   <meta property="og:title" content="Reexam Office Action Timing — USPTO Reexam" />
   <meta property="og:description" content="Time from reexam grant to first non-final and final office actions." />
   <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/reexam-actions" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -43,7 +44,7 @@
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
-    .kpi .sub2 { font-size: 0.72rem; color: #a0aec0; margin-top: 2px; }
+    .kpi .sub2 { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
     .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
@@ -116,7 +117,8 @@
   <div class="card">
     <h2>Reexamination Office Action Timing</h2>
     <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits and (2) the final office action. <strong>Measured for reexaminations ordered on or after January 1, 2025.</strong></div>
-    <p style="font-size:0.78rem;color:#a0aec0;margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div id="freshness" class="sub"></div>
     <div class="filter-bar">
       <div class="fb-group">
         <label for="period-select">Period:</label>
@@ -257,7 +259,7 @@ function buildExaminerSection(rows) {
   document.getElementById('examiner-stat').innerHTML = '';
   aExaminer = '';
   const names = [...new Set(rows.map((p) => (p.examiner_name || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  if (!names.length) { card.style.display = 'none'; return; }
+  if (!names.length) { card.style.display = 'none'; pendingExaminer = null; return; }
   const sel = document.getElementById('examiner-select');
   sel.innerHTML = ['<option value="">Select an examiner…</option>']
     .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
@@ -268,6 +270,13 @@ function buildExaminerSection(rows) {
     // Also filter the proceedings table below to the selected examiner.
     aExaminer = name; render();
   };
+  // Restore the examiner from the URL once, if it is a valid option in this scope.
+  if (pendingExaminer && names.includes(pendingExaminer)) {
+    aExaminer = pendingExaminer;
+    sel.value = pendingExaminer;
+    document.getElementById('examiner-stat').innerHTML = statCards(rows.filter((p) => (p.examiner_name || '').trim() === pendingExaminer));
+  }
+  pendingExaminer = null;
 }
 // Reset the examiner selection — show all examiners / unfilter the table.
 function clearExaminer() {
@@ -306,6 +315,7 @@ function exportCsv() {
 }
 
 let aExaminer = '';
+let pendingExaminer = null; // examiner from the URL, applied once after the dropdown is populated
 function filtered() {
   // Scoped set (first office action in the selected period + art unit), then the
   // optional selected-examiner filter, then text filter.
@@ -352,6 +362,7 @@ function render() {
   const resetBtn = document.getElementById('examiner-reset'); if (resetBtn) resetBtn.style.display = aExaminer ? '' : 'none';
   if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
   const arrow = (k) => (aSort.key === k ? (aSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const ariaSort = (k) => (aSort.key === k ? (aSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const cell = (num, date, n, docId, label) => date
     ? `${fmtDate(date)} <span class="days">(${n} days)</span>${docLinks(num, docId, label)}`
     : '<span class="ext">—</span>';
@@ -371,10 +382,10 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th class="sortable" tabindex="0" role="button" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortActions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
-      <th class="sortable" tabindex="0" role="button" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('application_number')}" onclick="sortActions('application_number')">Control No.${arrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('order_date')}" onclick="sortActions('order_date')">Reexam Ordered${arrow('order_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('nonf_date')}" onclick="sortActions('nonf_date')">First Office Action${arrow('nonf_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('finl_date')}" onclick="sortActions('finl_date')">Final Office Action${arrow('finl_date')}</th>
       <th>Examiner</th><th>Group Art Unit</th><th>Technology Area</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
@@ -395,6 +406,7 @@ function writeFiltersToUrl() {
   if (aPeriod && aPeriod !== 'since2025') p.set('period', aPeriod);
   if (aArtUnit) p.set('au', aArtUnit);
   if (aTc) p.set('tc', aTc);
+  if (aExaminer) p.set('ex', aExaminer);
   const q = ((document.getElementById('table-filter') || {}).value || '').trim();
   if (q) p.set('q', q);
   if (aSort.key !== 'nonf_date' || aSort.dir !== 'desc') { p.set('sort', aSort.key); p.set('dir', aSort.dir); }
@@ -412,6 +424,8 @@ function readFiltersFromUrl() {
   document.getElementById('period-select').value = aPeriod;
   const auSel = document.getElementById('artunit-select'); auSel.value = params.get('au') || ''; aArtUnit = auSel.value;
   const tcSel = document.getElementById('tc-select'); tcSel.value = params.get('tc') || ''; aTc = tcSel.value;
+  // Examiner dropdown is populated later (scope-dependent), so validate/apply it once then.
+  pendingExaminer = params.get('ex') || null;
 }
 
 function periodInfo(p) {
@@ -493,7 +507,7 @@ function trendSvg(data, gran) {
   const every = Math.max(1, Math.ceil(n / 12));
   const xlabels = data.map((d, i) => (i % every === 0 ? `<text x="${px(i)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
   const hits = data.map((d, i) => `<circle class="pt" cx="${px(i)}" cy="${yfor(d.avg)}" r="14" fill="transparent" data-m="${esc(trendLabel(d.ms, gran))}" data-a="${d.avg}" data-n="${d.n}"></circle>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}`
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Line chart of average days from reexamination grant to first office action, by first-action date.">${grid}`
     + `<polyline points="${pts}" fill="none" stroke="#1a3a6b" stroke-width="2"/>${dots}${vals}${xlabels}${hits}</svg>`;
 }
 function buildTrend(rows, gran) {
@@ -541,6 +555,18 @@ function applyFilters() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.actions || [];
+    const freshEl = document.getElementById('freshness');
+    if (freshEl) {
+      let maxMs = -Infinity, maxRaw = null;
+      for (const p of _rows) {
+        for (const raw of [p.nonf_date, p.finl_date]) {
+          const t = ms(raw);
+          if (!isNaN(t) && t > maxMs) { maxMs = t; maxRaw = raw; }
+        }
+      }
+      freshEl.textContent = 'Data refreshed daily from the USPTO Open Data Portal.'
+        + (maxRaw ? ' Most recent office action on file: ' + fmtDate(maxRaw) + '.' : '');
+    }
     const withAction = _rows.filter((p) => p.nonf_date).length;
     if (!withAction) {
       document.getElementById('list-heading').textContent = 'Proceedings With at Least One Office Action (Total: 0)';

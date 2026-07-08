@@ -30,7 +30,7 @@
     input { padding: 9px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.95rem; }
     button { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 9px 16px; border-radius: 8px; }
     button:hover { background: #15305a; }
-    .muted { color: #a0aec0; font-size: 0.8rem; }
+    .muted { color: #64748b; font-size: 0.8rem; }
     .err { color: #c53030; font-weight: 600; margin-top: 10px; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     a { color: #1a3a6b; }
@@ -175,7 +175,8 @@ function sortTracked(key) {
 function trackedTh(key, label) {
   const active = trackedSort.key === key;
   const arrow = active ? (trackedSort.dir === 1 ? ' ▲' : ' ▼') : '';
-  return `<th onclick="sortTracked('${key}')" title="Sort by ${label}" style="text-align:left;font-weight:600;color:${active ? '#1a3a6b' : '#718096'};font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px;cursor:pointer;user-select:none;white-space:nowrap">${label}${arrow}</th>`;
+  const ariaSort = active ? (trackedSort.dir === 1 ? 'ascending' : 'descending') : 'none';
+  return `<th onclick="sortTracked('${key}')" aria-sort="${ariaSort}" title="Sort by ${label}" style="text-align:left;font-weight:600;color:${active ? '#1a3a6b' : '#718096'};font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;padding:6px 10px;cursor:pointer;user-select:none;white-space:nowrap">${label}${arrow}</th>`;
 }
 
 function trackedTableHtml() {
@@ -210,7 +211,7 @@ function render(s) {
       <div class="row" style="justify-content:space-between">
         <div><h2 style="margin:0">Backlog — proceedings due for a check now</h2>
         <div class="sub" style="margin:4px 0 0">Green = caught up. Amber = waiting for the next scheduled run.</div></div>
-        <button onclick="go()">Refresh</button>
+        <button onclick="refresh()">Refresh</button>
       </div>
       <div class="kpi-strip" style="margin-top:16px">
         ${dueCard(s.undetermined, 'Reexams to scan (undetermined)')}

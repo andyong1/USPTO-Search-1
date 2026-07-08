@@ -4,6 +4,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition, classifyRequester } from '../lib/uspto.js';
+import { classifyFwd } from '../lib/ptab.js';
+
+test('classifyFwd — petitioner total win (all challenged claims unpatentable)', () => {
+  assert.equal(classifyFwd('... FINAL WRITTEN DECISION Determining All Challenged Claims Unpatentable 35 U.S.C. 318(a) ...').outcome, 'petitioner_all');
+  assert.equal(classifyFwd('Determining All of the Challenged Claims Unpatentable').outcome, 'petitioner_all');
+});
+test('classifyFwd — patent owner total win (no challenged claims unpatentable)', () => {
+  assert.equal(classifyFwd('Final Written Decision Determining No Challenged Claims Unpatentable').outcome, 'po_none');
+});
+test('classifyFwd — partial (some challenged claims)', () => {
+  assert.equal(classifyFwd('JUDGMENT Final Written Decision Determining Some Challenged Claims Unpatentable and Some Not Unpatentable').outcome, 'partial');
+});
+test('classifyFwd — body-text fallback when caption not captured', () => {
+  assert.equal(classifyFwd('the Board concludes that all challenged claims are unpatentable.').outcome, 'petitioner_all');
+  assert.equal(classifyFwd('Petitioner has not shown that any of the challenged claims are unpatentable; no challenged claims are unpatentable.').outcome, 'po_none');
+});
+test('classifyFwd — non-standard disposition => other', () => {
+  assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'other');
+  assert.equal(classifyFwd('').outcome, 'other');
+});
 
 // classifyRequester takes a flat list of USPTO code strings (union of document +
 // transaction codes). Third-party requires a positive third-party code; patent

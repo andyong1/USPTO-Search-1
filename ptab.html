@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PTAB Final Written Decisions (internal)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header p { font-size: 0.8rem; opacity: 0.8; margin-top: 3px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 22px; }
+    .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #64748b; font-size: 0.85rem; margin-bottom: 14px; }
+    .filter-bar { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+    .fb-group { display: flex; flex-direction: column; gap: 5px; }
+    .fb-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
+    .fb-group input[type=date] { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
+    .types { display: flex; gap: 14px; align-items: center; }
+    .types label { font-weight: 500; font-size: 0.9rem; display: inline-flex; gap: 5px; align-items: center; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 6px 0 4px; }
+    @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: #64748b; margin-top: 6px; line-height: 1.3; }
+    .table-wrap { overflow: auto; max-height: 72vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 9px 12px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; cursor: pointer; user-select: none; }
+    th:hover { background: #e2e8f0; }
+    td { padding: 9px 12px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: #64748b; font-size: 0.8rem; text-decoration: none; }
+    .ext:hover { text-decoration: underline; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+    .o-po { background: #c6f6d5; color: #276749; }
+    .o-pet { background: #fed7d7; color: #9b2c2c; }
+    .o-partial { background: #feebc8; color: #9c4221; }
+    .o-other { background: #e2e8f0; color: #4a5568; }
+    .btn { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.9rem; padding: 9px 16px; border-radius: 8px; }
+    .btn:hover { background: #15305a; }
+    .btn.secondary { background: #e2e8f0; color: #1a3a6b; }
+    .btn.secondary:hover { background: #cbd5e0; }
+    .state { text-align: center; padding: 40px 20px; color: #64748b; }
+    .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
+  </style>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>PTAB Final Written Decisions</h1>
+  <p>AIA trials (IPR / PGR / CBM) that reached an FWD — i.e. instituted past the discretionary-denial stage · internal</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Final Written Decision Outcomes</h2>
+    <div class="sub" id="freshness">A Final Written Decision only issues after institution, so every case here got past discretionary denial. Outcome is parsed from the Board's decision caption.</div>
+
+    <div class="filter-bar">
+      <div class="fb-group"><label for="from">FWD date from</label><input type="date" id="from" /></div>
+      <div class="fb-group"><label for="to">FWD date to</label><input type="date" id="to" /></div>
+      <div class="fb-group"><label>Trial type</label>
+        <div class="types">
+          <label><input type="checkbox" class="type-cb" value="IPR" checked> IPR</label>
+          <label><input type="checkbox" class="type-cb" value="PGR" checked> PGR</label>
+          <label><input type="checkbox" class="type-cb" value="CBM" checked> CBM</label>
+        </div>
+      </div>
+      <button class="btn secondary" id="reset">Reset filters</button>
+      <button class="btn" id="export">Export .xlsx</button>
+    </div>
+
+    <div id="kpi"></div>
+    <p class="disclaimer">Outcome key: <strong>Patent owner win</strong> = no challenged claims held unpatentable · <strong>Petitioner win</strong> = all challenged claims unpatentable · <strong>Partial</strong> = some claims unpatentable · <strong>Other</strong> = non-standard disposition (e.g. adverse judgment) — review the decision. Classification is heuristic (parsed from the FWD text); verify against the decision.</p>
+  </div>
+
+  <div class="card">
+    <h2 id="list-heading">Cases</h2>
+    <div id="body"><div class="state">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const OUTCOME = {
+  po_none:        { label: 'Patent owner win', cls: 'o-po' },
+  petitioner_all: { label: 'Petitioner win',   cls: 'o-pet' },
+  partial:        { label: 'Partial',          cls: 'o-partial' },
+  other:          { label: 'Other / review',   cls: 'o-other' },
+};
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
+
+let ALL = [];
+let sortKey = 'fwd_date', sortDir = 'desc';
+
+function selectedTypes() { return [...document.querySelectorAll('.type-cb:checked')].map((c) => c.value); }
+function filtered() {
+  const from = ymd(document.getElementById('from').value);
+  const to = ymd(document.getElementById('to').value);
+  const types = new Set(selectedTypes());
+  return ALL.filter((r) => {
+    if (types.size && !types.has(r.trial_type)) return false;
+    const d = ymd(r.fwd_date);
+    if (from && d && d < from) return false;
+    if (to && d && d > to) return false;
+    return true;
+  });
+}
+function sorted(rows) {
+  const sign = sortDir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => sign * String(a[sortKey] || '').localeCompare(String(b[sortKey] || ''), undefined, { numeric: true }));
+}
+
+function buildKpi(rows) {
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
+  for (const r of rows) c[r.outcome] = (c[r.outcome] || 0) + 1;
+  const pct = (n) => (c.total ? (n / c.total * 100).toFixed(1) + '%' : '—');
+  const card = (num, lbl, color, sub) => `<div class="kpi"><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}${sub ? '<br>' + sub : ''}</div></div>`;
+  document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
+    ${card(c.total, 'Final Written Decisions', '#1a3a6b', '')}
+    ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none))}
+    ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all))}
+    ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial))}
+    ${card(c.other, 'Other / Review', '#4a5568', pct(c.other))}
+  </div>`;
+}
+
+function render() {
+  const rows = sorted(filtered());
+  buildKpi(rows);
+  const body = document.getElementById('body');
+  document.getElementById('list-heading').textContent = `Cases (${rows.length})`;
+  if (!rows.length) { body.innerHTML = '<div class="state">No Final Written Decisions match your filters.</div>'; return; }
+  const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
+  const trs = rows.map((r) => {
+    const o = OUTCOME[r.outcome] || OUTCOME.other;
+    const pdf = r.fwd_pdf_url ? `<a class="ext" href="/api/ptab?file=${encodeURIComponent(r.fwd_pdf_url)}" target="_blank" rel="noopener">FWD ↗</a>` : '';
+    const pat = r.patent_number ? `<a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number || '')}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
+    return `<tr>
+      <td>${esc(r.trial_number)} ${pdf}</td>
+      <td>${esc(r.trial_type)}</td>
+      <td>${pat}</td>
+      <td>${r.po_name ? esc(r.po_name) : '<span class="ext">—</span>'}</td>
+      <td>${r.petitioner_name ? esc(r.petitioner_name) : '<span class="ext">—</span>'}</td>
+      <td>${r.tech_center ? esc(r.tech_center) : '<span class="ext">—</span>'}</td>
+      <td>${fmtDate(r.institution_date)}</td>
+      <td>${fmtDate(r.fwd_date)}</td>
+      <td><span class="badge ${o.cls}">${o.label}</span></td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
+    ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
+    ${th('institution_date', 'Instituted')}${th('fwd_date', 'FWD Date')}${th('outcome', 'Outcome')}
+  </tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = k === 'fwd_date' || k === 'institution_date' ? 'desc' : 'asc'; } render(); }
+
+function exportXlsx() {
+  if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
+  const rows = sorted(filtered());
+  const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Group Art Unit',
+    'Patent Owner', 'Petitioner', 'PO Counsel', 'Petitioner Counsel', 'Petition Date', 'Institution Date',
+    'FWD Date', 'Outcome', 'Outcome Detail', 'FWD PDF URL'];
+  const aoa = [header, ...rows.map((r) => [
+    r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.group_art_unit,
+    r.po_name, r.petitioner_name, r.po_counsel, r.petitioner_counsel, fmtDate(r.petition_date), fmtDate(r.institution_date),
+    fmtDate(r.fwd_date), (OUTCOME[r.outcome] || OUTCOME.other).label, r.outcome_detail, r.fwd_pdf_url,
+  ])];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 40].map((w) => ({ wch: w }));
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
+  for (const r of rows) c[r.outcome] = (c[r.outcome] || 0) + 1;
+  const pct = (n) => (c.total ? +(n / c.total * 100).toFixed(1) : 0);
+  const sAoa = [
+    ['PTAB Final Written Decisions — Summary'], [],
+    ['Total FWDs', c.total],
+    ['Patent Owner total wins (no claims unpatentable)', c.po_none, pct(c.po_none) + '%'],
+    ['Petitioner total wins (all claims unpatentable)', c.petitioner_all, pct(c.petitioner_all) + '%'],
+    ['Partial (some claims unpatentable)', c.partial, pct(c.partial) + '%'],
+    ['Other / review', c.other, pct(c.other) + '%'],
+    [], ['Generated', new Date().toISOString().slice(0, 10)],
+  ];
+  const sWs = XLSX.utils.aoa_to_sheet(sAoa); sWs['!cols'] = [{ wch: 46 }, { wch: 10 }, { wch: 8 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sWs, 'Summary');
+  XLSX.utils.book_append_sheet(wb, ws, 'FWDs');
+  XLSX.writeFile(wb, 'ptab-fwd-outcomes.xlsx');
+}
+
+document.getElementById('from').addEventListener('change', render);
+document.getElementById('to').addEventListener('change', render);
+document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
+document.getElementById('reset').addEventListener('click', () => {
+  document.getElementById('from').value = ''; document.getElementById('to').value = '';
+  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
+});
+document.getElementById('export').addEventListener('click', exportXlsx);
+
+(async () => {
+  try {
+    const res = await fetch('/api/ptab');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    ALL = data.rows || [];
+    if (!ALL.length) {
+      document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/cron/ptab-scan), then reload.</div>';
+      buildKpi([]);
+      return;
+    }
+    const latest = ALL.reduce((m, r) => (r.fwd_date && r.fwd_date > m ? r.fwd_date : m), '');
+    if (latest) document.getElementById('freshness').textContent += ' Most recent FWD on file: ' + fmtDate(latest) + '.';
+    render();
+  } catch (e) {
+    document.getElementById('body').innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+  }
+})();
+</script>
+</body>
+</html>

@@ -213,7 +213,7 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     const data = await res.json();
     ALL = data.rows || [];
     if (!ALL.length) {
-      document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/cron/ptab-scan), then reload.</div>';
+      document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/ptab?scan=1), then reload.</div>';
       buildKpi([]);
       return;
     }

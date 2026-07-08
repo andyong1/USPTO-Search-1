@@ -434,6 +434,29 @@ let oSort = { key: 'cert_date', dir: 'desc' };
 const TABLE_PAGE_SIZE = 100;
 let tablePage = 1;
 function gotoTablePage(delta) { tablePage += delta; render(); }
+function gotoTablePageAbs(n) { tablePage = n; render(); }
+// Windowed page numbers: 1 … (cur-2 … cur+2) … last, with ellipses for gaps.
+function pageNums(cur, total) {
+  const delta = 2, keep = [], out = [];
+  for (let i = 1; i <= total; i++) if (i === 1 || i === total || (i >= cur - delta && i <= cur + delta)) keep.push(i);
+  let prev;
+  for (const i of keep) { if (prev) { if (i - prev === 2) out.push(prev + 1); else if (i - prev > 2) out.push('…'); } out.push(i); prev = i; }
+  return out;
+}
+// Pager: "Showing X–Y of Z" + Prev / numbered pages / Next.
+function pagerHtml(page, pages, start, end, total) {
+  const nums = pageNums(page, pages).map((n) => n === '…'
+    ? '<span style="padding:0 4px;color:#718096">…</span>'
+    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === page ? ';background:#1a3a6b;color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+  return `<div class="table-pager" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
+    <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="btn-csv" onclick="gotoTablePage(-1)"${page <= 1 ? ' disabled' : ''}>‹ Prev</button>
+      ${nums}
+      <button class="btn-csv" onclick="gotoTablePage(1)"${page >= pages ? ' disabled' : ''}>Next ›</button>
+    </div>
+  </div>`;
+}
 function sortOutcomes(key) {
   tablePage = 1;
   if (oSort.key === key) oSort.dir = oSort.dir === 'asc' ? 'desc' : 'asc';
@@ -487,13 +510,7 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('group_art_unit')}" onclick="sortOutcomes('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortOutcomes('tech_center')">Technology Area${arrow('tech_center')}</th>
     </tr></thead>
-    <tbody>${rows}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px">
-    <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
-    <span style="display:flex;gap:8px">
-      <button class="btn-csv" onclick="gotoTablePage(-1)"${tablePage <= 1 ? ' disabled' : ''}>‹ Prev</button>
-      <button class="btn-csv" onclick="gotoTablePage(1)"${tablePage >= pageCount ? ' disabled' : ''}>Next ›</button>
-    </span>
-  </div>` : '');
+    <tbody>${rows}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pageCount, start, end, total) : '');
 }
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }

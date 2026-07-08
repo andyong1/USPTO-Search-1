@@ -7,9 +7,10 @@
 //                                   CRON_SECRET-gated. Params: from (2024-01-01), to, types (IPR,PGR,CBM). Resumable via ?offset=.
 //   GET /api/ptab?classify=1      → classify pass: fetch each unclassified FWD PDF, extract text, classify.
 //                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
-import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome } from '../lib/db.js';
+import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
+  markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage, classifyFwdFromPdf, CLASSIFIER_V } from '../lib/ptab.js';
+import { fetchFwdPage, classifyFwdFromPdf, fetchDdDecision, CLASSIFIER_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -77,6 +78,31 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Director discretionary decision pass (bifurcated DD process) ──
+    if (q.dd) {
+      if (!gate(req, res)) return;
+      const V = DD_CHECK_V;
+      const markedOld = await markOldFwdNoDD(V, DD_CUTOFF); // pre-DD-process FWDs → 'none' (no fetch)
+      const CONCURRENCY = 5;
+      const deadline = Date.now() + 50000;
+      let processed = 0; const tally = {}; const errors = [];
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToCheckDD(CONCURRENCY, V, DD_CUTOFF);
+        if (!batch.length) break;
+        await Promise.all(batch.map(async (trial) => {
+          try { const dd = await fetchDdDecision(trial); await setPtabFwdDD(trial, dd, V); processed++; tally[dd] = (tally[dd] || 0) + 1; }
+          catch (e) {
+            try { await setPtabFwdDD(trial, 'error', V); } catch { /* ignore */ }
+            processed++; tally.error = (tally.error || 0) + 1;
+            if (errors.length < 5) errors.push({ trial, error: String(e.message || e) });
+          }
+        }));
+      }
+      const remaining = await countPtabFwdToCheckDD(V, DD_CUTOFF);
+      res.status(200).json({ ok: true, mode: 'dd', ddCheckVersion: V, markedOld, processed, tally, remaining, done: remaining === 0, errors });
+      return;
+    }
+
     // ── FWD PDF proxy ──
     if (q.file) {
       const url = String(q.file);
@@ -105,12 +131,14 @@ export default async function handler(req, res) {
     // ── Read (page data) ──
     res.setHeader('Cache-Control', 'no-store');
     const rows = await listPtabFwd();
-    const summary = { total: rows.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0 };
+    const summary = { total: rows.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0, dd: 0, ddPending: 0 };
     for (const r of rows) {
-      if ((r.classified_v || 0) < CLASSIFIER_V) { summary.pending += 1; continue; }
-      summary[r.outcome] = (summary[r.outcome] || 0) + 1;
+      if ((r.classified_v || 0) < CLASSIFIER_V) summary.pending += 1;
+      else summary[r.outcome] = (summary[r.outcome] || 0) + 1;
+      if ((r.dd_checked_v || 0) < DD_CHECK_V) summary.ddPending += 1;
+      else if (r.dd_decision && r.dd_decision !== 'none' && r.dd_decision !== 'error') summary.dd += 1;
     }
-    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V });
+    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
   } catch (err) {
     res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
   }

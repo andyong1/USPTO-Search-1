@@ -4,7 +4,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition, classifyRequester } from '../lib/uspto.js';
-import { classifyFwd } from '../lib/ptab-classify.js';
+import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
+
+test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
+  const docs = [
+    { typeDesc: 'EXHIBIT', title: 'Some exhibit' },
+    { typeDesc: 'Director Discretionary Decision: Refer', title: 'Director Discretionary Decision: Refer' },
+    { typeDesc: 'Institution Decision:  Grant', title: '' },
+  ];
+  assert.equal(detectDdDecision(docs), 'refer');
+  assert.equal(detectDdDecision([{ typeDesc: 'Director Discretionary Decision: Deny' }]), 'deny');
+  assert.equal(detectDdDecision([{ typeDesc: 'PO Discretionary Denial Brief' }, { typeDesc: 'EXHIBIT' }]), 'none');
+  assert.equal(detectDdDecision([]), 'none');
+});
 
 test('classifyFwd — caption: petitioner total win (All Challenged Claims Unpatentable)', () => {
   assert.equal(classifyFwd('... FINAL WRITTEN DECISION Determining All Challenged Claims Unpatentable 35 U.S.C. 318(a) ...').outcome, 'petitioner_all');

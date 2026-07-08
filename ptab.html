@@ -46,6 +46,7 @@
     .o-partial { background: #feebc8; color: #9c4221; }
     .o-other { background: #e2e8f0; color: #4a5568; }
     .o-pending { background: #fefcbf; color: #744210; }
+    .o-dd { background: #e9d8fd; color: #553c9a; }
     .btn { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.9rem; padding: 9px 16px; border-radius: 8px; }
     .btn:hover { background: #15305a; }
     .btn.secondary { background: #e2e8f0; color: #1a3a6b; }
@@ -76,6 +77,13 @@
           <label><input type="checkbox" class="type-cb" value="CBM" checked> CBM</label>
         </div>
       </div>
+      <div class="fb-group"><label for="dd">Discretionary review</label>
+        <select id="dd" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem">
+          <option value="">All FWDs</option>
+          <option value="yes">Had Director discretionary decision</option>
+          <option value="no">No discretionary decision</option>
+        </select>
+      </div>
       <button class="btn secondary" id="reset">Reset filters</button>
       <button class="btn" id="export">Export .xlsx</button>
     </div>
@@ -99,9 +107,22 @@ const OUTCOME = {
   unclassified:   { label: 'Pending',          cls: 'o-pending' },
 };
 let CV = 1; // classifier version from the API; rows below it are still pending
+let DDV = 1; // director-discretionary-decision check version
 function outcomeKey(r) {
   if ((r.classified_v || 0) < CV) return 'unclassified';
   return OUTCOME[r.outcome] ? r.outcome : 'other';
+}
+// Director discretionary decision: 'pending' (not checked), 'none', or the subtype.
+function ddKey(r) {
+  if ((r.dd_checked_v || 0) < DDV) return 'pending';
+  const v = String(r.dd_decision || 'none').toLowerCase();
+  return (v === 'none' || v === 'error' || v === '') ? 'none' : v;
+}
+function ddCell(r) {
+  const k = ddKey(r);
+  if (k === 'pending') return '<span class="ext">…</span>';
+  if (k === 'none') return '<span class="ext">—</span>';
+  return `<span class="badge o-dd">${esc(k.charAt(0).toUpperCase() + k.slice(1))}</span>`;
 }
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
@@ -115,11 +136,15 @@ function filtered() {
   const from = ymd(document.getElementById('from').value);
   const to = ymd(document.getElementById('to').value);
   const types = new Set(selectedTypes());
+  const dd = document.getElementById('dd').value;
   return ALL.filter((r) => {
     if (types.size && !types.has(r.trial_type)) return false;
     const d = ymd(r.fwd_date);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
+    if (dd === 'yes' && ddKey(r) === 'none') return false; // require a DD decision (pending counts as maybe)
+    if (dd === 'yes' && ddKey(r) === 'pending') return false;
+    if (dd === 'no' && ddKey(r) !== 'none') return false;
     return true;
   });
 }
@@ -172,12 +197,13 @@ function render() {
       <td>${fmtDate(r.institution_date)}</td>
       <td>${fmtDate(r.fwd_date)}${fwdLinks}</td>
       <td><span class="badge ${o.cls}">${o.label}</span></td>
+      <td>${ddCell(r)}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table><thead><tr>
     ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
     ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
-    ${th('institution_date', 'Instituted')}${th('fwd_date', 'FWD Date')}${th('outcome', 'Outcome')}
+    ${th('institution_date', 'Instituted')}${th('fwd_date', 'FWD Date')}${th('outcome', 'Outcome')}${th('dd_decision', 'Disc. Review')}
   </tr></thead><tbody>${trs}</tbody></table></div>`;
 }
 function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = k === 'fwd_date' || k === 'institution_date' ? 'desc' : 'asc'; } render(); }
@@ -185,16 +211,17 @@ function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : '
 function exportXlsx() {
   if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
   const rows = sorted(filtered());
+  const ddLabel = (r) => { const k = ddKey(r); return k === 'pending' ? 'not checked' : k === 'none' ? '' : k.charAt(0).toUpperCase() + k.slice(1); };
   const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Group Art Unit',
     'Patent Owner', 'Petitioner', 'PO Counsel', 'Petitioner Counsel', 'Petition Date', 'Institution Date',
-    'FWD Date', 'Outcome', 'Outcome Detail', 'FWD PDF URL'];
+    'FWD Date', 'Outcome', 'Outcome Detail', 'Director Discretionary Decision', 'FWD PDF URL'];
   const aoa = [header, ...rows.map((r) => [
     r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.group_art_unit,
     r.po_name, r.petitioner_name, r.po_counsel, r.petitioner_counsel, fmtDate(r.petition_date), fmtDate(r.institution_date),
-    fmtDate(r.fwd_date), (OUTCOME[outcomeKey(r)] || OUTCOME.other).label, r.outcome_detail, r.fwd_pdf_url,
+    fmtDate(r.fwd_date), (OUTCOME[outcomeKey(r)] || OUTCOME.other).label, r.outcome_detail, ddLabel(r), r.fwd_pdf_url,
   ])];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 40].map((w) => ({ wch: w }));
+  ws['!cols'] = [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 16, 40].map((w) => ({ wch: w }));
   const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
   for (const r of rows) c[outcomeKey(r)]++;
   const pct = (n) => (c.total ? +(n / c.total * 100).toFixed(1) : 0);
@@ -216,9 +243,10 @@ function exportXlsx() {
 
 document.getElementById('from').addEventListener('change', render);
 document.getElementById('to').addEventListener('change', render);
+document.getElementById('dd').addEventListener('change', render);
 document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
 document.getElementById('reset').addEventListener('click', () => {
-  document.getElementById('from').value = ''; document.getElementById('to').value = '';
+  document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd').value = '';
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
 });
 document.getElementById('export').addEventListener('click', exportXlsx);
@@ -229,6 +257,7 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     CV = data.classifierVersion || 1;
+    DDV = data.ddCheckVersion || 1;
     ALL = data.rows || [];
     if (!ALL.length) {
       document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/ptab?scan=1), then reload.</div>';

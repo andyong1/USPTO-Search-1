@@ -77,13 +77,6 @@
           <label><input type="checkbox" class="type-cb" value="CBM" checked> CBM</label>
         </div>
       </div>
-      <div class="fb-group"><label for="dd">Discretionary review</label>
-        <select id="dd" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem">
-          <option value="">All FWDs</option>
-          <option value="yes">Had Director discretionary decision</option>
-          <option value="no">No discretionary decision</option>
-        </select>
-      </div>
       <button class="btn secondary" id="reset">Reset filters</button>
       <button class="btn" id="export">Export .xlsx</button>
     </div>
@@ -93,7 +86,12 @@
   </div>
 
   <div class="card">
-    <h2 id="list-heading">Cases</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="list-heading" style="margin:0">Cases</h2>
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="dd-refer"> Show only proceedings with discretionary denial referrals
+      </label>
+    </div>
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -136,15 +134,13 @@ function filtered() {
   const from = ymd(document.getElementById('from').value);
   const to = ymd(document.getElementById('to').value);
   const types = new Set(selectedTypes());
-  const dd = document.getElementById('dd').value;
+  const onlyRefer = document.getElementById('dd-refer').checked;
   return ALL.filter((r) => {
     if (types.size && !types.has(r.trial_type)) return false;
     const d = ymd(r.fwd_date);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
-    if (dd === 'yes' && ddKey(r) === 'none') return false; // require a DD decision (pending counts as maybe)
-    if (dd === 'yes' && ddKey(r) === 'pending') return false;
-    if (dd === 'no' && ddKey(r) !== 'none') return false;
+    if (onlyRefer && ddKey(r) !== 'refer') return false; // only discretionary-denial referrals
     return true;
   });
 }
@@ -243,10 +239,10 @@ function exportXlsx() {
 
 document.getElementById('from').addEventListener('change', render);
 document.getElementById('to').addEventListener('change', render);
-document.getElementById('dd').addEventListener('change', render);
+document.getElementById('dd-refer').addEventListener('change', render);
 document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
 document.getElementById('reset').addEventListener('click', () => {
-  document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd').value = '';
+  document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd-refer').checked = false;
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
 });
 document.getElementById('export').addEventListener('click', exportXlsx);

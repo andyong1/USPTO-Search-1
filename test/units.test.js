@@ -4,21 +4,25 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
 import { analyzePetition, classifyRequester } from '../lib/uspto.js';
-import { classifyFwd } from '../lib/ptab.js';
+import { classifyFwd } from '../lib/ptab-classify.js';
 
-test('classifyFwd — petitioner total win (all challenged claims unpatentable)', () => {
+test('classifyFwd — caption: petitioner total win (All Challenged Claims Unpatentable)', () => {
   assert.equal(classifyFwd('... FINAL WRITTEN DECISION Determining All Challenged Claims Unpatentable 35 U.S.C. 318(a) ...').outcome, 'petitioner_all');
   assert.equal(classifyFwd('Determining All of the Challenged Claims Unpatentable').outcome, 'petitioner_all');
 });
-test('classifyFwd — patent owner total win (no challenged claims unpatentable)', () => {
+test('classifyFwd — caption: patent owner total win (No Challenged Claims Unpatentable)', () => {
   assert.equal(classifyFwd('Final Written Decision Determining No Challenged Claims Unpatentable').outcome, 'po_none');
 });
-test('classifyFwd — partial (some challenged claims)', () => {
+test('classifyFwd — caption: partial (Some Challenged Claims)', () => {
   assert.equal(classifyFwd('JUDGMENT Final Written Decision Determining Some Challenged Claims Unpatentable and Some Not Unpatentable').outcome, 'partial');
 });
-test('classifyFwd — body-text fallback when caption not captured', () => {
-  assert.equal(classifyFwd('the Board concludes that all challenged claims are unpatentable.').outcome, 'petitioner_all');
-  assert.equal(classifyFwd('Petitioner has not shown that any of the challenged claims are unpatentable; no challenged claims are unpatentable.').outcome, 'po_none');
+test('classifyFwd — ORDER fallback, negation-aware', () => {
+  // Petitioner win: affirmative "held unpatentable" holding.
+  assert.equal(classifyFwd("it is ORDERED that claims 1-20 of the '889 patent are held unpatentable.").outcome, 'petitioner_all');
+  // PO win: "has not shown ... unpatentable" must NOT read as an unpatentability holding.
+  assert.equal(classifyFwd('Petitioner has not shown by a preponderance of the evidence that any of the challenged claims are unpatentable.').outcome, 'po_none');
+  // Partial: one clause holds claims unpatentable, another says not shown.
+  assert.equal(classifyFwd('Claims 1-5 are held unpatentable; Petitioner has not shown that claims 6-10 are unpatentable.').outcome, 'partial');
 });
 test('classifyFwd — non-standard disposition => other', () => {
   assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'other');

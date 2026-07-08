@@ -1,32 +1,36 @@
-// PTAB FWD tracker API (read + scan + PDF proxy) — one function to stay within
-// the Vercel Hobby 12-function limit.
-//   GET /api/ptab                 → { rows: [...], summary: {petitioner_all, partial, po_none, other, total} }
-//   GET /api/ptab?file=<url>      → stream a Final Written Decision PDF (proxied with the API key;
-//                                   only api.uspto.gov ptab-files URLs are allowed)
-//   GET /api/ptab?scan=1          → populate/refresh the cache from the ODP Search Decisions endpoint.
-//                                   CRON_SECRET-gated (Bearer or ?key=). Resumable via ?offset=<nextOffset>.
-//                                   Params: from (default 2024-01-01), to, types (default IPR,PGR,CBM). Re-run while done=false.
-import { listPtabFwd, upsertPtabFwd } from '../lib/db.js';
+// PTAB FWD tracker API (read + metadata scan + classify pass + PDF proxy) — one
+// function to stay within the Vercel Hobby 12-function limit.
+//   GET /api/ptab                 → { rows, summary, classifierVersion }
+//   GET /api/ptab?file=<url>      → stream an FWD PDF (proxied with the API key;
+//                                   only api.uspto.gov ptab-files URLs; ?dl=1 to download, ?name= filename)
+//   GET /api/ptab?scan=1          → metadata catalog: discover/refresh FWD rows (does NOT classify).
+//                                   CRON_SECRET-gated. Params: from (2024-01-01), to, types (IPR,PGR,CBM). Resumable via ?offset=.
+//   GET /api/ptab?classify=1      → classify pass: fetch each unclassified FWD PDF, extract text, classify.
+//                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
+import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage } from '../lib/ptab.js';
+import { fetchFwdPage, classifyFwdFromPdf, CLASSIFIER_V } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
+
+function gate(req, res) {
+  const secret = (process.env.CRON_SECRET || '').trim();
+  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '') || (req.query && req.query.key) || '').trim();
+  if (secret && provided !== secret) { res.status(401).json({ error: 'Unauthorized' }); return false; }
+  return true;
+}
 
 export default async function handler(req, res) {
   try {
     const q = req.query || {};
 
-    // ── Scan / populate (CRON_SECRET-gated) ──
+    // ── Metadata catalog (discover/refresh FWD rows; no classification) ──
     if (q.scan) {
-      const secret = (process.env.CRON_SECRET || '').trim();
-      const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '') || q.key || '').trim();
-      if (secret && provided !== secret) { res.status(401).json({ error: 'Unauthorized' }); return; }
-
+      if (!gate(req, res)) return;
       const types = String(q.types || 'IPR,PGR,CBM').split(',').map((s) => s.trim()).filter(Boolean);
       const from = String(q.from || '2024-01-01');
       const to = String(q.to || '2100-01-01');
       let offset = parseInt(q.offset || '0', 10) || 0;
-
       const LIMIT = 100, MAX_PAGES = 5;
       const deadline = Date.now() + 50000;
       let pages = 0, fetched = 0, upserted = 0, count = null, done = false;
@@ -35,18 +39,45 @@ export default async function handler(req, res) {
         let page;
         try { page = await fetchFwdPage({ types, from, to, offset, limit: LIMIT }); }
         catch (e) { errors.push({ offset, error: String(e.message || e) }); break; }
-        count = page.count;
-        fetched += page.fetched;
-        for (const r of page.rows) { try { await upsertPtabFwd(r); upserted++; } catch (e) { errors.push({ trial: r.trial_number, error: String(e.message || e) }); } }
-        pages++;
-        offset += LIMIT;
+        count = page.count; fetched += page.fetched;
+        for (const r of page.rows) { try { await upsertPtabFwdMeta(r); upserted++; } catch (e) { errors.push({ trial: r.trial_number, error: String(e.message || e) }); } }
+        pages++; offset += LIMIT;
         if (page.fetched < LIMIT) { done = true; break; }
       }
-      res.status(200).json({ ok: true, from, to, types, reportedTotal: count, fetched, upserted, nextOffset: done ? null : offset, done, errors });
+      res.status(200).json({ ok: true, mode: 'catalog', from, to, types, reportedTotal: count, fetched, upserted, nextOffset: done ? null : offset, done, errors });
       return;
     }
 
-    // ── FWD PDF proxy (the fileDownloadURI needs the server-held X-API-KEY) ──
+    // ── Classify pass (fetch each FWD PDF, extract text, classify) ──
+    if (q.classify) {
+      if (!gate(req, res)) return;
+      const CV = CLASSIFIER_V;
+      const CONCURRENCY = 5;
+      const deadline = Date.now() + 50000;
+      let processed = 0; const tally = {}; const errors = [];
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToClassify(CONCURRENCY, CV);
+        if (!batch.length) break;
+        await Promise.all(batch.map(async (row) => {
+          try {
+            const { outcome, detail, source } = await classifyFwdFromPdf(row.fwd_pdf_url);
+            await setPtabFwdOutcome(row.trial_number, outcome, detail, source, CV);
+            processed++; tally[outcome] = (tally[outcome] || 0) + 1;
+          } catch (e) {
+            // Mark processed (other/error) at this version so a bad PDF can't block
+            // the queue; bump CLASSIFIER_V later to retry.
+            try { await setPtabFwdOutcome(row.trial_number, 'other', 'classify error: ' + String(e.message || e).slice(0, 140), 'error', CV); } catch { /* ignore */ }
+            processed++; tally.other = (tally.other || 0) + 1;
+            if (errors.length < 5) errors.push({ trial: row.trial_number, error: String(e.message || e) });
+          }
+        }));
+      }
+      const remaining = await countPtabFwdToClassify(CV);
+      res.status(200).json({ ok: true, mode: 'classify', classifierVersion: CV, processed, tally, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── FWD PDF proxy ──
     if (q.file) {
       const url = String(q.file);
       if (!/^https:\/\/api\.uspto\.gov\/api\/v1\/patent\/ptab-files\/[^\s]+$/.test(url)) {
@@ -74,9 +105,12 @@ export default async function handler(req, res) {
     // ── Read (page data) ──
     res.setHeader('Cache-Control', 'no-store');
     const rows = await listPtabFwd();
-    const summary = rows.reduce((a, r) => { a.total += 1; a[r.outcome] = (a[r.outcome] || 0) + 1; return a; },
-      { total: 0, petitioner_all: 0, partial: 0, po_none: 0, other: 0 });
-    res.status(200).json({ rows, summary });
+    const summary = { total: rows.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0 };
+    for (const r of rows) {
+      if ((r.classified_v || 0) < CLASSIFIER_V) { summary.pending += 1; continue; }
+      summary[r.outcome] = (summary[r.outcome] || 0) + 1;
+    }
+    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V });
   } catch (err) {
     res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
   }

@@ -45,6 +45,7 @@
     .o-pet { background: #fed7d7; color: #9b2c2c; }
     .o-partial { background: #feebc8; color: #9c4221; }
     .o-other { background: #e2e8f0; color: #4a5568; }
+    .o-pending { background: #fefcbf; color: #744210; }
     .btn { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.9rem; padding: 9px 16px; border-radius: 8px; }
     .btn:hover { background: #15305a; }
     .btn.secondary { background: #e2e8f0; color: #1a3a6b; }
@@ -95,7 +96,13 @@ const OUTCOME = {
   petitioner_all: { label: 'Petitioner win',   cls: 'o-pet' },
   partial:        { label: 'Partial',          cls: 'o-partial' },
   other:          { label: 'Other / review',   cls: 'o-other' },
+  unclassified:   { label: 'Pending',          cls: 'o-pending' },
 };
+let CV = 1; // classifier version from the API; rows below it are still pending
+function outcomeKey(r) {
+  if ((r.classified_v || 0) < CV) return 'unclassified';
+  return OUTCOME[r.outcome] ? r.outcome : 'other';
+}
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
 function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
@@ -122,17 +129,21 @@ function sorted(rows) {
 }
 
 function buildKpi(rows) {
-  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
-  for (const r of rows) c[r.outcome] = (c[r.outcome] || 0) + 1;
-  const pct = (n) => (c.total ? (n / c.total * 100).toFixed(1) + '%' : '—');
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
+  for (const r of rows) c[outcomeKey(r)]++;
+  const classified = c.total - c.unclassified;
+  const pct = (n) => (classified ? (n / classified * 100).toFixed(1) + '%' : '—');
   const card = (num, lbl, color, sub) => `<div class="kpi"><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}${sub ? '<br>' + sub : ''}</div></div>`;
+  const pending = c.unclassified
+    ? `<p class="disclaimer" style="color:#9c4221">${c.unclassified} of ${c.total} not yet classified — run <code>/api/ptab?classify=1</code> (repeat until done), then reload. Percentages below are of the ${classified} classified so far.</p>`
+    : '';
   document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
-    ${card(c.total, 'Final Written Decisions', '#1a3a6b', '')}
+    ${card(c.total, 'Final Written Decisions', '#1a3a6b', c.unclassified ? c.unclassified + ' pending' : '')}
     ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none))}
     ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all))}
     ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial))}
     ${card(c.other, 'Other / Review', '#4a5568', pct(c.other))}
-  </div>`;
+  </div>${pending}`;
 }
 
 function render() {
@@ -144,7 +155,7 @@ function render() {
   const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
   const trs = rows.map((r) => {
-    const o = OUTCOME[r.outcome] || OUTCOME.other;
+    const o = OUTCOME[outcomeKey(r)] || OUTCOME.other;
     const pat = r.patent_number ? `<a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number || '')}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
     const fileBase = r.fwd_pdf_url ? `/api/ptab?file=${encodeURIComponent(r.fwd_pdf_url)}` : '';
     const fwdLinks = r.fwd_pdf_url
@@ -180,12 +191,12 @@ function exportXlsx() {
   const aoa = [header, ...rows.map((r) => [
     r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.group_art_unit,
     r.po_name, r.petitioner_name, r.po_counsel, r.petitioner_counsel, fmtDate(r.petition_date), fmtDate(r.institution_date),
-    fmtDate(r.fwd_date), (OUTCOME[r.outcome] || OUTCOME.other).label, r.outcome_detail, r.fwd_pdf_url,
+    fmtDate(r.fwd_date), (OUTCOME[outcomeKey(r)] || OUTCOME.other).label, r.outcome_detail, r.fwd_pdf_url,
   ])];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 40].map((w) => ({ wch: w }));
-  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
-  for (const r of rows) c[r.outcome] = (c[r.outcome] || 0) + 1;
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
+  for (const r of rows) c[outcomeKey(r)]++;
   const pct = (n) => (c.total ? +(n / c.total * 100).toFixed(1) : 0);
   const sAoa = [
     ['PTAB Final Written Decisions — Summary'], [],
@@ -217,6 +228,7 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     const res = await fetch('/api/ptab');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    CV = data.classifierVersion || 1;
     ALL = data.rows || [];
     if (!ALL.length) {
       document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/ptab?scan=1), then reload.</div>';

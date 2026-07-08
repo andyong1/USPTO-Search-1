@@ -38,6 +38,8 @@
     a.link:hover { text-decoration: underline; }
     .ext { color: #64748b; font-size: 0.8rem; text-decoration: none; }
     .ext:hover { text-decoration: underline; }
+    .fwd-links { margin-top: 3px; display: flex; gap: 12px; white-space: nowrap; }
+    .fwd-links a { color: #1a3a6b; font-weight: 600; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
     .o-po { background: #c6f6d5; color: #276749; }
     .o-pet { background: #fed7d7; color: #9b2c2c; }
@@ -143,17 +145,21 @@ function render() {
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
   const trs = rows.map((r) => {
     const o = OUTCOME[r.outcome] || OUTCOME.other;
-    const pdf = r.fwd_pdf_url ? `<a class="ext" href="/api/ptab?file=${encodeURIComponent(r.fwd_pdf_url)}" target="_blank" rel="noopener">FWD ↗</a>` : '';
     const pat = r.patent_number ? `<a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number || '')}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
+    const fileBase = r.fwd_pdf_url ? `/api/ptab?file=${encodeURIComponent(r.fwd_pdf_url)}` : '';
+    const fwdLinks = r.fwd_pdf_url
+      ? `<div class="fwd-links"><a class="ext" href="${fileBase}" target="_blank" rel="noopener">View ↗</a>`
+        + `<a class="ext" href="${fileBase}&dl=1&name=${encodeURIComponent(r.trial_number + '-FWD.pdf')}" download>Download ⤓</a></div>`
+      : '';
     return `<tr>
-      <td>${esc(r.trial_number)} ${pdf}</td>
+      <td>${esc(r.trial_number)}</td>
       <td>${esc(r.trial_type)}</td>
       <td>${pat}</td>
       <td>${r.po_name ? esc(r.po_name) : '<span class="ext">—</span>'}</td>
       <td>${r.petitioner_name ? esc(r.petitioner_name) : '<span class="ext">—</span>'}</td>
       <td>${r.tech_center ? esc(r.tech_center) : '<span class="ext">—</span>'}</td>
       <td>${fmtDate(r.institution_date)}</td>
-      <td>${fmtDate(r.fwd_date)}</td>
+      <td>${fmtDate(r.fwd_date)}${fwdLinks}</td>
       <td><span class="badge ${o.cls}">${o.label}</span></td>
     </tr>`;
   }).join('');

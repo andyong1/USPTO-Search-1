@@ -60,8 +60,10 @@ export default async function handler(req, res) {
       catch (e) { res.status(502).json({ error: 'PDF fetch failed.', detail: controller.signal.aborted ? 'timed out' : String(e) }); return; }
       finally { clearTimeout(timer); }
       if (!up.ok) { res.status(up.status).json({ error: 'PDF not available.' }); return; }
+      let fname = String(q.name || 'final-written-decision.pdf').replace(/[^A-Za-z0-9._-]/g, '') || 'final-written-decision.pdf';
+      if (!/\.pdf$/i.test(fname)) fname += '.pdf';
       res.setHeader('Content-Type', up.headers.get('content-type') || 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Content-Disposition', `${q.dl ? 'attachment' : 'inline'}; filename="${fname}"`);
       res.setHeader('Cache-Control', 'private, max-age=3600');
       res.status(200).send(Buffer.from(await up.arrayBuffer()));
       return;

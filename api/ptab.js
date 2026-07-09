@@ -10,6 +10,7 @@
 //   GET /api/ptab?classify=1      → classify pass: run the classifier over the STORED text (offline, no fetch).
 //                                   CRON_SECRET-gated. Bump CLASSIFIER_V + re-run to reclassify without re-fetching.
 //   GET /api/ptab?dd=1            → director-discretionary-decision backfill (CRON_SECRET-gated, resumable).
+//                                   Add &trial=<no> to force a re-check of a single proceeding.
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
@@ -113,6 +114,16 @@ export default async function handler(req, res) {
     if (q.dd) {
       if (!gate(req, res)) return;
       const V = DD_CHECK_V;
+      // Targeted re-check of one trial (forces past the version/cutoff gate) — for
+      // fixing a single row without re-running the whole set, and because a DD
+      // decision can be filed after the initial check.
+      if (q.trial) {
+        const trial = String(q.trial).toUpperCase().trim();
+        if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(trial)) { res.status(400).json({ error: 'Invalid trial number.' }); return; }
+        try { const dd = await fetchDdDecision(trial); await setPtabFwdDD(trial, dd, V); res.status(200).json({ ok: true, mode: 'dd', trial, dd_decision: dd, ddCheckVersion: V }); }
+        catch (e) { res.status(502).json({ error: 'DD check failed.', detail: String(e.message || e) }); }
+        return;
+      }
       const markedOld = await markOldFwdNoDD(V, DD_CUTOFF); // pre-DD-process FWDs → 'none' (no fetch)
       const CONCURRENCY = 5;
       const deadline = Date.now() + 50000;

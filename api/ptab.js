@@ -208,10 +208,20 @@ export default async function handler(req, res) {
       try { detail = await fetchTrialDetail(trial); }
       catch (e) { res.status(502).json({ error: 'Trial fetch failed.', detail: String(e.message || e) }); return; }
       let stored = null;
-      try { const s = await getPtabFwdByTrial(trial); if (s) stored = { outcome: s.outcome, outcome_detail: s.outcome_detail, dd_decision: s.dd_decision, classified_v: s.classified_v, dd_checked_v: s.dd_checked_v, fwd_date: s.fwd_date, fwd_pdf_url: s.fwd_pdf_url }; }
-      catch { /* stored FWD data is optional enrichment */ }
+      try {
+        const s = await getPtabFwdByTrial(trial);
+        // Include the catalog metadata too, so the page can render a header even
+        // when the live docket is unavailable (404).
+        if (s) stored = {
+          outcome: s.outcome, outcome_detail: s.outcome_detail, dd_decision: s.dd_decision,
+          classified_v: s.classified_v, dd_checked_v: s.dd_checked_v, fwd_date: s.fwd_date, fwd_pdf_url: s.fwd_pdf_url,
+          trial_type: s.trial_type, patent_number: s.patent_number, application_number: s.application_number,
+          tech_center: s.tech_center, group_art_unit: s.group_art_unit, po_name: s.po_name, petitioner_name: s.petitioner_name,
+          po_counsel: s.po_counsel, petitioner_counsel: s.petitioner_counsel, petition_date: s.petition_date, institution_date: s.institution_date,
+        };
+      } catch { /* stored FWD data is optional enrichment */ }
       res.setHeader('Cache-Control', 'private, max-age=300');
-      res.status(200).json({ trial, meta: detail.meta, documents: detail.documents, count: detail.count, stored, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
+      res.status(200).json({ trial, meta: detail.meta, documents: detail.documents, count: detail.count, docsUnavailable: detail.docsUnavailable, stored, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
       return;
     }
 

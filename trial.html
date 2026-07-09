@@ -84,8 +84,31 @@ function titleCase(s) { return String(s||'').charAt(0).toUpperCase() + String(s|
 const params = new URLSearchParams(location.search);
 const NO = (params.get('no') || '').toUpperCase().trim();
 
-let DOCS = [], META = {}, STORED = null;
+let DOCS = [], META = {}, STORED = null, DOCS_UNAVAILABLE = false;
 let sortKey = 'filingDate', sortDir = 'desc';
+
+// Build the header metadata, preferring the live docket's values but falling back
+// to our stored catalog row when the live documents feed is unavailable (404).
+function mergeMeta(live, s) {
+  s = s || {};
+  return {
+    trialNumber: live.trialNumber || NO,
+    trialType: live.trialType || s.trial_type || '',
+    status: live.status || '',
+    patentNumber: live.patentNumber || s.patent_number || '',
+    applicationNumber: live.applicationNumber || s.application_number || '',
+    techCenter: live.techCenter || s.tech_center || '',
+    artUnit: live.artUnit || s.group_art_unit || '',
+    inventor: live.inventor || '',
+    poName: live.poName || s.po_name || '',
+    poCounsel: live.poCounsel || s.po_counsel || '',
+    petitionerName: live.petitionerName || s.petitioner_name || '',
+    petitionerCounsel: live.petitionerCounsel || s.petitioner_counsel || '',
+    petitionDate: live.petitionDate || s.petition_date || '',
+    institutionDate: live.institutionDate || s.institution_date || '',
+    latestDecisionDate: live.latestDecisionDate || s.fwd_date || '',
+  };
+}
 
 function fileLink(d, download) {
   if (!d.url) return '';
@@ -215,13 +238,16 @@ function renderDocket() {
 function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === 'filingDate' || k === 'number' || k === 'sizeBytes') ? 'desc' : 'asc'; } renderDocket(); }
 
 function renderAll() {
-  document.getElementById('root').innerHTML =
-    headerCard() + timelineCard() +
-    `<div class="card"><h2>Documents (${DOCS.length})</h2>${docketFilters()}<div id="docket-body"></div></div>`;
-  document.getElementById('q').addEventListener('input', renderDocket);
-  document.getElementById('cat').addEventListener('change', renderDocket);
-  document.getElementById('party').addEventListener('change', renderDocket);
-  renderDocket();
+  const docsCard = DOCS_UNAVAILABLE
+    ? `<div class="card"><h2>Documents</h2><div class="state">The USPTO Open Data Portal has no document docket for this proceeding (the documents feed returned 404). Showing catalog data only — the FWD PDF above still opens if available.</div></div>`
+    : `<div class="card"><h2>Documents (${DOCS.length})</h2>${docketFilters()}<div id="docket-body"></div></div>`;
+  document.getElementById('root').innerHTML = headerCard() + timelineCard() + docsCard;
+  if (!DOCS_UNAVAILABLE) {
+    document.getElementById('q').addEventListener('input', renderDocket);
+    document.getElementById('cat').addEventListener('change', renderDocket);
+    document.getElementById('party').addEventListener('change', renderDocket);
+    renderDocket();
+  }
 }
 
 (async () => {
@@ -234,8 +260,11 @@ function renderAll() {
     const res = await fetch('/api/ptab?trial=' + encodeURIComponent(NO));
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e.error || ('HTTP ' + res.status)) + (e.detail ? ' — ' + e.detail : '')); }
     const data = await res.json();
-    META = data.meta || {}; DOCS = data.documents || []; STORED = data.stored || null;
-    if (!DOCS.length && !META.status) {
+    STORED = data.stored || null;
+    DOCS = data.documents || [];
+    DOCS_UNAVAILABLE = !!data.docsUnavailable;
+    META = mergeMeta(data.meta || {}, STORED);
+    if (!DOCS.length && !META.status && !STORED) {
       document.getElementById('root').innerHTML = `<div class="card"><div class="state">No records found for ${esc(NO)}. Check the trial number.</div></div>`;
       return;
     }

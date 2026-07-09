@@ -18,7 +18,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, fetchTrialDetail, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
+import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -248,6 +248,19 @@ export default async function handler(req, res) {
           po_counsel: s.po_counsel, petitioner_counsel: s.petitioner_counsel, petition_date: s.petition_date, institution_date: s.institution_date,
         };
       } catch { /* stored FWD data is optional enrichment */ }
+      // Self-heal the DD flag from the docket we just fetched: the standalone dd
+      // check hits the same feed but can be rate-limited into failing, whereas this
+      // fetch already succeeded. Only persist a positive detection (never downgrade
+      // to 'none' from a possibly-partial docket), so the table badge self-corrects.
+      try {
+        if (!detail.docsUnavailable && detail.documents.length) {
+          const dd = detectDdDecision(detail.documents.map((d) => ({ typeDesc: d.type, title: d.title })));
+          if (dd && dd !== 'none' && dd !== 'error' && (!stored || stored.dd_decision !== dd)) {
+            await setPtabFwdDD(trial, dd, DD_CHECK_V);
+            if (stored) { stored.dd_decision = dd; stored.dd_checked_v = DD_CHECK_V; }
+          }
+        }
+      } catch { /* best-effort self-heal */ }
       res.setHeader('Cache-Control', 'private, max-age=300');
       res.status(200).json({ trial, meta: detail.meta, documents: detail.documents, count: detail.count, docsUnavailable: detail.docsUnavailable, stored, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
       return;

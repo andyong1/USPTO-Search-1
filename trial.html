@@ -232,7 +232,7 @@ function renderAll() {
   document.title = NO + ' — PTAB proceeding';
   try {
     const res = await fetch('/api/ptab?trial=' + encodeURIComponent(NO));
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + res.status)); }
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error((e.error || ('HTTP ' + res.status)) + (e.detail ? ' — ' + e.detail : '')); }
     const data = await res.json();
     META = data.meta || {}; DOCS = data.documents || []; STORED = data.stored || null;
     if (!DOCS.length && !META.status) {

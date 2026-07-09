@@ -119,8 +119,9 @@ function milestones() {
 
 function headerCard() {
   const m = META;
+  const patNum = String(m.patentNumber || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   const patLink = m.patentNumber
-    ? `<a class="link" href="https://patentcenter.uspto.gov/applications/${esc(m.applicationNumber || '')}" target="_blank" rel="noopener">${esc(m.patentNumber)}</a>`
+    ? `<a class="link" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(m.patentNumber)}</a>`
     : '—';
   const outcomeBadge = STORED && STORED.outcome && OUTCOME[STORED.outcome]
     ? `<span class="badge ${OUTCOME[STORED.outcome].cls}">${OUTCOME[STORED.outcome].label}</span>` : '';

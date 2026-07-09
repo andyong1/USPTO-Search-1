@@ -104,6 +104,7 @@ const OUTCOME = {
   unclassified:   { label: 'Pending',          cls: 'o-pending' },
 };
 let CV = 1; // classifier version from the API; rows below it are still pending
+let EV = 1; // text-extraction version; rows below it still need the extract pass
 let DDV = 1; // director-discretionary-decision check version
 function outcomeKey(r) {
   if ((r.classified_v || 0) < CV) return 'unclassified';
@@ -179,8 +180,9 @@ function buildKpi(rows) {
   const classified = c.total - c.unclassified;
   const pct = (n) => (classified ? (n / classified * 100).toFixed(1) + '%' : '—');
   const card = (num, lbl, color, sub) => `<div class="kpi"><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}${sub ? '<br>' + sub : ''}</div></div>`;
+  const needExtract = rows.filter((r) => (r.extracted_v || 0) < EV).length;
   const pending = c.unclassified
-    ? `<p class="disclaimer" style="color:#9c4221">${c.unclassified} of ${c.total} not yet classified — run <code>/api/ptab?classify=1</code> (repeat until done), then reload. Percentages below are of the ${classified} classified so far.</p>`
+    ? `<p class="disclaimer" style="color:#9c4221">${c.unclassified} of ${c.total} not yet classified — run ${needExtract ? '<code>/api/ptab?extract=1</code> then ' : ''}<code>/api/ptab?classify=1</code> (repeat each until done), then reload. Percentages below are of the ${classified} classified so far.</p>`
     : '';
   document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
     ${card(c.total, 'Final Written Decisions', '#1a3a6b', c.unclassified ? c.unclassified + ' pending' : '')}
@@ -279,6 +281,7 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     CV = data.classifierVersion || 1;
+    EV = data.extractVersion || 1;
     DDV = data.ddCheckVersion || 1;
     ALL = data.rows || [];
     if (!ALL.length) {

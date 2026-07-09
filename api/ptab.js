@@ -5,12 +5,16 @@
 //                                   only api.uspto.gov ptab-files URLs; ?dl=1 to download, ?name= filename)
 //   GET /api/ptab?scan=1          → metadata catalog: discover/refresh FWD rows (does NOT classify).
 //                                   CRON_SECRET-gated. Params: from (2024-01-01), to, types (IPR,PGR,CBM). Resumable via ?offset=.
-//   GET /api/ptab?classify=1      → classify pass: fetch each unclassified FWD PDF, extract text, classify.
+//   GET /api/ptab?extract=1       → extract pass: fetch each FWD PDF, extract + STORE its text (expensive; run once).
 //                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
-import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome, promoteCaptionClassified,
+//   GET /api/ptab?classify=1      → classify pass: run the classifier over the STORED text (offline, no fetch).
+//                                   CRON_SECRET-gated. Bump CLASSIFIER_V + re-run to reclassify without re-fetching.
+//   GET /api/ptab?dd=1            → director-discretionary-decision backfill (CRON_SECRET-gated, resumable).
+import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
+  getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage, classifyFwdFromPdf, fetchDdDecision, fetchTrialDetail, CLASSIFIER_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
+import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, fetchTrialDetail, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -49,35 +53,57 @@ export default async function handler(req, res) {
       return;
     }
 
-    // ── Classify pass (fetch each FWD PDF, extract text, classify) ──
-    if (q.classify) {
+    // ── Extract pass (fetch each FWD PDF, extract + store its text) ──
+    // Expensive (network + PDF parse). Run once; text is cached so classification
+    // can be re-run offline. Bump EXTRACT_V (and re-run) only if extraction changes.
+    if (q.extract) {
       if (!gate(req, res)) return;
-      const CV = CLASSIFIER_V;
-      // Caption-classified rows are stable across versions — promote them to CV
-      // without re-fetching, so only fallback/other/error rows get reprocessed.
-      const promoted = await promoteCaptionClassified(CV);
+      const EV = EXTRACT_V;
       const CONCURRENCY = 5;
       const deadline = Date.now() + 50000;
       let processed = 0; const tally = {}; const errors = [];
       while (Date.now() < deadline) {
-        const batch = await getPtabFwdToClassify(CONCURRENCY, CV);
+        const batch = await getPtabFwdToExtract(CONCURRENCY, EV);
         if (!batch.length) break;
         await Promise.all(batch.map(async (row) => {
           try {
-            const { outcome, detail, source } = await classifyFwdFromPdf(row.fwd_pdf_url);
-            await setPtabFwdOutcome(row.trial_number, outcome, detail, source, CV);
-            processed++; tally[outcome] = (tally[outcome] || 0) + 1;
+            const { text, source } = await extractFwdText(row.fwd_pdf_url);
+            await setPtabFwdText(row.trial_number, text, source, EV);
+            processed++; tally[source] = (tally[source] || 0) + 1;
           } catch (e) {
-            // Mark processed (other/error) at this version so a bad PDF can't block
-            // the queue; bump CLASSIFIER_V later to retry.
-            try { await setPtabFwdOutcome(row.trial_number, 'other', 'classify error: ' + String(e.message || e).slice(0, 140), 'error', CV); } catch { /* ignore */ }
-            processed++; tally.other = (tally.other || 0) + 1;
+            // Store an empty/error row at this version so a bad PDF can't block the
+            // queue; bump EXTRACT_V later to retry.
+            try { await setPtabFwdText(row.trial_number, '', 'error', EV); } catch { /* ignore */ }
+            processed++; tally.error = (tally.error || 0) + 1;
             if (errors.length < 5) errors.push({ trial: row.trial_number, error: String(e.message || e) });
           }
         }));
       }
+      const remaining = await countPtabFwdToExtract(EV);
+      res.status(200).json({ ok: true, mode: 'extract', extractVersion: EV, processed, tally, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── Classify pass (offline: run the classifier over the stored text) ──
+    // Cheap and network-free, so a CLASSIFIER_V bump reprocesses everything without
+    // re-fetching a single PDF. Only rows that have been extracted are eligible.
+    if (q.classify) {
+      if (!gate(req, res)) return;
+      const CV = CLASSIFIER_V;
+      const BATCH = 150;
+      const deadline = Date.now() + 50000;
+      let processed = 0; const tally = {};
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToClassify(BATCH, CV);
+        if (!batch.length) break;
+        for (const row of batch) {
+          const { outcome, detail } = classifyFwd(row.decision_text || '');
+          await setPtabFwdOutcome(row.trial_number, outcome, detail, CV);
+          processed++; tally[outcome] = (tally[outcome] || 0) + 1;
+        }
+      }
       const remaining = await countPtabFwdToClassify(CV);
-      res.status(200).json({ ok: true, mode: 'classify', classifierVersion: CV, promoted, processed, tally, remaining, done: remaining === 0, errors });
+      res.status(200).json({ ok: true, mode: 'classify', classifierVersion: CV, processed, tally, remaining, done: remaining === 0 });
       return;
     }
 
@@ -148,15 +174,18 @@ export default async function handler(req, res) {
 
     // ── Read (page data) ──
     res.setHeader('Cache-Control', 'no-store');
-    const rows = await listPtabFwd();
-    const summary = { total: rows.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0, dd: 0, ddPending: 0 };
-    for (const r of rows) {
+    const all = await listPtabFwd();
+    const summary = { total: all.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0, extractPending: 0, dd: 0, ddPending: 0 };
+    for (const r of all) {
+      if ((r.extracted_v || 0) < EXTRACT_V) summary.extractPending += 1;
       if ((r.classified_v || 0) < CLASSIFIER_V) summary.pending += 1;
       else summary[r.outcome] = (summary[r.outcome] || 0) + 1;
       if ((r.dd_checked_v || 0) < DD_CHECK_V) summary.ddPending += 1;
       else if (r.dd_decision && r.dd_decision !== 'none' && r.dd_decision !== 'error') summary.dd += 1;
     }
-    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
+    // Drop the bulky stored decision_text — the page never needs it.
+    const rows = all.map(({ decision_text, ...rest }) => rest);
+    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V });
   } catch (err) {
     res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
   }

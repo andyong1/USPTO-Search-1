@@ -53,7 +53,13 @@
     .btn.secondary:hover { background: #cbd5e0; }
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
-  </style>
+    .status-strip { display: flex; flex-wrap: wrap; gap: 9px; margin: 2px 0 16px; }
+    .chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 8px; font-size: 0.79rem; font-weight: 600; border: 1px solid transparent; }
+    .chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .chip.ok { background: #f0fff4; color: #276749; border-color: #c6f6d5; } .chip.ok .dot { background: #38a169; }
+    .chip.warn { background: #fffaf0; color: #9c4221; border-color: #feebc8; } .chip.warn .dot { background: #dd6b20; }
+    .chip.neutral { background: #f7fafc; color: #4a5568; border-color: #e2e8f0; } .chip.neutral .dot { background: #a0aec0; }
+</style>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
 </head>
 <body>
@@ -66,6 +72,7 @@
   <div class="card">
     <h2>Final Written Decision Outcomes After January 1, 2024</h2>
     <div class="sub" id="freshness">Outcome is parsed from the Board's decision caption.</div>
+    <div id="status"></div>
 
     <div class="filter-bar">
       <div class="fb-group"><label for="from">FWD date from</label><input type="date" id="from" /></div>
@@ -127,7 +134,40 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
 function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
 
 let ALL = [];
+let SUMMARY = null, MAINTAIN_LAST_RUN = null;
 let sortKey = 'fwd_date', sortDir = 'desc';
+
+// Relative-time helpers for the pipeline status strip.
+function agoText(iso) {
+  if (!iso) return 'never run';
+  const t = new Date(iso).getTime(); if (isNaN(t)) return 'unknown';
+  const h = (Date.now() - t) / 3.6e6;
+  if (h < 1) return Math.max(1, Math.round(h * 60)) + ' min ago';
+  if (h < 48) return Math.round(h) + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+function daysAgo(ymd) {
+  const t = new Date(String(ymd) + 'T00:00:00Z').getTime(); if (isNaN(t)) return '';
+  const d = Math.floor((Date.now() - t) / 8.64e7);
+  return d <= 0 ? 'today' : d + 'd ago';
+}
+function chip(cls, label) { return `<span class="chip ${cls}"><span class="dot"></span>${esc(label)}</span>`; }
+// Pipeline health: heartbeat + per-pass backlog + FWD freshness. Rendered once on load.
+function renderStatus() {
+  const el = document.getElementById('status'); if (!el) return;
+  const s = SUMMARY || {};
+  const ex = s.extractPending || 0, cl = s.pending || 0, dd = s.ddPending || 0;
+  const heartFresh = MAINTAIN_LAST_RUN && (Date.now() - new Date(MAINTAIN_LAST_RUN).getTime()) < 26 * 3.6e6;
+  const latest = ALL.reduce((m, r) => (r.fwd_date && r.fwd_date > m ? r.fwd_date : m), '');
+  const chips = [
+    chip(MAINTAIN_LAST_RUN ? (heartFresh ? 'ok' : 'warn') : 'warn', 'Daily maintain: ' + agoText(MAINTAIN_LAST_RUN)),
+    chip(ex ? 'warn' : 'ok', 'Extraction: ' + (ex ? ex + ' pending' : 'all done')),
+    chip(cl ? 'warn' : 'ok', 'Classification: ' + (cl ? cl + ' pending' : 'all done')),
+    chip(dd ? 'warn' : 'ok', 'DD check: ' + (dd ? dd + ' pending' : 'all done')),
+    chip('neutral', 'Latest FWD: ' + (latest ? fmtDate(latest) + ' · ' + daysAgo(latest) : '—')),
+  ];
+  el.innerHTML = `<div class="status-strip">${chips.join('')}</div>`;
+}
 
 function selectedTypes() { return [...document.querySelectorAll('.type-cb:checked')].map((c) => c.value); }
 function filtered() {
@@ -284,13 +324,14 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     EV = data.extractVersion || 1;
     DDV = data.ddCheckVersion || 1;
     ALL = data.rows || [];
+    SUMMARY = data.summary || null;
+    MAINTAIN_LAST_RUN = data.maintainLastRun || null;
+    renderStatus();
     if (!ALL.length) {
       document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/ptab?scan=1), then reload.</div>';
       buildKpi([]);
       return;
     }
-    const latest = ALL.reduce((m, r) => (r.fwd_date && r.fwd_date > m ? r.fwd_date : m), '');
-    if (latest) document.getElementById('freshness').textContent += ' Most recent FWD on file: ' + fmtDate(latest) + '.';
     readUrl();
     render();
   } catch (e) {

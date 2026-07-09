@@ -16,7 +16,8 @@
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
-  markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial } from '../lib/db.js';
+  markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
+  stampMaintainRun, getMaintainLastRun } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
@@ -224,6 +225,7 @@ export default async function handler(req, res) {
       ]);
       out.remaining = { extract: remExtract, classify: remClassify, dd: remDd };
       out.done = remExtract === 0 && remClassify === 0 && remDd === 0;
+      try { await stampMaintainRun(); } catch { /* heartbeat is best-effort */ }
       res.status(200).json(out);
       return;
     }
@@ -304,7 +306,9 @@ export default async function handler(req, res) {
     }
     // Drop the bulky stored decision_text — the page never needs it.
     const rows = all.map(({ decision_text, ...rest }) => rest);
-    res.status(200).json({ rows, summary, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V });
+    let maintainLastRun = null;
+    try { maintainLastRun = await getMaintainLastRun(); } catch { /* optional */ }
+    res.status(200).json({ rows, summary, maintainLastRun, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V });
   } catch (err) {
     res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
   }

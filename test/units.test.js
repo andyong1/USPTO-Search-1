@@ -28,6 +28,15 @@ test('classifyFwd — caption: patent owner total win (No Challenged Claims Unpa
   assert.equal(classifyFwd('Final Written Decision Determining No Claims Unpatentable 35 U.S.C. § 318(a)').outcome, 'po_none');
   assert.equal(classifyFwd('JUDGMENT Determining All Claims Unpatentable').outcome, 'petitioner_all');
 });
+test('classifyFwd — caption without a quantifier (Determining Challenged Claim(s) Unpatentable)', () => {
+  // IPR2025-00615 / IPR2023-00203: singular, no All/No/Some → petitioner win.
+  assert.equal(classifyFwd('Final Written Decision Determining Challenged Claim Unpatentable 35 U.S.C. § 318(a)').outcome, 'petitioner_all');
+  // IPR2022-01225: specific claims listed. With no survivors in the body → all
+  // challenged claims were listed → petitioner win.
+  assert.equal(classifyFwd('Final Written Decision Determining Challenged Claims 1, 3–11, 13, 14, 16–24, and 26 Unpatentable').outcome, 'petitioner_all');
+  // Same caption but the body shows some challenged claims survived → partial.
+  assert.equal(classifyFwd('Determining Challenged Claims 1, 3–11 Unpatentable. Petitioner has not shown claims 2 and 12 are unpatentable.').outcome, 'partial');
+});
 test('classifyFwd — caption: partial (Some Challenged Claims)', () => {
   assert.equal(classifyFwd('JUDGMENT Final Written Decision Determining Some Challenged Claims Unpatentable and Some Not Unpatentable').outcome, 'partial');
 });

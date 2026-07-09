@@ -10,6 +10,8 @@
 //   GET /api/ptab?classify=1      → classify pass: run the classifier over the STORED text (offline, no fetch).
 //                                   CRON_SECRET-gated. Bump CLASSIFIER_V + re-run to reclassify without re-fetching.
 //   GET /api/ptab?dd=1            → director-discretionary-decision backfill (CRON_SECRET-gated, resumable).
+//   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
+//                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial } from '../lib/db.js';
@@ -129,6 +131,72 @@ export default async function handler(req, res) {
       }
       const remaining = await countPtabFwdToCheckDD(V, DD_CUTOFF);
       res.status(200).json({ ok: true, mode: 'dd', ddCheckVersion: V, markedOld, processed, tally, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── Maintenance orchestrator (one-shot: scan → extract → classify → dd) ──
+    // For a single external scheduler (e.g. cron-job.org) that can't loop. Bounded
+    // to ~22s to return inside cron-job.org's 30s timeout. Resumable: returns
+    // done=false with per-pass remaining counts if a heavy backlog doesn't fit.
+    if (q.maintain) {
+      if (!gate(req, res)) return;
+      const CV = CLASSIFIER_V, EV = EXTRACT_V, DDV = DD_CHECK_V;
+      const deadline = Date.now() + 22000;
+      const out = { ok: true, mode: 'maintain' };
+
+      // 1) Scan the newest FWDs (2 pages = 200 newest; new decisions sort to the top).
+      try {
+        let offset = 0, upserted = 0, reportedTotal = null;
+        for (let p = 0; p < 2 && Date.now() < deadline; p++) {
+          const page = await fetchFwdPage({ types: ['IPR', 'PGR', 'CBM'], from: '2024-01-01', to: '2100-01-01', offset, limit: 100 });
+          reportedTotal = page.count;
+          for (const r of page.rows) { try { await upsertPtabFwdMeta(r); upserted++; } catch { /* skip bad row */ } }
+          offset += 100;
+          if (page.fetched < 100) break;
+        }
+        out.scan = { upserted, reportedTotal };
+      } catch (e) { out.scan = { error: String(e.message || e) }; }
+
+      // 2) Extract pending FWD PDFs (bounded by the shared deadline).
+      let exProc = 0; const exTally = {};
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToExtract(5, EV);
+        if (!batch.length) break;
+        await Promise.all(batch.map(async (row) => {
+          try { const { text, source } = await extractFwdText(row.fwd_pdf_url); await setPtabFwdText(row.trial_number, text, source, EV); exProc++; exTally[source] = (exTally[source] || 0) + 1; }
+          catch { try { await setPtabFwdText(row.trial_number, '', 'error', EV); } catch { /* ignore */ } exProc++; exTally.error = (exTally.error || 0) + 1; }
+        }));
+      }
+      out.extract = { processed: exProc, tally: exTally };
+
+      // 3) Classify pending (offline; fast).
+      let clProc = 0; const clTally = {};
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToClassify(150, CV);
+        if (!batch.length) break;
+        for (const row of batch) { const { outcome, detail } = classifyFwd(row.decision_text || ''); await setPtabFwdOutcome(row.trial_number, outcome, detail, CV); clProc++; clTally[outcome] = (clTally[outcome] || 0) + 1; }
+      }
+      out.classify = { processed: clProc, tally: clTally };
+
+      // 4) Director discretionary decision backfill (bounded).
+      const markedOld = await markOldFwdNoDD(DDV, DD_CUTOFF);
+      let ddProc = 0; const ddTally = {};
+      while (Date.now() < deadline) {
+        const batch = await getPtabFwdToCheckDD(5, DDV, DD_CUTOFF);
+        if (!batch.length) break;
+        await Promise.all(batch.map(async (trial) => {
+          try { const dd = await fetchDdDecision(trial); await setPtabFwdDD(trial, dd, DDV); ddProc++; ddTally[dd] = (ddTally[dd] || 0) + 1; }
+          catch { try { await setPtabFwdDD(trial, 'error', DDV); } catch { /* ignore */ } ddProc++; ddTally.error = (ddTally.error || 0) + 1; }
+        }));
+      }
+      out.dd = { markedOld, processed: ddProc, tally: ddTally };
+
+      const [remExtract, remClassify, remDd] = await Promise.all([
+        countPtabFwdToExtract(EV), countPtabFwdToClassify(CV), countPtabFwdToCheckDD(DDV, DD_CUTOFF),
+      ]);
+      out.remaining = { extract: remExtract, classify: remClassify, dd: remDd };
+      out.done = remExtract === 0 && remClassify === 0 && remDd === 0;
+      res.status(200).json(out);
       return;
     }
 

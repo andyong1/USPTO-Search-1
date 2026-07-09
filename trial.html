@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PTAB proceeding (internal)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header a.back { color: #cbd5e0; font-size: 0.82rem; text-decoration: none; }
+    header a.back:hover { color: #fff; text-decoration: underline; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 22px; }
+    .card h2 { font-size: 1.05rem; color: #1a3a6b; margin-bottom: 14px; }
+    .title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+    .title-row .tno { font-size: 1.5rem; font-weight: 700; color: #1a3a6b; }
+    .badge { display: inline-block; padding: 3px 11px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+    .o-po { background: #c6f6d5; color: #276749; } .o-pet { background: #fed7d7; color: #9b2c2c; }
+    .o-partial { background: #feebc8; color: #9c4221; } .o-other { background: #e2e8f0; color: #4a5568; }
+    .o-pending { background: #fefcbf; color: #744210; } .o-dd { background: #e9d8fd; color: #553c9a; }
+    .st { background: #bee3f8; color: #2a4365; } .st-fwd { background: #c6f6d5; color: #276749; }
+    .st-denied { background: #fed7d7; color: #9b2c2c; } .st-term { background: #e2e8f0; color: #4a5568; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 24px; margin-top: 16px; }
+    .meta-grid .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: #94a3b8; font-weight: 600; }
+    .meta-grid .v { font-size: 0.92rem; margin-top: 2px; word-break: break-word; }
+    .fwd-links { margin-top: 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: #64748b; }
+    /* timeline */
+    .tl { list-style: none; margin-top: 4px; }
+    .tl li { position: relative; padding: 0 0 18px 26px; border-left: 2px solid #e2e8f0; }
+    .tl li:last-child { border-left-color: transparent; padding-bottom: 0; }
+    .tl li::before { content: ''; position: absolute; left: -7px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #1a3a6b; }
+    .tl li.pending::before { background: #cbd5e0; }
+    .tl .ev { font-weight: 600; font-size: 0.92rem; }
+    .tl .dt { font-size: 0.82rem; color: #64748b; }
+    /* docket */
+    .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .toolbar input, .toolbar select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.88rem; }
+    .toolbar input[type=search] { min-width: 220px; }
+    .table-wrap { overflow: auto; max-height: 68vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 9px 12px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; cursor: pointer; user-select: none; }
+    th:hover { background: #e2e8f0; }
+    td { padding: 8px 12px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+    td.acts { white-space: nowrap; }
+    td.acts a { color: #1a3a6b; font-weight: 600; text-decoration: none; margin-right: 10px; }
+    td.acts a:hover { text-decoration: underline; }
+    .state { text-align: center; padding: 40px 20px; color: #64748b; }
+    .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<header>
+  <a class="back" href="/ptab">← Back to Final Written Decisions</a>
+  <h1>PTAB Proceeding</h1>
+</header>
+
+<div class="container" id="root">
+  <div class="card"><div class="state">Loading…</div></div>
+</div>
+
+<script>
+const OUTCOME = {
+  po_none:        { label: 'Patent owner win', cls: 'o-po' },
+  petitioner_all: { label: 'Petitioner win',   cls: 'o-pet' },
+  partial:        { label: 'Partial',          cls: 'o-partial' },
+  other:          { label: 'Other / review',   cls: 'o-other' },
+};
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function fmtSize(b) { if (b == null || b === '') return '—'; const n = +b; if (!n) return '—'; if (n < 1024) return n + ' B'; if (n < 1048576) return (n/1024).toFixed(0) + ' KB'; return (n/1048576).toFixed(1) + ' MB'; }
+function partyLabel(p) { return { PETITIONER: 'Petitioner', PATENT_OWNER: 'Patent Owner', BOARD: 'Board' }[p] || (p ? p.replace(/_/g,' ') : '—'); }
+function statusClass(s) { s = String(s||'').toLowerCase(); if (s.includes('final written')) return 'st-fwd'; if (s.includes('deni')) return 'st-denied'; if (s.includes('terminat') || s.includes('settl') || s.includes('dismiss')) return 'st-term'; return 'st'; }
+function titleCase(s) { return String(s||'').charAt(0).toUpperCase() + String(s||'').slice(1); }
+
+const params = new URLSearchParams(location.search);
+const NO = (params.get('no') || '').toUpperCase().trim();
+
+let DOCS = [], META = {}, STORED = null;
+let sortKey = 'filingDate', sortDir = 'desc';
+
+function fileLink(d, download) {
+  if (!d.url) return '';
+  const base = `/api/ptab?file=${encodeURIComponent(d.url)}`;
+  if (download) return `${base}&dl=1&name=${encodeURIComponent(d.name || (NO + '-' + (d.number || d.id) + '.pdf'))}`;
+  return base;
+}
+
+// Derive key milestones for the timeline from metadata + the docket.
+function milestones() {
+  const ev = [];
+  if (META.petitionDate) ev.push({ label: 'Petition filed', date: META.petitionDate });
+  if (META.institutionDate) ev.push({ label: 'Institution decision', date: META.institutionDate });
+  const ddDoc = DOCS.find((d) => /Director\s+Discretionary\s+Decision/i.test(d.type || d.title));
+  if (ddDoc) {
+    const m = String(ddDoc.type || ddDoc.title).match(/Director\s+Discretionary\s+Decision\s*:?\s*([A-Za-z][A-Za-z-]*)/i);
+    ev.push({ label: 'Director discretionary decision' + (m ? ' — ' + titleCase(m[1]) : ''), date: ddDoc.filingDate });
+  } else if (STORED && STORED.dd_decision && STORED.dd_decision !== 'none' && STORED.dd_decision !== 'error') {
+    ev.push({ label: 'Director discretionary decision — ' + titleCase(STORED.dd_decision), date: '' });
+  }
+  const fwdDoc = DOCS.find((d) => /Final\s+Written\s+Decision/i.test(d.type || d.title));
+  const fwdDate = (fwdDoc && fwdDoc.filingDate) || (STORED && STORED.fwd_date) || '';
+  if (fwdDate || fwdDoc) {
+    const oc = STORED && STORED.outcome && OUTCOME[STORED.outcome];
+    ev.push({ label: 'Final Written Decision' + (oc ? ' — ' + oc.label : ''), date: fwdDate });
+  }
+  // Sort chronologically; events without a date sink to the end.
+  ev.sort((a, b) => String(a.date || '9999').localeCompare(String(b.date || '9999')));
+  return ev;
+}
+
+function headerCard() {
+  const m = META;
+  const patLink = m.patentNumber
+    ? `<a class="link" href="https://patentcenter.uspto.gov/applications/${esc(m.applicationNumber || '')}" target="_blank" rel="noopener">${esc(m.patentNumber)}</a>`
+    : '—';
+  const outcomeBadge = STORED && STORED.outcome && OUTCOME[STORED.outcome]
+    ? `<span class="badge ${OUTCOME[STORED.outcome].cls}">${OUTCOME[STORED.outcome].label}</span>` : '';
+  const ddBadge = STORED && STORED.dd_decision && !['none','error',''].includes(String(STORED.dd_decision).toLowerCase())
+    ? `<span class="badge o-dd">Disc. decision: ${esc(titleCase(STORED.dd_decision))}</span>` : '';
+  const statusBadge = m.status ? `<span class="badge ${statusClass(m.status)}">${esc(m.status)}</span>` : '';
+  const cell = (k, v) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  const fwdUrl = STORED && STORED.fwd_pdf_url;
+  const fwdLinks = fwdUrl
+    ? `<div class="fwd-links">
+         <a class="link" href="/api/ptab?file=${encodeURIComponent(fwdUrl)}" target="_blank" rel="noopener">View FWD ↗</a>
+         <a class="link" href="/api/ptab?file=${encodeURIComponent(fwdUrl)}&dl=1&name=${encodeURIComponent(NO + '-FWD.pdf')}" download>Download FWD ⤓</a>
+       </div>` : '';
+  return `<div class="card">
+    <div class="title-row">
+      <span class="tno">${esc(m.trialNumber || NO)}</span>
+      ${m.trialType ? `<span class="badge o-other">${esc(m.trialType)}</span>` : ''}
+      ${statusBadge}${outcomeBadge}${ddBadge}
+    </div>
+    <div class="meta-grid">
+      ${cell('Patent', patLink)}
+      ${cell('Application', esc(m.applicationNumber) || '—')}
+      ${cell('Tech center / art unit', `${esc(m.techCenter) || '—'}${m.artUnit ? ' / ' + esc(m.artUnit) : ''}`)}
+      ${cell('Patent owner', (esc(m.poName) || '—') + (m.poCounsel ? `<div class="ext" style="font-size:0.8rem">Counsel: ${esc(m.poCounsel)}</div>` : ''))}
+      ${cell('Petitioner', (esc(m.petitionerName) || '—') + (m.petitionerCounsel ? `<div class="ext" style="font-size:0.8rem">Counsel: ${esc(m.petitionerCounsel)}</div>` : ''))}
+      ${cell('Inventor', esc(m.inventor) || '—')}
+      ${cell('Petition filed', fmtDate(m.petitionDate))}
+      ${cell('Institution decision', fmtDate(m.institutionDate))}
+      ${cell('Latest decision', fmtDate(m.latestDecisionDate))}
+    </div>
+    ${fwdLinks}
+  </div>`;
+}
+
+function timelineCard() {
+  const ev = milestones();
+  if (!ev.length) return '';
+  const items = ev.map((e) => `<li class="${e.date ? '' : 'pending'}"><div class="ev">${esc(e.label)}</div><div class="dt">${e.date ? fmtDate(e.date) : 'date n/a'}</div></li>`).join('');
+  return `<div class="card"><h2>Status timeline</h2><ul class="tl">${items}</ul></div>`;
+}
+
+function docketFilters() {
+  const cats = [...new Set(DOCS.map((d) => d.category).filter(Boolean))].sort();
+  const parties = [...new Set(DOCS.map((d) => d.party).filter(Boolean))].sort();
+  const opt = (v, lbl) => `<option value="${esc(v)}">${esc(lbl)}</option>`;
+  return `<div class="toolbar">
+    <input type="search" id="q" placeholder="Filter documents…" />
+    <select id="cat"><option value="">All categories</option>${cats.map((c) => opt(c, c)).join('')}</select>
+    <select id="party"><option value="">All parties</option>${parties.map((p) => opt(p, partyLabel(p))).join('')}</select>
+  </div>`;
+}
+
+function filteredDocs() {
+  const q = (document.getElementById('q')?.value || '').toLowerCase().trim();
+  const cat = document.getElementById('cat')?.value || '';
+  const party = document.getElementById('party')?.value || '';
+  const sign = sortDir === 'asc' ? 1 : -1;
+  return DOCS.filter((d) => {
+    if (cat && d.category !== cat) return false;
+    if (party && d.party !== party) return false;
+    if (q && !(`${d.type} ${d.title} ${d.name} ${d.category}`.toLowerCase().includes(q))) return false;
+    return true;
+  }).sort((a, b) => sign * String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), undefined, { numeric: true }));
+}
+
+function renderDocket() {
+  const rows = filteredDocs();
+  const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  const th = (k, lbl) => `<th onclick="sortBy('${k}')">${lbl}${arrow(k)}</th>`;
+  const trs = rows.map((d) => {
+    const acts = d.url
+      ? `<a href="${fileLink(d, false)}" target="_blank" rel="noopener">View ↗</a><a href="${fileLink(d, true)}" download>Download ⤓</a>`
+      : '<span class="ext">—</span>';
+    return `<tr>
+      <td>${fmtDate(d.filingDate)}</td>
+      <td>${d.number ?? '—'}</td>
+      <td>${esc(d.category) || '—'}</td>
+      <td>${esc(d.type) || '—'}</td>
+      <td>${esc(d.title) || '—'}</td>
+      <td>${esc(partyLabel(d.party))}</td>
+      <td>${fmtSize(d.sizeBytes)}</td>
+      <td class="acts">${acts}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('docket-body').innerHTML = `<div class="table-wrap"><table><thead><tr>
+    ${th('filingDate', 'Filed')}${th('number', 'No.')}${th('category', 'Category')}${th('type', 'Type')}
+    ${th('title', 'Title')}${th('party', 'Party')}${th('sizeBytes', 'Size')}<th>Document</th>
+  </tr></thead><tbody>${trs}</tbody></table></div>
+  <p class="disclaimer">${rows.length} of ${DOCS.length} documents shown. Documents open through the site's PDF proxy (USPTO key stays server-side). Live from the USPTO Open Data Portal.</p>`;
+}
+function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === 'filingDate' || k === 'number' || k === 'sizeBytes') ? 'desc' : 'asc'; } renderDocket(); }
+
+function renderAll() {
+  document.getElementById('root').innerHTML =
+    headerCard() + timelineCard() +
+    `<div class="card"><h2>Documents (${DOCS.length})</h2>${docketFilters()}<div id="docket-body"></div></div>`;
+  document.getElementById('q').addEventListener('input', renderDocket);
+  document.getElementById('cat').addEventListener('change', renderDocket);
+  document.getElementById('party').addEventListener('change', renderDocket);
+  renderDocket();
+}
+
+(async () => {
+  if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(NO)) {
+    document.getElementById('root').innerHTML = '<div class="card"><div class="state">No valid trial number in the URL (expected e.g. <code>?no=IPR2025-00221</code>).</div></div>';
+    return;
+  }
+  document.title = NO + ' — PTAB proceeding';
+  try {
+    const res = await fetch('/api/ptab?trial=' + encodeURIComponent(NO));
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + res.status)); }
+    const data = await res.json();
+    META = data.meta || {}; DOCS = data.documents || []; STORED = data.stored || null;
+    if (!DOCS.length && !META.status) {
+      document.getElementById('root').innerHTML = `<div class="card"><div class="state">No records found for ${esc(NO)}. Check the trial number.</div></div>`;
+      return;
+    }
+    renderAll();
+  } catch (e) {
+    document.getElementById('root').innerHTML = `<div class="card"><div class="state">Could not load ${esc(NO)} (${esc(e.message)}).</div></div>`;
+  }
+})();
+</script>
+</body>
+</html>

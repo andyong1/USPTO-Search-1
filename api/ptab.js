@@ -8,9 +8,9 @@
 //   GET /api/ptab?classify=1      → classify pass: fetch each unclassified FWD PDF, extract text, classify.
 //                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome, promoteCaptionClassified,
-  markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD } from '../lib/db.js';
+  markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage, classifyFwdFromPdf, fetchDdDecision, CLASSIFIER_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
+import { fetchFwdPage, classifyFwdFromPdf, fetchDdDecision, fetchTrialDetail, CLASSIFIER_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -103,6 +103,21 @@ export default async function handler(req, res) {
       }
       const remaining = await countPtabFwdToCheckDD(V, DD_CUTOFF);
       res.status(200).json({ ok: true, mode: 'dd', ddCheckVersion: V, markedOld, processed, tally, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── Trial detail (live docket + status for one proceeding) ──
+    if (q.trial) {
+      const trial = String(q.trial).toUpperCase().trim();
+      if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(trial)) { res.status(400).json({ error: 'Invalid trial number.' }); return; }
+      let detail;
+      try { detail = await fetchTrialDetail(trial); }
+      catch (e) { res.status(502).json({ error: 'Trial fetch failed.', detail: String(e.message || e) }); return; }
+      let stored = null;
+      try { const s = await getPtabFwdByTrial(trial); if (s) stored = { outcome: s.outcome, outcome_detail: s.outcome_detail, dd_decision: s.dd_decision, classified_v: s.classified_v, dd_checked_v: s.dd_checked_v, fwd_date: s.fwd_date, fwd_pdf_url: s.fwd_pdf_url }; }
+      catch { /* stored FWD data is optional enrichment */ }
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.status(200).json({ trial, meta: detail.meta, documents: detail.documents, count: detail.count, stored, classifierVersion: CLASSIFIER_V, ddCheckVersion: DD_CHECK_V });
       return;
     }
 

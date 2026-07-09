@@ -210,7 +210,7 @@ function render() {
         + `<a class="ext" href="${fileBase}&dl=1&name=${encodeURIComponent(r.trial_number + '-FWD.pdf')}" download>Download ⤓</a></div>`
       : '';
     return `<tr>
-      <td>${esc(r.trial_number)}</td>
+      <td><a class="link" href="/trial?no=${encodeURIComponent(r.trial_number)}">${esc(r.trial_number)}</a></td>
       <td>${esc(r.trial_type)}</td>
       <td>${pat}</td>
       <td>${r.po_name ? esc(r.po_name) : '<span class="ext">—</span>'}</td>

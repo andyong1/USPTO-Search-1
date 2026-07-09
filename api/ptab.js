@@ -7,6 +7,7 @@
 //                                   CRON_SECRET-gated. Params: from (2024-01-01), to, types (IPR,PGR,CBM). Resumable via ?offset=.
 //   GET /api/ptab?extract=1       → extract pass: fetch each FWD PDF, extract + STORE its text (expensive; run once).
 //                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
+//                                   Add &trial=<no> to force a re-extract + reclassify of one proceeding (diagnostic).
 //   GET /api/ptab?classify=1      → classify pass: run the classifier over the STORED text (offline, no fetch).
 //                                   CRON_SECRET-gated. Bump CLASSIFIER_V + re-run to reclassify without re-fetching.
 //   GET /api/ptab?dd=1            → director-discretionary-decision backfill (CRON_SECRET-gated, resumable).
@@ -62,6 +63,22 @@ export default async function handler(req, res) {
     if (q.extract) {
       if (!gate(req, res)) return;
       const EV = EXTRACT_V;
+      // Targeted re-extract + reclassify of one trial (forces past the version gate).
+      // Diagnostic: reports the text source, length, and resulting outcome.
+      if (q.trial) {
+        const trial = String(q.trial).toUpperCase().trim();
+        if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(trial)) { res.status(400).json({ error: 'Invalid trial number.' }); return; }
+        const row = await getPtabFwdByTrial(trial);
+        if (!row || !row.fwd_pdf_url) { res.status(404).json({ error: 'No FWD PDF on file for this trial.' }); return; }
+        try {
+          const { text, source } = await extractFwdText(row.fwd_pdf_url);
+          await setPtabFwdText(trial, text, source, EV);
+          const { outcome, detail } = classifyFwd(text);
+          await setPtabFwdOutcome(trial, outcome, detail, CLASSIFIER_V);
+          res.status(200).json({ ok: true, mode: 'extract', trial, source, textLength: (text || '').length, outcome, detail });
+        } catch (e) { res.status(502).json({ error: 'Extract failed.', detail: String(e.message || e) }); }
+        return;
+      }
       const CONCURRENCY = 5;
       const deadline = Date.now() + 50000;
       let processed = 0; const tally = {}; const errors = [];

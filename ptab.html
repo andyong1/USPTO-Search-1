@@ -202,7 +202,8 @@ function render() {
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
   const trs = rows.map((r) => {
     const o = OUTCOME[outcomeKey(r)] || OUTCOME.other;
-    const pat = r.patent_number ? `<a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number || '')}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
+    const patNum = String(r.patent_number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const pat = r.patent_number ? `<a class="ext" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
     const fileBase = r.fwd_pdf_url ? `/api/ptab?file=${encodeURIComponent(r.fwd_pdf_url)}` : '';
     const fwdLinks = r.fwd_pdf_url
       ? `<div class="fwd-links"><a class="ext" href="${fileBase}" target="_blank" rel="noopener">View ↗</a>`

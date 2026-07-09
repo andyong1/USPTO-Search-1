@@ -59,13 +59,13 @@
 <body>
 <header>
   <h1>PTAB Final Written Decisions</h1>
-  <p>AIA trials (IPR / PGR / CBM) that reached an FWD — i.e. instituted past the discretionary-denial stage · internal</p>
+  <p>AIA trials (IPR / PGR) with a FWD issued on or after January 1, 2024</p>
 </header>
 
 <div class="container">
   <div class="card">
     <h2>Final Written Decision Outcomes</h2>
-    <div class="sub" id="freshness">A Final Written Decision only issues after institution, so every case here got past discretionary denial. Outcome is parsed from the Board's decision caption.</div>
+    <div class="sub" id="freshness">Outcome is parsed from the Board's decision caption.</div>
 
     <div class="filter-bar">
       <div class="fb-group"><label for="from">FWD date from</label><input type="date" id="from" /></div>
@@ -74,7 +74,6 @@
         <div class="types">
           <label><input type="checkbox" class="type-cb" value="IPR" checked> IPR</label>
           <label><input type="checkbox" class="type-cb" value="PGR" checked> PGR</label>
-          <label><input type="checkbox" class="type-cb" value="CBM" checked> CBM</label>
         </div>
       </div>
       <button class="btn secondary" id="reset">Reset filters</button>
@@ -157,7 +156,7 @@ function writeUrl() {
   const from = document.getElementById('from').value; if (from) p.set('from', from);
   const to = document.getElementById('to').value; if (to) p.set('to', to);
   const types = selectedTypes();
-  if (types.length && types.length < 3) p.set('types', types.join(','));
+  if (types.length && types.length < 2) p.set('types', types.join(','));
   if (sortKey !== 'fwd_date' || sortDir !== 'desc') { p.set('sort', sortKey); p.set('dir', sortDir); }
   const qs = p.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));

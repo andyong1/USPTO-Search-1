@@ -49,6 +49,11 @@ test('classifyFwd — quantifier disposition (singular claim / stated in ORDER)'
   assert.equal(classifyFwd('Petitioner has not shown that all challenged claims are unpatentable.').outcome, 'po_none');
   // "some challenged claims ... unpatentable" => partial.
   assert.equal(classifyFwd('We conclude some challenged claims are unpatentable and others are not.').outcome, 'partial');
+  // The IPR2025-00221 case: "each of the challenged claims—i.e., ...—is unpatentable"
+  // with verb "has demonstrated" (not "has shown"); abbreviation periods must not cut it short.
+  assert.equal(classifyFwd("we find that Petitioner has demonstrated by a preponderance of the evidence that each of the challenged claims—i.e., claims 1–8 of the '889 patent—is unpatentable.").outcome, 'petitioner_all');
+  // Negation guard on the new verbs: "has not demonstrated ... unpatentable" => PO win.
+  assert.equal(classifyFwd('Petitioner has not demonstrated that each of the challenged claims is unpatentable.').outcome, 'po_none');
 });
 test('classifyFwd — non-standard disposition => other', () => {
   assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'other');

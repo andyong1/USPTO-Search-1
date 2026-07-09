@@ -36,6 +36,20 @@ test('classifyFwd — ORDER fallback, negation-aware', () => {
   // Partial: one clause holds claims unpatentable, another says not shown.
   assert.equal(classifyFwd('Claims 1-5 are held unpatentable; Petitioner has not shown that claims 6-10 are unpatentable.').outcome, 'partial');
 });
+test('classifyFwd — quantifier disposition (singular claim / stated in ORDER)', () => {
+  // The IPR2025-00247 case: singular "no challenged claim ... unpatentable" => PO win.
+  assert.equal(classifyFwd('We determine that no challenged claim is unpatentable.').outcome, 'po_none');
+  // Singular caption variant.
+  assert.equal(classifyFwd('Final Written Decision Determining No Challenged Claim Unpatentable').outcome, 'po_none');
+  // "none of the challenged claims ... unpatentable" => PO win.
+  assert.equal(classifyFwd('Petitioner has established that none of the challenged claims are unpatentable? No.').outcome, 'po_none');
+  // "all challenged claims ... unpatentable" stated in the order (no caption) => petitioner win.
+  assert.equal(classifyFwd('For the foregoing reasons, all challenged claims are unpatentable.').outcome, 'petitioner_all');
+  // Negation guard: "has not shown that all challenged claims are unpatentable" => PO win, NOT petitioner.
+  assert.equal(classifyFwd('Petitioner has not shown that all challenged claims are unpatentable.').outcome, 'po_none');
+  // "some challenged claims ... unpatentable" => partial.
+  assert.equal(classifyFwd('We conclude some challenged claims are unpatentable and others are not.').outcome, 'partial');
+});
 test('classifyFwd — non-standard disposition => other', () => {
   assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'other');
   assert.equal(classifyFwd('').outcome, 'other');

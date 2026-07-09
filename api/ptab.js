@@ -7,7 +7,7 @@
 //                                   CRON_SECRET-gated. Params: from (2024-01-01), to, types (IPR,PGR,CBM). Resumable via ?offset=.
 //   GET /api/ptab?classify=1      → classify pass: fetch each unclassified FWD PDF, extract text, classify.
 //                                   CRON_SECRET-gated. Time-bounded + resumable — re-run while done=false.
-import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
+import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome, promoteCaptionClassified,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
 import { fetchFwdPage, classifyFwdFromPdf, fetchDdDecision, CLASSIFIER_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
@@ -53,6 +53,9 @@ export default async function handler(req, res) {
     if (q.classify) {
       if (!gate(req, res)) return;
       const CV = CLASSIFIER_V;
+      // Caption-classified rows are stable across versions — promote them to CV
+      // without re-fetching, so only fallback/other/error rows get reprocessed.
+      const promoted = await promoteCaptionClassified(CV);
       const CONCURRENCY = 5;
       const deadline = Date.now() + 50000;
       let processed = 0; const tally = {}; const errors = [];
@@ -74,7 +77,7 @@ export default async function handler(req, res) {
         }));
       }
       const remaining = await countPtabFwdToClassify(CV);
-      res.status(200).json({ ok: true, mode: 'classify', classifierVersion: CV, processed, tally, remaining, done: remaining === 0, errors });
+      res.status(200).json({ ok: true, mode: 'classify', classifierVersion: CV, promoted, processed, tally, remaining, done: remaining === 0, errors });
       return;
     }
 

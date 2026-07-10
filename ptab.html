@@ -20,7 +20,8 @@
     .filter-bar { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
     .fb-group { display: flex; flex-direction: column; gap: 5px; }
     .fb-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
-    .fb-group input[type=date] { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
+    .fb-group input[type=date], .fb-group input[type=search], .fb-group select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+    .fb-group input[type=search] { width: 100%; }
     .types { display: flex; gap: 14px; align-items: center; }
     .types label { font-weight: 500; font-size: 0.9rem; display: inline-flex; gap: 5px; align-items: center; }
     .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 6px 0 4px; }
@@ -83,6 +84,18 @@
           <label><input type="checkbox" class="type-cb" value="PGR" checked> PGR</label>
         </div>
       </div>
+      <div class="fb-group"><label for="outcome-f">Outcome</label>
+        <select id="outcome-f">
+          <option value="">All outcomes</option>
+          <option value="petitioner_all">Petitioner win</option>
+          <option value="po_none">Patent owner win</option>
+          <option value="partial">Partial</option>
+          <option value="other">Other / review</option>
+          <option value="unclassified">Pending</option>
+          <option value="review">⚠ Needs review (Other + errors)</option>
+        </select>
+      </div>
+      <div class="fb-group" style="flex:1;min-width:200px"><label for="search">Search</label><input type="search" id="search" placeholder="Trial no., patent, party…" /></div>
       <button class="btn secondary" id="reset">Reset filters</button>
       <button class="btn" id="export">Export .xlsx</button>
     </div>
@@ -175,12 +188,21 @@ function filtered() {
   const to = ymd(document.getElementById('to').value);
   const types = new Set(selectedTypes());
   const onlyRefer = document.getElementById('dd-refer').checked;
+  const oc = document.getElementById('outcome-f').value;
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
   return ALL.filter((r) => {
     if (types.size && !types.has(r.trial_type)) return false;
     const d = ymd(r.fwd_date);
     if (from && d && d < from) return false;
     if (to && d && d > to) return false;
     if (onlyRefer && ddKey(r) !== 'refer') return false; // only discretionary-denial referrals
+    if (oc) {
+      const k = outcomeKey(r);
+      // "review" = anything a human should look at: 'other' or a failed extraction/classify.
+      if (oc === 'review') { if (!(k === 'other' || r.text_source === 'error')) return false; }
+      else if (k !== oc) return false;
+    }
+    if (q && !`${r.trial_number} ${r.patent_number} ${r.po_name} ${r.petitioner_name} ${r.application_number}`.toLowerCase().includes(q)) return false;
     return true;
   });
 }
@@ -198,6 +220,8 @@ function writeUrl() {
   const to = document.getElementById('to').value; if (to) p.set('to', to);
   const types = selectedTypes();
   if (types.length && types.length < 2) p.set('types', types.join(','));
+  const oc = document.getElementById('outcome-f').value; if (oc) p.set('outcome', oc);
+  const q = document.getElementById('search').value.trim(); if (q) p.set('q', q);
   if (sortKey !== 'fwd_date' || sortDir !== 'desc') { p.set('sort', sortKey); p.set('dir', sortDir); }
   const qs = p.toString();
   history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
@@ -210,6 +234,8 @@ function readUrl() {
   if (p.get('to')) document.getElementById('to').value = p.get('to');
   const types = p.get('types');
   if (types) { const set = new Set(types.split(',')); document.querySelectorAll('.type-cb').forEach((c) => { c.checked = set.has(c.value); }); }
+  if (p.get('outcome')) document.getElementById('outcome-f').value = p.get('outcome');
+  if (p.get('q')) document.getElementById('search').value = p.get('q');
   const s = p.get('sort'), d = p.get('dir');
   if (SORT_KEYS.includes(s)) { sortKey = s; sortDir = d === 'asc' ? 'asc' : 'desc'; }
 }
@@ -308,9 +334,12 @@ function exportXlsx() {
 document.getElementById('from').addEventListener('change', render);
 document.getElementById('to').addEventListener('change', render);
 document.getElementById('dd-refer').addEventListener('change', render);
+document.getElementById('outcome-f').addEventListener('change', render);
+document.getElementById('search').addEventListener('input', render);
 document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
 document.getElementById('reset').addEventListener('click', () => {
   document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd-refer').checked = false;
+  document.getElementById('outcome-f').value = ''; document.getElementById('search').value = '';
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
 });
 document.getElementById('export').addEventListener('click', exportXlsx);

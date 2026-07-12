@@ -32,6 +32,7 @@ import {
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
+import { fetchFwdPage } from '../../lib/ptab.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -82,10 +83,24 @@ async function maybeSendSubscriberDigest(req) {
   }
 
   const events = await getDocEventsByOfficialDate(targetDate);
+
+  // PTAB final written decisions issued that same day (best-effort — a failure
+  // here must not block the reexam digest). Dedupe to one row per trial.
+  let ptabDecisions = [];
+  try {
+    const page = await fetchFwdPage({ types: ['IPR', 'PGR', 'CBM'], from: targetDate, to: targetDate, offset: 0, limit: 100 });
+    const seen = new Set();
+    for (const r of page.rows) {
+      if (seen.has(r.trial_number)) continue;
+      seen.add(r.trial_number);
+      ptabDecisions.push({ trial: r.trial_number, type: r.trial_type, patent: r.patent_number, po: r.po_name, petitioner: r.petitioner_name, pdfUrl: r.fwd_pdf_url });
+    }
+  } catch (e) { ptabDecisions = []; }
+
   // Mark the day handled even when empty, so we check at most once per day.
   if (!force) await setSubDigestDate(targetDate);
 
-  if (!events.length) return { date: targetDate, newDocs: 0, sent: 0 };
+  if (!events.length && !ptabDecisions.length) return { date: targetDate, newDocs: 0, ptab: 0, sent: 0 };
 
   const subscribers = await listReexamSubscribers();
   const base = baseUrl(req);
@@ -93,12 +108,12 @@ async function maybeSendSubscriberDigest(req) {
   let sent = 0; const errors = [];
   for (const s of subscribers) {
     const r = await sendComprehensiveDigestTo(s.email, events, {
-      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`,
+      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`, ptabDecisions,
     });
     if (r && r.sent) sent++;
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
-  return { date: targetDate, newDocs: events.length, subscribers: subscribers.length, sent, errors };
+  return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, subscribers: subscribers.length, sent, errors };
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we

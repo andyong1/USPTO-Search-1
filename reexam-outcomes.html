@@ -18,7 +18,10 @@
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
-    .site-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .site-nav { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; align-items: flex-start; }
+    .nav-section { display: flex; flex-direction: column; gap: 6px; }
+    .nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding-left: 3px; }
+    .nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }
     .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.9rem; padding: 10px 16px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
     .site-nav a:hover { background: #cbd5e0; }
     .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
@@ -102,13 +105,29 @@
 
 <div class="container">
   <nav class="site-nav">
-    <a href="/uspto-search">Application Search &amp; Tracking</a>
-    <a href="/reexam">Reexam Determinations</a>
-    <a href="/reexam-actions">Reexam Office Action Timing</a>
-    <a href="/reexam-outcomes" class="active" aria-current="page">Reexam Final Outcomes</a>
-    <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
-    <a href="/reexam-petitions">Post-Order Petitions</a>
-    <a href="/file-history">File History Print to PDF</a>
+    <div class="nav-section">
+      <span class="nav-section-label">Application Search</span>
+      <div class="nav-section-links">
+        <a href="/uspto-search">Application Search &amp; Tracking</a>
+        <a href="/file-history">File History Print to PDF</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">Reexam Stats</span>
+      <div class="nav-section-links">
+        <a href="/reexam">Reexam Determinations</a>
+        <a href="/reexam-actions">Reexam Office Action Timing</a>
+        <a href="/reexam-outcomes" class="active" aria-current="page">Reexam Final Outcomes</a>
+        <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+        <a href="/reexam-petitions">Post-Order Petitions</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">PTAB Stats</span>
+      <div class="nav-section-links">
+        <a href="/ptab">PTAB FWD Outcomes</a>
+      </div>
+    </div>
   </nav>
 
   <div class="card">

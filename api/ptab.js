@@ -362,7 +362,8 @@ export default async function handler(req, res) {
         for (const kind of ['reexam', 'ipr']) if (recent || !stored.has(kind + ':' + d)) work.push({ kind, d });
       }
       const CONCURRENCY = 4;
-      const deadline = Date.now() + 50000;
+      // ~22s so it returns inside cron-job.org's 30s timeout; re-run to continue.
+      const deadline = Date.now() + 22000;
       let processed = 0; const errors = [];
       let i = 0;
       async function worker() {

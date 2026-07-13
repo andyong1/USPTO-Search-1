@@ -263,6 +263,7 @@
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
+  <script src="/export.js" defer></script>
 </head>
 <body>
 
@@ -467,7 +468,7 @@
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="copyShareLink(this)">🔗 Copy link</button>
         <button class="toggle-raw" onclick="toggleRaw()">{ } Raw JSON</button>
-        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="exportCSV()">Export CSV</button>
+        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="exportCSV()">Export .xlsx</button>
       </div>
     </div>
     <div id="results-body"></div>
@@ -937,14 +938,10 @@ function exportCSV() {
     ['Inventor', i => md(i).firstInventorName || bagNames(md(i).inventorBag)],
     ['Applicant', i => md(i).firstApplicantName || bagNames(md(i).applicantBag)],
   ];
-  const header = cols.map(c => c[0]).join(',');
-  const body = list.map(i => cols.map(c => `"${String(c[1](i) ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-
-  const blob = new Blob([header + '\n' + body], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'uspto-results.csv';
-  a.click();
+  if (typeof exportXlsx !== 'function') { alert('Export helper is still loading — try again in a moment.'); return; }
+  const header = cols.map(c => c[0]);
+  const rows = list.map(i => cols.map(c => String(c[1](i) ?? '')));
+  exportXlsx('uspto-results.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
 
 // ── Utilities ──────────────────────────────────────────────────────

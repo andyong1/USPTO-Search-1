@@ -129,6 +129,7 @@
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
+  <script src="/export.js" defer></script>
 </head>
 <body>
 
@@ -226,7 +227,7 @@
   <div class="card" style="margin-top:24px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <h2 style="margin:0">Detailed Listing of Reexamination Determinations</h2>
-      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
+      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
     </div>
     <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="tablePage=1;renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
@@ -544,12 +545,7 @@ function exportCsv() {
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => [d.application_number, d.determination_type, fmtDate(d.official_date), d.examiner_name, d.group_art_unit,
     d.tech_center || '', REQUESTER_LABEL[requesterKey(d)]]);
-  const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'reexam-determinations.csv';
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
 
 // Technology center number → human-readable name (for the Technology Area tooltip).

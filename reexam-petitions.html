@@ -82,6 +82,7 @@
     }
   </style>
   <script defer src="/_vercel/insights/script.js"></script>
+  <script src="/export.js" defer></script>
 </head>
 <body>
 
@@ -142,7 +143,7 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
       <h2 id="list-heading" style="margin:0">Petitions</h2>
-      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export CSV</button>
+      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" aria-label="Filter petitions" style="margin-top:0" />
@@ -194,12 +195,7 @@ function exportCsv() {
     p.decision_doc_id ? (p.decision_325d ? 'Yes' : 'No') : '',
     p.nonf_date ? fmtDate(p.nonf_date) : '',
   ]);
-  const csv = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'post-order-petitions.csv';
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  window.exportXlsx('post-order-petitions.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
 
 function filtered() {

@@ -12,14 +12,19 @@
 //                                   CRON_SECRET-gated. Bump CLASSIFIER_V + re-run to reclassify without re-fetching.
 //   GET /api/ptab?dd=1            → director-discretionary-decision backfill (CRON_SECRET-gated, resumable).
 //                                   Add &trial=<no> to force a re-check of a single proceeding.
+//   GET /api/ptab?dscan=1&feed=inst|dd → decisions catalog for /ptab-decisions (institution + DD
+//                                   decisions since 2024; metadata-only). CRON_SECRET-gated, resumable via ?offset=.
+//   GET /api/ptab?decisions=1     → read for the /ptab-decisions page ({ rows, summary }).
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
-  stampMaintainRun, getMaintainLastRun } from '../lib/db.js';
+  stampMaintainRun, getMaintainLastRun,
+  upsertPtabInstitution, upsertPtabDd, listPtabDecisions } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
-import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
+import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
+  fetchInstitutionPage, fetchDdPage, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -55,6 +60,34 @@ export default async function handler(req, res) {
         if (page.fetched < LIMIT) { done = true; break; }
       }
       res.status(200).json({ ok: true, mode: 'catalog', from, to, types, reportedTotal: count, fetched, upserted, nextOffset: done ? null : offset, done, errors });
+      return;
+    }
+
+    // ── Decisions catalog (institution + Director-discretionary decisions) ──
+    // Metadata-only (no PDFs). ?feed=inst|dd, resumable via ?offset=.
+    if (q.dscan) {
+      if (!gate(req, res)) return;
+      const feed = String(q.feed || 'inst') === 'dd' ? 'dd' : 'inst';
+      const from = String(q.from || '2024-01-01');
+      const to = String(q.to || '2100-01-01');
+      let offset = parseInt(q.offset || '0', 10) || 0;
+      const LIMIT = 100, MAX_PAGES = 6;
+      const deadline = Date.now() + 50000;
+      let pages = 0, fetched = 0, upserted = 0, count = null, done = false;
+      const errors = [];
+      while (pages < MAX_PAGES && Date.now() < deadline) {
+        let page;
+        try { page = feed === 'dd' ? await fetchDdPage({ from, to, offset, limit: LIMIT }) : await fetchInstitutionPage({ from, to, offset, limit: LIMIT }); }
+        catch (e) { errors.push({ offset, error: String(e.message || e) }); break; }
+        count = page.count; fetched += page.fetched;
+        for (const r of page.rows) {
+          try { if (feed === 'dd') await upsertPtabDd(r); else await upsertPtabInstitution(r); upserted++; }
+          catch (e) { errors.push({ trial: r.trial_number, error: String(e.message || e) }); }
+        }
+        pages++; offset += LIMIT;
+        if (page.fetched < LIMIT) { done = true; break; }
+      }
+      res.status(200).json({ ok: true, mode: 'dscan', feed, from, to, reportedTotal: count, fetched, upserted, nextOffset: done ? null : offset, done, errors });
       return;
     }
 
@@ -220,6 +253,20 @@ export default async function handler(req, res) {
       }
       out.dd = { markedOld, processed: ddProc, tally: ddTally };
 
+      // 5) Refresh the newest institution + Director-discretionary decisions
+      // (metadata-only; newest-first so new decisions are caught within a day).
+      let decProc = 0;
+      try {
+        for (const feed of ['inst', 'dd']) {
+          for (let p = 0; p < 2 && Date.now() < deadline; p++) {
+            const page = feed === 'dd' ? await fetchDdPage({ offset: p * 100, limit: 100 }) : await fetchInstitutionPage({ offset: p * 100, limit: 100 });
+            for (const r of page.rows) { try { if (feed === 'dd') await upsertPtabDd(r); else await upsertPtabInstitution(r); decProc++; } catch { /* skip */ } }
+            if (page.fetched < 100) break;
+          }
+        }
+      } catch { /* best-effort */ }
+      out.decisions = { upserted: decProc };
+
       const [remExtract, remClassify, remDd] = await Promise.all([
         countPtabFwdToExtract(EV), countPtabFwdToClassify(CV), countPtabFwdToCheckDD(DDV, DD_CUTOFF),
       ]);
@@ -290,6 +337,19 @@ export default async function handler(req, res) {
       res.setHeader('Content-Disposition', `${q.dl ? 'attachment' : 'inline'}; filename="${fname}"`);
       res.setHeader('Cache-Control', 'private, max-age=3600');
       res.status(200).send(Buffer.from(await up.arrayBuffer()));
+      return;
+    }
+
+    // ── Decisions read (discretion / institution decisions page) ──
+    if (q.decisions) {
+      res.setHeader('Cache-Control', 'no-store');
+      const drows = await listPtabDecisions();
+      const dsummary = { total: drows.length, dd_deny: 0, dd_refer: 0, inst_granted: 0, inst_denied: 0 };
+      for (const r of drows) {
+        if (r.dd_type === 'deny') dsummary.dd_deny++; else if (r.dd_type === 'refer') dsummary.dd_refer++;
+        if (r.inst_type === 'granted') dsummary.inst_granted++; else if (r.inst_type === 'denied') dsummary.inst_denied++;
+      }
+      res.status(200).json({ rows: drows, summary: dsummary });
       return;
     }
 

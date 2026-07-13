@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PTAB Discretion / Institution Decisions (internal)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header p { font-size: 0.8rem; opacity: 0.8; margin-top: 3px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 22px; }
+    .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #64748b; font-size: 0.85rem; margin-bottom: 14px; }
+    .filter-bar { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+    .fb-group { display: flex; flex-direction: column; gap: 5px; }
+    .fb-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
+    .fb-group input[type=date], .fb-group select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+    .types { display: flex; gap: 14px; align-items: center; }
+    .types label { font-weight: 500; font-size: 0.9rem; display: inline-flex; gap: 5px; align-items: center; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 6px 0 4px; }
+    @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: #64748b; margin-top: 6px; line-height: 1.3; }
+    .table-wrap { overflow: auto; max-height: 72vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 9px 12px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; cursor: pointer; user-select: none; }
+    th:hover { background: #e2e8f0; }
+    td { padding: 9px 12px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: #64748b; font-size: 0.8rem; text-decoration: none; }
+    .ext:hover { text-decoration: underline; }
+    .fwd-links { margin-top: 3px; display: flex; gap: 10px; white-space: nowrap; }
+    .fwd-links a { color: #1a3a6b; font-weight: 600; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+    .o-po { background: #c6f6d5; color: #276749; }
+    .o-pet { background: #fed7d7; color: #9b2c2c; }
+    .o-other { background: #e2e8f0; color: #4a5568; }
+    .o-dd { background: #e9d8fd; color: #553c9a; }
+    .btn { cursor: pointer; background: #1a3a6b; color: #fff; border: none; font-weight: 600; font-size: 0.9rem; padding: 9px 16px; border-radius: 8px; }
+    .btn.secondary { background: #e2e8f0; color: #1a3a6b; }
+    .btn.secondary:hover { background: #cbd5e0; }
+    .state { text-align: center; padding: 40px 20px; color: #64748b; }
+    .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
+    .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
+    /* Unified top nav */
+    .site-nav { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; align-items: flex-start; }
+    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+    .site-nav a:hover { background: #cbd5e0; }
+    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+    .nav-section { display: flex; flex-direction: column; gap: 6px; }
+    .nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding-left: 3px; }
+    .nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }
+  </style>
+  <script src="/subscribe.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>PTAB Discretion / Institution Decisions</h1>
+  <p>Director discretionary decisions and Board institution decisions issued on or after January 1, 2024</p>
+</header>
+
+<div class="container">
+  <nav class="site-nav">
+    <div class="nav-section">
+      <span class="nav-section-label">Application Search</span>
+      <div class="nav-section-links">
+        <a href="/uspto-search">Application Search &amp; Tracking</a>
+        <a href="/file-history">File History Print to PDF</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">Reexam Stats</span>
+      <div class="nav-section-links">
+        <a href="/reexam">Reexam Determinations</a>
+        <a href="/reexam-actions">Reexam Office Action Timing</a>
+        <a href="/reexam-outcomes">Reexam Final Outcomes</a>
+        <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+        <a href="/reexam-petitions">Post-Order Petitions</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">PTAB Stats</span>
+      <div class="nav-section-links">
+        <a href="/ptab-decisions" class="active" aria-current="page">PTAB Discretion / Institution Decisions</a>
+        <a href="/ptab">PTAB FWD Outcomes</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="card">
+    <h2>Discretion &amp; Institution Decisions After January 1, 2024</h2>
+    <div class="sub" id="refreshed">Director discretionary decisions (deny / refer) and Board institution decisions (granted / denied), from the USPTO Open Data Portal. Data refreshed daily.</div>
+
+    <div class="filter-bar">
+      <div class="fb-group"><label for="period">Period</label>
+        <select id="period">
+          <option value="since2024">Since Jan 1, 2024</option>
+          <option value="since2025">Since Jan 1, 2025</option>
+          <option value="since2026">Since Jan 1, 2026</option>
+          <option value="last60">Last 60 days</option>
+          <option value="last30">Last 30 days</option>
+        </select>
+      </div>
+      <div class="fb-group"><label for="from">Decision date from</label><input type="date" id="from" /></div>
+      <div class="fb-group"><label for="to">Decision date to</label><input type="date" id="to" /></div>
+      <div class="fb-group"><label for="tc">Technology Center</label>
+        <select id="tc"><option value="">All Technology Centers</option></select>
+      </div>
+      <div class="fb-group"><label>Trial type</label>
+        <div class="types">
+          <label><input type="checkbox" class="type-cb" value="IPR" checked> IPR</label>
+          <label><input type="checkbox" class="type-cb" value="PGR" checked> PGR</label>
+        </div>
+      </div>
+      <button class="btn secondary" id="reset">Reset filters</button>
+    </div>
+
+    <div id="kpi"></div>
+    <p class="disclaimer"><strong>Discretionary Decision</strong> = the Director's bifurcated-process decision to discretionarily <em>deny</em> the petition or <em>refer</em> it to the Board for a merits (institution) decision. <strong>Institution Decision</strong> = the Board's decision to institute (granted) or not (denied). Compiled from USPTO metadata — informational only; verify against the official decision.</p>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+      <h2 id="list-heading" style="margin:0">Proceedings</h2>
+    </div>
+    <input type="search" id="search" class="table-filter" placeholder="Filter by trial no., patent, or party…" aria-label="Filter proceedings" />
+    <div id="body"><div class="state">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
+function titleCase(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+
+let ALL = [];
+let sortKey = '_date', sortDir = 'desc';
+
+const TC_SHORT = {
+  '1600': 'Biotech & Organic Chem', '1700': 'Chemical & Materials', '2100': 'Computers & Software',
+  '2400': 'Networks & Security', '2600': 'Communications', '2800': 'Semiconductors & Electrical',
+  '2900': 'Designs', '3600': 'Transportation & E-Commerce', '3700': 'Mechanical & Medical', '3900': 'Central Reexam Unit',
+};
+function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
+function populateTc() {
+  const set = new Set();
+  for (const r of ALL) { const tc = String(r.tech_center || '').trim(); if (tc) set.add(tc); }
+  const tcs = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  document.getElementById('tc').innerHTML =
+    ['<option value="">All Technology Centers</option>'].concat(tcs.map((t) => `<option value="${esc(t)}">${esc(tcOptionLabel(t))}</option>`)).join('');
+}
+function periodFromYmd() {
+  const p = document.getElementById('period').value;
+  if (p === 'since2025') return '20250101';
+  if (p === 'since2026') return '20260101';
+  if (p === 'last60') return ymd(new Date(Date.now() - 60 * 86400000).toISOString());
+  if (p === 'last30') return ymd(new Date(Date.now() - 30 * 86400000).toISOString());
+  return '20240101';
+}
+// A proceeding's effective decision date = the later of its institution and DD dates.
+function rowDate(r) { return [r.inst_date, r.dd_date].filter(Boolean).sort().pop() || ''; }
+
+function selectedTypes() { return [...document.querySelectorAll('.type-cb:checked')].map((c) => c.value); }
+function filtered() {
+  const to = ymd(document.getElementById('to').value);
+  const fromBox = ymd(document.getElementById('from').value);
+  const lower = [periodFromYmd(), fromBox].filter(Boolean).sort().pop();
+  const types = new Set(selectedTypes());
+  const tc = document.getElementById('tc').value;
+  const q = (document.getElementById('search').value || '').toLowerCase().trim();
+  return ALL.filter((r) => {
+    if (types.size && !types.has(r.trial_type)) return false;
+    const d = ymd(rowDate(r));
+    if (lower && d && d < lower) return false;
+    if (to && d && d > to) return false;
+    if (tc && String(r.tech_center || '').trim() !== tc) return false;
+    if (q && !`${r.trial_number} ${r.patent_number} ${r.po_name} ${r.petitioner_name} ${r.application_number}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function sorted(rows) {
+  const sign = sortDir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => sign * String(a[sortKey] || '').localeCompare(String(b[sortKey] || ''), undefined, { numeric: true }));
+}
+
+const SORT_KEYS = ['trial_number', 'trial_type', 'patent_number', 'po_name', 'petitioner_name', 'tech_center', 'dd_type', 'inst_type', '_date'];
+function writeUrl() {
+  const p = new URLSearchParams();
+  const from = document.getElementById('from').value; if (from) p.set('from', from);
+  const to = document.getElementById('to').value; if (to) p.set('to', to);
+  const types = selectedTypes(); if (types.length && types.length < 2) p.set('types', types.join(','));
+  const per = document.getElementById('period').value; if (per && per !== 'since2024') p.set('period', per);
+  const tc = document.getElementById('tc').value; if (tc) p.set('tc', tc);
+  const q = document.getElementById('search').value.trim(); if (q) p.set('q', q);
+  if (sortKey !== '_date' || sortDir !== 'desc') { p.set('sort', sortKey); p.set('dir', sortDir); }
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  if (p.get('from')) document.getElementById('from').value = p.get('from');
+  if (p.get('to')) document.getElementById('to').value = p.get('to');
+  const types = p.get('types');
+  if (types) { const set = new Set(types.split(',')); document.querySelectorAll('.type-cb').forEach((c) => { c.checked = set.has(c.value); }); }
+  if (p.get('period')) document.getElementById('period').value = p.get('period');
+  if (p.get('tc')) document.getElementById('tc').value = p.get('tc');
+  if (p.get('q')) document.getElementById('search').value = p.get('q');
+  const s = p.get('sort'), d = p.get('dir');
+  if (SORT_KEYS.includes(s)) { sortKey = s; sortDir = d === 'asc' ? 'asc' : 'desc'; }
+}
+
+function buildKpi(rows) {
+  let ddDeny = 0, ddRefer = 0, instG = 0, instD = 0;
+  for (const r of rows) {
+    if (r.dd_type === 'deny') ddDeny++; else if (r.dd_type === 'refer') ddRefer++;
+    if (r.inst_type === 'granted') instG++; else if (r.inst_type === 'denied') instD++;
+  }
+  const card = (num, lbl, color) => `<div class="kpi"><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}</div></div>`;
+  document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
+    ${card(ddDeny, 'Discretionary Denials', '#9b2c2c')}
+    ${card(ddRefer, 'Referred to Board', '#553c9a')}
+    ${card(instG, 'Institutions Granted', '#276749')}
+    ${card(instD, 'Institutions Denied', '#9b2c2c')}
+  </div>`;
+}
+
+// Deny/Refer or Granted/Denied badge + date + View/Download.
+function decCell(type, date, pdfUrl, trial, kind) {
+  if (!type) return '<span class="ext">—</span>';
+  let cls = 'o-other', label = titleCase(type);
+  if (kind === 'dd') { if (type === 'refer') { cls = 'o-dd'; label = 'Referred'; } else if (type === 'deny') { cls = 'o-pet'; label = 'Denied'; } }
+  else { if (type === 'granted') { cls = 'o-po'; label = 'Granted'; } else if (type === 'denied') { cls = 'o-pet'; label = 'Denied'; } }
+  const base = pdfUrl ? `/api/ptab?file=${encodeURIComponent(pdfUrl)}` : '';
+  const links = pdfUrl
+    ? `<div class="fwd-links"><a class="ext" href="${base}" target="_blank" rel="noopener">View ↗</a><a class="ext" href="${base}&dl=1&name=${encodeURIComponent(trial + '-' + kind + '.pdf')}" download>Download ⤓</a></div>`
+    : '';
+  return `<span class="badge ${cls}">${esc(label)}</span><div class="ext" style="margin-top:3px">${fmtDate(date)}</div>${links}`;
+}
+
+function render() {
+  writeUrl();
+  const rows = sorted(filtered());
+  buildKpi(rows);
+  const body = document.getElementById('body');
+  document.getElementById('list-heading').textContent = `Proceedings (${rows.length})`;
+  if (!rows.length) { body.innerHTML = '<div class="state">No decisions match your filters.</div>'; return; }
+  const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
+  const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
+  const trs = rows.map((r) => {
+    const patNum = String(r.patent_number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const pat = r.patent_number ? `<a class="ext" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
+    return `<tr>
+      <td><a class="link" href="/trial?no=${encodeURIComponent(r.trial_number)}">${esc(r.trial_number)}</a></td>
+      <td>${esc(r.trial_type)}</td>
+      <td>${pat}</td>
+      <td>${r.po_name ? esc(r.po_name) : '<span class="ext">—</span>'}</td>
+      <td>${r.petitioner_name ? esc(r.petitioner_name) : '<span class="ext">—</span>'}</td>
+      <td>${r.tech_center ? esc(r.tech_center) : '<span class="ext">—</span>'}</td>
+      <td>${decCell(r.dd_type, r.dd_date, r.dd_pdf_url, r.trial_number, 'dd')}</td>
+      <td>${decCell(r.inst_type, r.inst_date, r.inst_pdf_url, r.trial_number, 'inst')}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
+    ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
+    ${th('dd_type', 'Discretionary Decision')}${th('inst_type', 'Institution Decision')}
+  </tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } render(); }
+
+document.getElementById('period').addEventListener('change', render);
+document.getElementById('from').addEventListener('change', render);
+document.getElementById('to').addEventListener('change', render);
+document.getElementById('tc').addEventListener('change', render);
+document.getElementById('search').addEventListener('input', render);
+document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
+document.getElementById('reset').addEventListener('click', () => {
+  document.getElementById('period').value = 'since2024';
+  document.getElementById('from').value = ''; document.getElementById('to').value = '';
+  document.getElementById('tc').value = ''; document.getElementById('search').value = '';
+  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
+});
+
+(async () => {
+  try {
+    const res = await fetch('/api/ptab?decisions=1');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    ALL = (data.rows || []).map((r) => ({ ...r, _date: rowDate(r) }));
+    if (!ALL.length) {
+      document.getElementById('body').innerHTML = '<div class="state">No decisions recorded yet. Populate via <code>/api/ptab?dscan=1&amp;feed=inst</code> and <code>&amp;feed=dd</code>, then reload.</div>';
+      buildKpi([]);
+      return;
+    }
+    populateTc();
+    readUrl();
+    render();
+  } catch (e) {
+    document.getElementById('body').innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+  }
+})();
+</script>
+</body>
+</html>

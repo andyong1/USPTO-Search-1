@@ -32,7 +32,7 @@ import {
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
-import { fetchFwdPage } from '../../lib/ptab.js';
+import { fetchFwdPage, fetchInstitutionPage, fetchDdPage } from '../../lib/ptab.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -97,10 +97,29 @@ async function maybeSendSubscriberDigest(req) {
     }
   } catch (e) { ptabDecisions = []; }
 
+  // PTAB Director-discretionary + Board institution decisions issued that same day
+  // (best-effort; deduped per trial+kind). Shown before the FWD section.
+  let ptabDecisionEvents = [];
+  try {
+    const seen = new Set();
+    const push = (rows, kind, typeKey) => {
+      for (const r of rows) {
+        const k = kind + ':' + r.trial_number; if (seen.has(k)) continue; seen.add(k);
+        ptabDecisionEvents.push({ trial: r.trial_number, type: r.trial_type, patent: r.patent_number, po: r.po_name, kind, decision: r[typeKey], pdfUrl: kind === 'Discretionary' ? r.dd_pdf_url : r.inst_pdf_url });
+      }
+    };
+    const [inst, dd] = await Promise.all([
+      fetchInstitutionPage({ from: targetDate, to: targetDate, offset: 0, limit: 100 }),
+      fetchDdPage({ from: targetDate, to: targetDate, offset: 0, limit: 100 }),
+    ]);
+    push(dd.rows, 'Discretionary', 'dd_type');
+    push(inst.rows, 'Institution', 'inst_type');
+  } catch (e) { ptabDecisionEvents = []; }
+
   // Mark the day handled even when empty, so we check at most once per day.
   if (!force) await setSubDigestDate(targetDate);
 
-  if (!events.length && !ptabDecisions.length) return { date: targetDate, newDocs: 0, ptab: 0, sent: 0 };
+  if (!events.length && !ptabDecisions.length && !ptabDecisionEvents.length) return { date: targetDate, newDocs: 0, ptab: 0, ptabDecisions: 0, sent: 0 };
 
   const subscribers = await listReexamSubscribers();
   const base = baseUrl(req);
@@ -108,12 +127,12 @@ async function maybeSendSubscriberDigest(req) {
   let sent = 0; const errors = [];
   for (const s of subscribers) {
     const r = await sendComprehensiveDigestTo(s.email, events, {
-      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`, ptabDecisions,
+      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`, ptabDecisions, ptabDecisionEvents,
     });
     if (r && r.sent) sent++;
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
-  return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, subscribers: subscribers.length, sent, errors };
+  return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors };
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we

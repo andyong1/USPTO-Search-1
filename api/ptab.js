@@ -15,8 +15,8 @@
 //   GET /api/ptab?dscan=1&feed=inst|dd → decisions catalog for /ptab-decisions (institution + DD
 //                                   decisions since 2024; metadata-only). CRON_SECRET-gated, resumable via ?offset=.
 //   GET /api/ptab?decisions=1     → read for the /ptab-decisions page ({ rows, summary }).
-//   GET /api/ptab?fscan=1         → filings-trends scan: monthly counts of ex parte reexams + IPR
-//                                   petitions since 2024 (CRON_SECRET-gated, resumable).
+//   GET /api/ptab?fscan=1         → filings-trends scan: DAILY counts of ex parte reexams + IPR
+//                                   petitions since 2024 (CRON_SECRET-gated, concurrent, resumable).
 //   GET /api/ptab?filings=1       → read for the /filings-trends page ({ reexam:[], ipr:[], updatedAt }).
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
@@ -343,44 +343,51 @@ export default async function handler(req, res) {
       return;
     }
 
-    // ── Filings trends scan (monthly counts: ex parte reexams + IPR petitions) ──
-    // Metadata-only count queries (one per month per kind). Newest-first + skip
-    // already-stored settled months, so it's cheap and resumable.
+    // ── Filings trends scan (DAILY counts: ex parte reexams + IPR petitions) ──
+    // One count query per day per kind. Newest-first, concurrent, and skips days
+    // already stored (a past day's count is fixed) except the most recent two, so
+    // the one-time backfill drains over a few runs and steady state is tiny.
     if (q.fscan) {
       if (!gate(req, res)) return;
       const pad = (n) => String(n).padStart(2, '0');
-      const now = new Date();
-      const curIdx = now.getUTCFullYear() * 12 + now.getUTCMonth();
-      const startIdx = 2024 * 12 + 0; // Jan 2024
-      const recentCut = curIdx - 2;   // always refresh the last ~3 months
-      const stored = new Set((await listFilings()).map((r) => r.kind + ':' + r.ym));
+      const dayStr = (t) => { const dt = new Date(t); return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`; };
+      const START = Date.UTC(2024, 0, 1), DAY = 86400000;
+      const todayMs = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+      const stored = new Set((await listFilings()).map((r) => r.kind + ':' + r.d));
+      // Build the work list (newest day first), skipping settled stored days.
+      const work = [];
+      for (let t = todayMs; t >= START; t -= DAY) {
+        const d = dayStr(t);
+        const recent = t >= todayMs - DAY; // always refresh today + yesterday
+        for (const kind of ['reexam', 'ipr']) if (recent || !stored.has(kind + ':' + d)) work.push({ kind, d });
+      }
+      const CONCURRENCY = 4;
       const deadline = Date.now() + 50000;
       let processed = 0; const errors = [];
-      for (let idx = curIdx; idx >= startIdx && Date.now() < deadline; idx--) {
-        const y = Math.floor(idx / 12), m = (idx % 12) + 1, ym = `${y}-${pad(m)}`;
-        const from = `${ym}-01`, to = `${ym}-${pad(new Date(Date.UTC(y, m, 0)).getUTCDate())}`;
-        for (const kind of ['reexam', 'ipr']) {
-          if (idx < recentCut && stored.has(kind + ':' + ym)) continue;
+      let i = 0;
+      async function worker() {
+        while (i < work.length && Date.now() < deadline) {
+          const { kind, d } = work[i++];
           try {
-            const count = kind === 'ipr' ? await fetchIprPetitionCount(from, to) : await fetchReexamFilingCount(from, to);
-            await upsertFilingCount(kind, ym, count); processed++;
-          } catch (e) { if (errors.length < 6) errors.push({ kind, ym, error: String(e.message || e) }); }
+            const count = kind === 'ipr' ? await fetchIprPetitionCount(d, d) : await fetchReexamFilingCount(d, d);
+            await upsertFilingCount(kind, d, count); processed++;
+          } catch (e) { if (errors.length < 6) errors.push({ kind, d, error: String(e.message || e) }); }
         }
       }
-      const totalPairs = (curIdx - startIdx + 1) * 2;
-      const have = (await listFilings()).length;
-      res.status(200).json({ ok: true, mode: 'filings-scan', processed, storedPairs: have, totalPairs, done: have >= totalPairs, errors });
+      await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+      const remaining = work.length - processed;
+      res.status(200).json({ ok: true, mode: 'filings-scan', processed, remaining, done: remaining <= 0, errors });
       return;
     }
 
-    // ── Filings trends read ──
+    // ── Filings trends read (daily series per kind) ──
     if (q.filings) {
       res.setHeader('Cache-Control', 'no-store');
       const rows = await listFilings();
       const series = { reexam: [], ipr: [] };
       let updatedAt = null;
       for (const r of rows) {
-        if (series[r.kind]) series[r.kind].push({ ym: r.ym, count: r.count });
+        if (series[r.kind]) series[r.kind].push({ d: r.d, count: r.count });
         if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) updatedAt = r.updated_at;
       }
       res.status(200).json({ ...series, updatedAt });

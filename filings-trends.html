@@ -17,6 +17,12 @@
     .card + .card { margin-top: 22px; }
     .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 4px; }
     .sub { color: #64748b; font-size: 0.85rem; margin-bottom: 14px; }
+    .filter-bar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+    .fb-group { display: flex; flex-direction: column; gap: 5px; }
+    .fb-group label { font-size: 0.8rem; font-weight: 600; color: #4a5568; }
+    .fb-group input[type=date], .fb-group select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; background: #fff; }
+    .btn-reset { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.85rem; padding: 8px 14px; border-radius: 6px; }
+    .btn-reset:hover { background: #cbd5e0; }
     .total { font-size: 2rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
     .total-lbl { font-size: 0.78rem; color: #64748b; margin: 2px 0 14px; }
     .chart-wrap { position: relative; overflow-x: auto; }
@@ -31,25 +37,27 @@
 <body>
 <header>
   <h1>Filings Trends</h1>
-  <p>Monthly filing volume since January 1, 2024 · internal</p>
+  <p>Filing volume over time · internal</p>
 </header>
 
 <div class="container">
-  <div class="card">
+  <div class="card" id="reexam-card">
     <h2>Ex Parte Reexaminations Filed</h2>
-    <div class="sub">New ex parte reexamination requests (90/ series) by filing month, from the USPTO Open Data Portal.</div>
+    <div class="sub">New ex parte reexamination requests (90/ series) by filing date, from the USPTO Open Data Portal.</div>
+    <div class="filter-bar" data-prefix="reexam"></div>
     <div class="total" id="reexam-total">—</div>
-    <div class="total-lbl">total since Jan 1, 2024</div>
+    <div class="total-lbl" id="reexam-total-lbl">total in selected period</div>
     <div class="chart-wrap" id="reexam-chart"><div class="state">Loading…</div></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="ipr-card">
     <h2>IPR Petitions Filed</h2>
-    <div class="sub">New inter partes review (IPR) petitions by petition-filing month, from the USPTO PTAB trials data.</div>
+    <div class="sub">New inter partes review (IPR) petitions by petition-filing date, from the USPTO PTAB trials data.</div>
+    <div class="filter-bar" data-prefix="ipr"></div>
     <div class="total" id="ipr-total">—</div>
-    <div class="total-lbl">total since Jan 1, 2024</div>
+    <div class="total-lbl" id="ipr-total-lbl">total in selected period</div>
     <div class="chart-wrap" id="ipr-chart"><div class="state">Loading…</div></div>
-    <p class="disclaimer" id="note">Counts are cached and refreshed periodically; the current month is partial. Compiled from USPTO data — informational only.</p>
+    <p class="disclaimer" id="note">Counts are cached daily; the current day/period may be partial. Aggregated by day, week, or month depending on the selected span. Compiled from USPTO data — informational only.</p>
   </div>
 
   <footer><a href="/privacy">Privacy Policy</a></footer>
@@ -57,60 +65,126 @@
 
 <script>
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function el(id) { return document.getElementById(id); }
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function ymLabel(ym) { const [y, m] = String(ym).split('-'); return MONTHS[+m - 1] + " '" + String(y).slice(2); }
+const DAY = 86400000;
+const SERIES = { reexam: [], ipr: [] };
+
+// Independent controls per chart (Period dropdown + custom from/to date boxes).
+function controlsHtml(prefix) {
+  return `<div class="fb-group"><label for="${prefix}-period">Period</label>
+      <select id="${prefix}-period">
+        <option value="since2024">Since Jan 1, 2024</option>
+        <option value="since2025">Since Jan 1, 2025</option>
+        <option value="since2026">Since Jan 1, 2026</option>
+        <option value="last60">Last 60 days</option>
+        <option value="last30">Last 30 days</option>
+      </select></div>
+    <div class="fb-group"><label for="${prefix}-from">From</label><input type="date" id="${prefix}-from" /></div>
+    <div class="fb-group"><label for="${prefix}-to">To</label><input type="date" id="${prefix}-to" /></div>
+    <button class="btn-reset" id="${prefix}-reset" type="button">Reset</button>`;
+}
+
+// Range from the period preset; an explicit date box overrides that end.
+function computeRange(period, fromBox, toBox) {
+  const now = Date.now();
+  const periodFrom = period === 'since2025' ? Date.UTC(2025, 0, 1)
+    : period === 'since2026' ? Date.UTC(2026, 0, 1)
+    : period === 'last60' ? now - 60 * DAY
+    : period === 'last30' ? now - 30 * DAY
+    : Date.UTC(2024, 0, 1);
+  const fromMs = fromBox ? Date.parse(fromBox + 'T00:00:00Z') : periodFrom;
+  const toMs = toBox ? Date.parse(toBox + 'T23:59:59Z') : now;
+  const spanDays = (toMs - fromMs) / DAY;
+  const gran = spanDays <= 45 ? 'day' : spanDays <= 150 ? 'week' : 'month';
+  return { fromMs, toMs, gran };
+}
+function bucketMs(t, gran) {
+  const dt = new Date(t), y = dt.getUTCFullYear(), mo = dt.getUTCMonth(), d = dt.getUTCDate();
+  if (gran === 'day') return Date.UTC(y, mo, d);
+  if (gran === 'week') { const dow = (dt.getUTCDay() + 6) % 7; return Date.UTC(y, mo, d) - dow * DAY; }
+  return Date.UTC(y, mo, 1);
+}
+function bLabel(ms, gran) { const dt = new Date(ms); return gran === 'month' ? MONTHS[dt.getUTCMonth()] + " '" + String(dt.getUTCFullYear()).slice(2) : (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate(); }
+// Aggregate daily rows into day/week/month buckets within [fromMs, toMs].
+function bucketDaily(series, fromMs, toMs, gran) {
+  const map = new Map();
+  for (const r of series) {
+    const t = Date.parse(r.d + 'T00:00:00Z'); if (isNaN(t) || t < fromMs || t > toMs) continue;
+    const b = bucketMs(t, gran); map.set(b, (map.get(b) || 0) + r.count);
+  }
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([ms, count]) => ({ ms, label: bLabel(ms, gran), count }));
+}
 function roundUp(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / (p / 2)) * (p / 2); }
 
-// Monthly count line chart with reexam-style hover tooltip.
-function countLineSvg(series, color, unit) {
-  const W = Math.max(560, series.length * 42), H = 260, mL = 44, mR = 16, mT = 16, mB = 44, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
-  const top = roundUp(Math.max(1, ...series.map((d) => d.count)));
+function countLineSvg(buckets, color, unit) {
+  const W = Math.max(560, buckets.length * 40), H = 260, mL = 44, mR = 16, mT = 16, mB = 44, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const top = roundUp(Math.max(1, ...buckets.map((d) => d.count)));
   const yfor = (v) => yBase - (v / top) * ph;
   let grid = '';
   for (let i = 0; i <= 4; i++) { const v = Math.round(top * i / 4), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
-  const n = series.length;
+  const n = buckets.length;
   const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
-  const line = n > 1 ? `<polyline points="${series.map((d, i) => `${px(i).toFixed(1)},${yfor(d.count).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
-  const dots = series.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
+  const line = n > 1 ? `<polyline points="${buckets.map((d, i) => `${px(i).toFixed(1)},${yfor(d.count).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
+  const dots = buckets.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
   const every = Math.max(1, Math.ceil(n / 14));
-  const xl = series.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(ymLabel(d.ym))}</text>` : '')).join('');
-  const hits = series.map((d, i) => `<circle class="pt" cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="14" fill="transparent" data-m="${esc(ymLabel(d.ym))}" data-c="${d.count}" data-u="${esc(unit)}"></circle>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Monthly filings">${grid}${line}${dots}${xl}${hits}</svg>`;
+  const xl = buckets.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(d.label)}</text>` : '')).join('');
+  const hits = buckets.map((d, i) => `<circle class="pt" cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="14" fill="transparent" data-m="${esc(d.label)}" data-c="${d.count}" data-u="${esc(unit)}"></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Filings over time">${grid}${line}${dots}${xl}${hits}</svg>`;
 }
-function drawChart(id, series, color, unit) {
-  const el = document.getElementById(id);
-  if (!series.length) { el.innerHTML = '<div class="state">No data yet — run /api/ptab?fscan=1 to populate.</div>'; return; }
-  el.innerHTML = countLineSvg(series, color, unit) + '<div class="chart-tip"></div>';
-  const tip = el.querySelector('.chart-tip');
-  el.onmousemove = (e) => {
+function drawChart(id, buckets, color, unit) {
+  const wrap = el(id);
+  if (!buckets.length) { wrap.innerHTML = '<div class="state">No filings in the selected period.</div>'; return; }
+  wrap.innerHTML = countLineSvg(buckets, color, unit) + '<div class="chart-tip"></div>';
+  const tip = wrap.querySelector('.chart-tip');
+  wrap.onmousemove = (e) => {
     const t = e.target;
     if (t && t.classList && t.classList.contains('pt')) {
       const ds = t.dataset;
       tip.innerHTML = `<strong>${esc(ds.m)}</strong><br>${ds.c} ${esc(ds.u)}`;
       tip.style.display = 'block';
-      const r = el.getBoundingClientRect();
+      const r = wrap.getBoundingClientRect();
       let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;
       if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 12;
       tip.style.left = x + 'px'; tip.style.top = y + 'px';
     } else { tip.style.display = 'none'; }
   };
-  el.onmouseleave = () => { tip.style.display = 'none'; };
+  wrap.onmouseleave = () => { tip.style.display = 'none'; };
+}
+function renderChart(prefix, color, unit) {
+  const { fromMs, toMs, gran } = computeRange(el(prefix + '-period').value, el(prefix + '-from').value, el(prefix + '-to').value);
+  const buckets = bucketDaily(SERIES[prefix], fromMs, toMs, gran);
+  el(prefix + '-total').textContent = buckets.reduce((t, b) => t + b.count, 0).toLocaleString();
+  el(prefix + '-total-lbl').textContent = `total in selected period · by ${gran}`;
+  drawChart(prefix + '-chart', buckets, color, unit);
+}
+function wireControls(prefix, color, unit) {
+  document.querySelector(`.filter-bar[data-prefix="${prefix}"]`).innerHTML = controlsHtml(prefix);
+  const rerender = () => renderChart(prefix, color, unit);
+  el(prefix + '-period').addEventListener('change', rerender);
+  el(prefix + '-from').addEventListener('change', rerender);
+  el(prefix + '-to').addEventListener('change', rerender);
+  el(prefix + '-reset').addEventListener('click', () => { el(prefix + '-period').value = 'since2024'; el(prefix + '-from').value = ''; el(prefix + '-to').value = ''; rerender(); });
 }
 
 (async () => {
+  wireControls('reexam', '#1a3a6b', 'reexaminations filed');
+  wireControls('ipr', '#9b2c2c', 'IPR petitions filed');
   try {
     const res = await fetch('/api/ptab?filings=1');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const reexam = data.reexam || [], ipr = data.ipr || [];
-    const sum = (a) => a.reduce((t, d) => t + (d.count || 0), 0);
-    document.getElementById('reexam-total').textContent = sum(reexam).toLocaleString();
-    document.getElementById('ipr-total').textContent = sum(ipr).toLocaleString();
-    drawChart('reexam-chart', reexam, '#1a3a6b', 'reexaminations filed');
-    drawChart('ipr-chart', ipr, '#9b2c2c', 'IPR petitions filed');
-    if (data.updatedAt) document.getElementById('note').textContent += ' Last refreshed ' + new Date(data.updatedAt).toLocaleDateString('en-US') + '.';
+    SERIES.reexam = data.reexam || [];
+    SERIES.ipr = data.ipr || [];
+    if (!SERIES.reexam.length && !SERIES.ipr.length) {
+      for (const id of ['reexam-chart', 'ipr-chart']) el(id).innerHTML = '<div class="state">No data yet — run /api/ptab?fscan=1 to populate.</div>';
+      return;
+    }
+    renderChart('reexam', '#1a3a6b', 'reexaminations filed');
+    renderChart('ipr', '#9b2c2c', 'IPR petitions filed');
+    if (data.updatedAt) el('note').textContent += ' Last refreshed ' + new Date(data.updatedAt).toLocaleDateString('en-US') + '.';
   } catch (e) {
-    for (const id of ['reexam-chart', 'ipr-chart']) document.getElementById(id).innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+    for (const id of ['reexam-chart', 'ipr-chart']) el(id).innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
   }
 })();
 </script>

@@ -52,6 +52,10 @@
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
     .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
+    .chart-wrap { overflow-x: auto; }
+    .chart-title { font-size: 0.9rem; font-weight: 600; color: #4a5568; margin: 0 0 4px; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+    @media (max-width: 860px) { .chart-grid { grid-template-columns: 1fr; } }
     /* Unified top nav */
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; align-items: flex-start; }
     .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
@@ -127,6 +131,21 @@
 
     <div id="kpi"></div>
     <p class="disclaimer"><strong>Discretionary Decision</strong> = the Director's bifurcated-process decision to discretionarily <em>deny</em> the petition or <em>refer</em> it to the Board for a merits (institution) decision. <strong>Institution Decision</strong> = the Board's decision to institute (granted) or not (denied). Compiled from USPTO metadata — informational only; verify against the official decision.</p>
+  </div>
+
+  <div class="card">
+    <h2>Rates Over Time</h2>
+    <div class="sub">Rate per <span id="gran-label">month</span>, reflecting the filters above. Each chart starts at the first period with a decision.</div>
+    <div class="chart-grid">
+      <div>
+        <div class="chart-title">Discretionary Denial Rate <span style="color:#94a3b8;font-weight:400">(% of Director decisions that denied)</span></div>
+        <div class="chart-wrap" id="dd-chart"></div>
+      </div>
+      <div>
+        <div class="chart-title">Institution Grant Rate <span style="color:#94a3b8;font-weight:400">(% of institution decisions granted)</span></div>
+        <div class="chart-wrap" id="inst-chart"></div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -252,10 +271,62 @@ function decCell(type, date, pdfUrl, trial, kind) {
   return `<span class="badge ${cls}">${esc(label)}</span><div class="ext" style="margin-top:3px">${fmtDate(date)}</div>${links}`;
 }
 
+// ── Rate-over-time bar charts (month / week / day, like the reexam page) ──
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function periodGran() { const p = document.getElementById('period').value; return p === 'last30' ? 'day' : p === 'last60' ? 'week' : 'month'; }
+function trendLabel(ms, gran) {
+  const dt = new Date(ms);
+  if (gran === 'month') return MONTHS[dt.getUTCMonth()] + " '" + String(dt.getUTCFullYear()).slice(2);
+  return (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate();
+}
+function bucketMs(dateStr, gran) {
+  const m = String(dateStr || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); if (!m) return null;
+  const y = +m[1], mo = +m[2] - 1, d = +m[3];
+  if (gran === 'day') return Date.UTC(y, mo, d);
+  if (gran === 'week') { const dow = (new Date(Date.UTC(y, mo, d)).getUTCDay() + 6) % 7; return Date.UTC(y, mo, d) - dow * 86400000; }
+  return Date.UTC(y, mo, 1);
+}
+// Bucket rows that carry the relevant decision; rate = a / (a + b). Only buckets
+// with data are created, so the chart starts at the first period with a decision.
+function rateData(rows, dateField, typeField, aType, bType, gran) {
+  const map = new Map();
+  for (const r of rows) {
+    const t = r[typeField]; if (t !== aType && t !== bType) continue;
+    const b = bucketMs(r[dateField], gran); if (b == null) continue;
+    if (!map.has(b)) map.set(b, { ms: b, a: 0, b: 0 });
+    const e = map.get(b); if (t === aType) e.a++; else e.b++;
+  }
+  return [...map.values()].sort((x, y) => x.ms - y.ms);
+}
+function rateBarSvg(data, gran, color) {
+  const W = Math.max(520, data.length * 46), H = 250, mL = 38, mR = 12, mT = 16, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const yfor = (v) => yBase - (v / 100) * ph;
+  let grid = '';
+  for (let i = 0; i <= 4; i++) { const v = 25 * i, y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}%</text>`; }
+  const n = data.length, bw = Math.min(34, (pw / n) * 0.6);
+  const cx = (i) => mL + pw * ((i + 0.5) / n);
+  const rate = (d) => { const t = d.a + d.b; return t ? d.a / t * 100 : 0; };
+  const bars = data.map((d, i) => { const r = rate(d); const h = (r / 100) * ph; return `<rect x="${(cx(i) - bw / 2).toFixed(1)}" y="${yfor(r).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}"><title>${esc(trendLabel(d.ms, gran))}: ${r.toFixed(0)}% (${d.a} of ${d.a + d.b})</title></rect>`; }).join('');
+  const vals = n <= 16 ? data.map((d, i) => `<text x="${cx(i).toFixed(1)}" y="${(yfor(rate(d)) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="#4a5568">${rate(d).toFixed(0)}%</text>`).join('') : '';
+  const every = Math.max(1, Math.ceil(n / 12));
+  const xl = data.map((d, i) => (i % every === 0 ? `<text x="${cx(i).toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Rate over time">${grid}${bars}${vals}${xl}</svg>`;
+}
+function buildCharts(rows) {
+  const gran = periodGran();
+  const gl = document.getElementById('gran-label'); if (gl) gl.textContent = gran;
+  const dd = rateData(rows, 'dd_date', 'dd_type', 'deny', 'refer', gran);
+  const inst = rateData(rows, 'inst_date', 'inst_type', 'granted', 'denied', gran);
+  const none = '<div class="state">No decisions to chart for the current filters.</div>';
+  document.getElementById('dd-chart').innerHTML = dd.length ? rateBarSvg(dd, gran, '#9b2c2c') : none;
+  document.getElementById('inst-chart').innerHTML = inst.length ? rateBarSvg(inst, gran, '#276749') : none;
+}
+
 function render() {
   writeUrl();
   const rows = sorted(filtered());
   buildKpi(rows);
+  buildCharts(rows);
   const body = document.getElementById('body');
   document.getElementById('list-heading').textContent = `Proceedings (${rows.length})`;
   if (!rows.length) { body.innerHTML = '<div class="state">No decisions match your filters.</div>'; return; }

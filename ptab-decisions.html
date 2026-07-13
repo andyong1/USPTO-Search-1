@@ -152,6 +152,9 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px">
       <h2 id="list-heading" style="margin:0">Proceedings</h2>
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:0.9rem;font-weight:600;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="dd-only"> Show only proceedings with discretionary denial decisions
+      </label>
     </div>
     <input type="search" id="search" class="table-filter" placeholder="Filter by trial no., patent, or party…" aria-label="Filter proceedings" />
     <div id="body"><div class="state">Loading…</div></div>
@@ -199,6 +202,7 @@ function filtered() {
   const lower = [periodFromYmd(), fromBox].filter(Boolean).sort().pop();
   const types = new Set(selectedTypes());
   const tc = document.getElementById('tc').value;
+  const onlyDd = document.getElementById('dd-only').checked;
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
   return ALL.filter((r) => {
     if (types.size && !types.has(r.trial_type)) return false;
@@ -206,6 +210,7 @@ function filtered() {
     if (lower && d && d < lower) return false;
     if (to && d && d > to) return false;
     if (tc && String(r.tech_center || '').trim() !== tc) return false;
+    if (onlyDd && !(r.dd_type === 'deny' || r.dd_type === 'refer')) return false; // has a Director discretionary decision
     if (q && !`${r.trial_number} ${r.patent_number} ${r.po_name} ${r.petitioner_name} ${r.application_number}`.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -223,6 +228,7 @@ function writeUrl() {
   const types = selectedTypes(); if (types.length && types.length < 2) p.set('types', types.join(','));
   const per = document.getElementById('period').value; if (per && per !== 'since2024') p.set('period', per);
   const tc = document.getElementById('tc').value; if (tc) p.set('tc', tc);
+  if (document.getElementById('dd-only').checked) p.set('ddonly', '1');
   const q = document.getElementById('search').value.trim(); if (q) p.set('q', q);
   if (sortKey !== '_date' || sortDir !== 'desc') { p.set('sort', sortKey); p.set('dir', sortDir); }
   const qs = p.toString();
@@ -236,6 +242,7 @@ function readUrl() {
   if (types) { const set = new Set(types.split(',')); document.querySelectorAll('.type-cb').forEach((c) => { c.checked = set.has(c.value); }); }
   if (p.get('period')) document.getElementById('period').value = p.get('period');
   if (p.get('tc')) document.getElementById('tc').value = p.get('tc');
+  document.getElementById('dd-only').checked = p.get('ddonly') === '1';
   if (p.get('q')) document.getElementById('search').value = p.get('q');
   const s = p.get('sort'), d = p.get('dir');
   if (SORT_KEYS.includes(s)) { sortKey = s; sortDir = d === 'asc' ? 'asc' : 'desc'; }
@@ -381,12 +388,13 @@ document.getElementById('period').addEventListener('change', render);
 document.getElementById('from').addEventListener('change', render);
 document.getElementById('to').addEventListener('change', render);
 document.getElementById('tc').addEventListener('change', render);
+document.getElementById('dd-only').addEventListener('change', render);
 document.getElementById('search').addEventListener('input', render);
 document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
 document.getElementById('reset').addEventListener('click', () => {
   document.getElementById('period').value = 'since2024';
   document.getElementById('from').value = ''; document.getElementById('to').value = '';
-  document.getElementById('tc').value = ''; document.getElementById('search').value = '';
+  document.getElementById('tc').value = ''; document.getElementById('dd-only').checked = false; document.getElementById('search').value = '';
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
 });
 

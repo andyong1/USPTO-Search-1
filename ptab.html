@@ -291,11 +291,13 @@ function buildKpi(rows) {
 }
 
 // Monthly stacked bar of FWDs by outcome (classified only), reflecting the filters.
+// Colors match the reexam-outcomes chart: confirmed green, cancelled red, some-
+// cancelled orange, and the dark "Amended / new only" navy for Other.
 const CHART_SEGS = [
-  ['po_none', '#38a169', 'Patent owner win'],
-  ['petitioner_all', '#e53e3e', 'Petitioner win'],
-  ['partial', '#dd6b20', 'Partial'],
-  ['other', '#a0aec0', 'Other'],
+  ['po_none', '#276749', 'Patent owner win'],
+  ['petitioner_all', '#c53030', 'Petitioner win'],
+  ['partial', '#ed8936', 'Partial'],
+  ['other', '#1a3a6b', 'Other'],
 ];
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function monthKey(s) { const m = String(s || '').match(/(\d{4})-?(\d{2})/); return m ? m[1] + '-' + m[2] : ''; }

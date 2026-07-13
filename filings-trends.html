@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Filings Trends (internal)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; }
+    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header p { font-size: 0.8rem; opacity: 0.8; margin-top: 3px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 22px; }
+    .card h2 { font-size: 1.1rem; color: #1a3a6b; margin-bottom: 4px; }
+    .sub { color: #64748b; font-size: 0.85rem; margin-bottom: 14px; }
+    .total { font-size: 2rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
+    .total-lbl { font-size: 0.78rem; color: #64748b; margin: 2px 0 14px; }
+    .chart-wrap { position: relative; overflow-x: auto; }
+    .chart-tip { position: absolute; display: none; background: #1a3a6b; color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45; pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .chart-wrap svg .pt { cursor: pointer; }
+    .state { text-align: center; padding: 40px 20px; color: #64748b; }
+    .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 12px; line-height: 1.5; }
+    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
+    footer a { color: #1a3a6b; text-decoration: none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Filings Trends</h1>
+  <p>Monthly filing volume since January 1, 2024 · internal</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Ex Parte Reexaminations Filed</h2>
+    <div class="sub">New ex parte reexamination requests (90/ series) by filing month, from the USPTO Open Data Portal.</div>
+    <div class="total" id="reexam-total">—</div>
+    <div class="total-lbl">total since Jan 1, 2024</div>
+    <div class="chart-wrap" id="reexam-chart"><div class="state">Loading…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>IPR Petitions Filed</h2>
+    <div class="sub">New inter partes review (IPR) petitions by petition-filing month, from the USPTO PTAB trials data.</div>
+    <div class="total" id="ipr-total">—</div>
+    <div class="total-lbl">total since Jan 1, 2024</div>
+    <div class="chart-wrap" id="ipr-chart"><div class="state">Loading…</div></div>
+    <p class="disclaimer" id="note">Counts are cached and refreshed periodically; the current month is partial. Compiled from USPTO data — informational only.</p>
+  </div>
+
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function ymLabel(ym) { const [y, m] = String(ym).split('-'); return MONTHS[+m - 1] + " '" + String(y).slice(2); }
+function roundUp(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / (p / 2)) * (p / 2); }
+
+// Monthly count line chart with reexam-style hover tooltip.
+function countLineSvg(series, color, unit) {
+  const W = Math.max(560, series.length * 42), H = 260, mL = 44, mR = 16, mT = 16, mB = 44, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const top = roundUp(Math.max(1, ...series.map((d) => d.count)));
+  const yfor = (v) => yBase - (v / top) * ph;
+  let grid = '';
+  for (let i = 0; i <= 4; i++) { const v = Math.round(top * i / 4), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
+  const n = series.length;
+  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
+  const line = n > 1 ? `<polyline points="${series.map((d, i) => `${px(i).toFixed(1)},${yfor(d.count).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
+  const dots = series.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
+  const every = Math.max(1, Math.ceil(n / 14));
+  const xl = series.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(ymLabel(d.ym))}</text>` : '')).join('');
+  const hits = series.map((d, i) => `<circle class="pt" cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="14" fill="transparent" data-m="${esc(ymLabel(d.ym))}" data-c="${d.count}" data-u="${esc(unit)}"></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Monthly filings">${grid}${line}${dots}${xl}${hits}</svg>`;
+}
+function drawChart(id, series, color, unit) {
+  const el = document.getElementById(id);
+  if (!series.length) { el.innerHTML = '<div class="state">No data yet — run /api/ptab?fscan=1 to populate.</div>'; return; }
+  el.innerHTML = countLineSvg(series, color, unit) + '<div class="chart-tip"></div>';
+  const tip = el.querySelector('.chart-tip');
+  el.onmousemove = (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('pt')) {
+      const ds = t.dataset;
+      tip.innerHTML = `<strong>${esc(ds.m)}</strong><br>${ds.c} ${esc(ds.u)}`;
+      tip.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;
+      if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 12;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    } else { tip.style.display = 'none'; }
+  };
+  el.onmouseleave = () => { tip.style.display = 'none'; };
+}
+
+(async () => {
+  try {
+    const res = await fetch('/api/ptab?filings=1');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const reexam = data.reexam || [], ipr = data.ipr || [];
+    const sum = (a) => a.reduce((t, d) => t + (d.count || 0), 0);
+    document.getElementById('reexam-total').textContent = sum(reexam).toLocaleString();
+    document.getElementById('ipr-total').textContent = sum(ipr).toLocaleString();
+    drawChart('reexam-chart', reexam, '#1a3a6b', 'reexaminations filed');
+    drawChart('ipr-chart', ipr, '#9b2c2c', 'IPR petitions filed');
+    if (data.updatedAt) document.getElementById('note').textContent += ' Last refreshed ' + new Date(data.updatedAt).toLocaleDateString('en-US') + '.';
+  } catch (e) {
+    for (const id of ['reexam-chart', 'ipr-chart']) document.getElementById(id).innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+  }
+})();
+</script>
+</body>
+</html>

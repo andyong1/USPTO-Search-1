@@ -59,6 +59,11 @@
     .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
     .chart-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
     .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
+    .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
+    .pg { padding: 5px 10px; border: 1px solid #cbd5e0; border-radius: 6px; background: #fff; color: #1a3a6b; font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+    .pg:hover:not(:disabled) { background: #edf2f7; }
+    .pg:disabled { opacity: 0.45; cursor: default; }
+    .pg.active { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
     /* Unified top nav */
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; align-items: flex-start; }
     .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
@@ -331,17 +336,28 @@ function buildChart(rows) {
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Final written decisions per month by outcome">${grid}${bars}${xl}</svg>`;
 }
 
+const TABLE_PAGE_SIZE = 100;
+let tablePage = 1;
+let VIEW_ROWS = [];
+
 function render() {
   writeUrl();
-  const rows = sorted(filtered());
-  buildKpi(rows);
-  buildChart(rows);
+  VIEW_ROWS = sorted(filtered());
+  buildKpi(VIEW_ROWS);
+  buildChart(VIEW_ROWS);
+  renderTable();
+}
+function renderTable() {
+  const rows = VIEW_ROWS, total = rows.length;
   const body = document.getElementById('body');
-  document.getElementById('list-heading').textContent = `Cases (${rows.length})`;
-  if (!rows.length) { body.innerHTML = '<div class="state">No Final Written Decisions match your filters.</div>'; return; }
+  document.getElementById('list-heading').textContent = `Cases (${total})`;
+  if (!total) { body.innerHTML = '<div class="state">No Final Written Decisions match your filters.</div>'; return; }
+  const pages = Math.ceil(total / TABLE_PAGE_SIZE);
+  tablePage = Math.min(Math.max(tablePage, 1), pages);
+  const start = (tablePage - 1) * TABLE_PAGE_SIZE, end = Math.min(start + TABLE_PAGE_SIZE, total);
   const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
-  const trs = rows.map((r) => {
+  const trs = rows.slice(start, end).map((r) => {
     const o = OUTCOME[outcomeKey(r)] || OUTCOME.other;
     const patNum = String(r.patent_number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     const pat = r.patent_number ? `<a class="ext" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
@@ -367,9 +383,31 @@ function render() {
     ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
     ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
     ${th('institution_date', 'Instituted')}${th('fwd_date', 'FWD Date')}${th('outcome', 'Outcome')}${th('dd_decision', 'Disc. Review')}
-  </tr></thead><tbody>${trs}</tbody></table></div>`;
+  </tr></thead><tbody>${trs}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pages, start, end, total) : '');
 }
-function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = k === 'fwd_date' || k === 'institution_date' ? 'desc' : 'asc'; } render(); }
+function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = k === 'fwd_date' || k === 'institution_date' ? 'desc' : 'asc'; } tablePage = 1; render(); }
+function applyFilters() { tablePage = 1; render(); }
+function gotoPage(delta) { tablePage += delta; renderTable(); }
+function gotoPageAbs(n) { tablePage = n; renderTable(); }
+// Windowed page numbers: 1 … (cur-2 … cur+2) … last.
+function pageNums(cur, total) {
+  const delta = 2, keep = [], out = [];
+  for (let i = 1; i <= total; i++) if (i === 1 || i === total || (i >= cur - delta && i <= cur + delta)) keep.push(i);
+  let prev;
+  for (const i of keep) { if (prev) { if (i - prev === 2) out.push(prev + 1); else if (i - prev > 2) out.push('…'); } out.push(i); prev = i; }
+  return out;
+}
+function pagerHtml(page, pages, start, end, total) {
+  const nums = pageNums(page, pages).map((n) => n === '…'
+    ? '<span style="padding:0 4px;color:#718096">…</span>'
+    : `<button class="pg${n === page ? ' active' : ''}" onclick="gotoPageAbs(${n})"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+  return `<div class="table-pager">
+    <span class="ext" style="font-size:0.82rem">Showing ${start + 1}–${end} of ${total}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="pg" onclick="gotoPage(-1)"${page <= 1 ? ' disabled' : ''}>‹ Prev</button>${nums}<button class="pg" onclick="gotoPage(1)"${page >= pages ? ' disabled' : ''}>Next ›</button>
+    </div>
+  </div>`;
+}
 
 function exportXlsx() {
   if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
@@ -404,18 +442,18 @@ function exportXlsx() {
   XLSX.writeFile(wb, 'ptab-fwd-outcomes.xlsx');
 }
 
-document.getElementById('period').addEventListener('change', render);
-document.getElementById('from').addEventListener('change', render);
-document.getElementById('to').addEventListener('change', render);
-document.getElementById('tc').addEventListener('change', render);
-document.getElementById('dd-refer').addEventListener('change', render);
-document.getElementById('search').addEventListener('input', render);
-document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
+document.getElementById('period').addEventListener('change', applyFilters);
+document.getElementById('from').addEventListener('change', applyFilters);
+document.getElementById('to').addEventListener('change', applyFilters);
+document.getElementById('tc').addEventListener('change', applyFilters);
+document.getElementById('dd-refer').addEventListener('change', applyFilters);
+document.getElementById('search').addEventListener('input', applyFilters);
+document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', applyFilters));
 document.getElementById('reset').addEventListener('click', () => {
   document.getElementById('period').value = 'since2024';
   document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd-refer').checked = false;
   document.getElementById('tc').value = ''; document.getElementById('search').value = '';
-  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
+  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); applyFilters();
 });
 document.getElementById('export').addEventListener('click', exportXlsx);
 

@@ -52,6 +52,11 @@
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
     .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
+    .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
+    .pg { padding: 5px 10px; border: 1px solid #cbd5e0; border-radius: 6px; background: #fff; color: #1a3a6b; font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+    .pg:hover:not(:disabled) { background: #edf2f7; }
+    .pg:disabled { opacity: 0.45; cursor: default; }
+    .pg.active { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
     .chart-wrap { overflow-x: auto; position: relative; }
     .chart-tip { position: absolute; display: none; background: #1a3a6b; color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45; pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .chart-wrap svg .pt { cursor: pointer; }
@@ -352,17 +357,28 @@ function buildCharts(rows) {
   attachChart('inst-chart', inst, gran, '#276749', { a: 'Instituted', b: 'Denied', r: 'Grant rate' });
 }
 
+const TABLE_PAGE_SIZE = 100;
+let tablePage = 1;
+let VIEW_ROWS = [];
+
 function render() {
   writeUrl();
-  const rows = sorted(filtered());
-  buildKpi(rows);
-  buildCharts(rows);
+  VIEW_ROWS = sorted(filtered());
+  buildKpi(VIEW_ROWS);
+  buildCharts(VIEW_ROWS);
+  renderTable();
+}
+function renderTable() {
+  const rows = VIEW_ROWS, total = rows.length;
   const body = document.getElementById('body');
-  document.getElementById('list-heading').textContent = `Proceedings (${rows.length})`;
-  if (!rows.length) { body.innerHTML = '<div class="state">No decisions match your filters.</div>'; return; }
+  document.getElementById('list-heading').textContent = `Proceedings (${total})`;
+  if (!total) { body.innerHTML = '<div class="state">No decisions match your filters.</div>'; return; }
+  const pages = Math.ceil(total / TABLE_PAGE_SIZE);
+  tablePage = Math.min(Math.max(tablePage, 1), pages);
+  const start = (tablePage - 1) * TABLE_PAGE_SIZE, end = Math.min(start + TABLE_PAGE_SIZE, total);
   const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
-  const trs = rows.map((r) => {
+  const trs = rows.slice(start, end).map((r) => {
     const patNum = String(r.patent_number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     const pat = r.patent_number ? `<a class="ext" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
     return `<tr>
@@ -380,22 +396,43 @@ function render() {
     ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
     ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
     ${th('dd_type', 'Discretionary Decision')}${th('inst_type', 'Institution Decision')}
-  </tr></thead><tbody>${trs}</tbody></table></div>`;
+  </tr></thead><tbody>${trs}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pages, start, end, total) : '');
 }
-function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } render(); }
+function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } tablePage = 1; render(); }
+function applyFilters() { tablePage = 1; render(); }
+function gotoPage(delta) { tablePage += delta; renderTable(); }
+function gotoPageAbs(n) { tablePage = n; renderTable(); }
+function pageNums(cur, total) {
+  const delta = 2, keep = [], out = [];
+  for (let i = 1; i <= total; i++) if (i === 1 || i === total || (i >= cur - delta && i <= cur + delta)) keep.push(i);
+  let prev;
+  for (const i of keep) { if (prev) { if (i - prev === 2) out.push(prev + 1); else if (i - prev > 2) out.push('…'); } out.push(i); prev = i; }
+  return out;
+}
+function pagerHtml(page, pages, start, end, total) {
+  const nums = pageNums(page, pages).map((n) => n === '…'
+    ? '<span style="padding:0 4px;color:#718096">…</span>'
+    : `<button class="pg${n === page ? ' active' : ''}" onclick="gotoPageAbs(${n})"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+  return `<div class="table-pager">
+    <span class="ext" style="font-size:0.82rem">Showing ${start + 1}–${end} of ${total}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="pg" onclick="gotoPage(-1)"${page <= 1 ? ' disabled' : ''}>‹ Prev</button>${nums}<button class="pg" onclick="gotoPage(1)"${page >= pages ? ' disabled' : ''}>Next ›</button>
+    </div>
+  </div>`;
+}
 
-document.getElementById('period').addEventListener('change', render);
-document.getElementById('from').addEventListener('change', render);
-document.getElementById('to').addEventListener('change', render);
-document.getElementById('tc').addEventListener('change', render);
-document.getElementById('dd-only').addEventListener('change', render);
-document.getElementById('search').addEventListener('input', render);
-document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
+document.getElementById('period').addEventListener('change', applyFilters);
+document.getElementById('from').addEventListener('change', applyFilters);
+document.getElementById('to').addEventListener('change', applyFilters);
+document.getElementById('tc').addEventListener('change', applyFilters);
+document.getElementById('dd-only').addEventListener('change', applyFilters);
+document.getElementById('search').addEventListener('input', applyFilters);
+document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', applyFilters));
 document.getElementById('reset').addEventListener('click', () => {
   document.getElementById('period').value = 'since2024';
   document.getElementById('from').value = ''; document.getElementById('to').value = '';
   document.getElementById('tc').value = ''; document.getElementById('dd-only').checked = false; document.getElementById('search').value = '';
-  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
+  document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); applyFilters();
 });
 
 (async () => {

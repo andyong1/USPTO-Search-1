@@ -29,6 +29,13 @@
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
     .kpi .lbl { font-size: 0.72rem; color: #64748b; margin-top: 6px; line-height: 1.3; }
+    .kpi.clickable { cursor: pointer; }
+    .kpi.clickable:hover { background: #eef2f7; }
+    .kpi.sel { box-shadow: 0 0 0 2px #1a3a6b inset; }
+    .seg { display: inline-flex; border: 1px solid #cbd5e0; border-radius: 7px; overflow: hidden; }
+    .seg button { border: none; background: #fff; color: #1a3a6b; font-weight: 600; font-size: 0.8rem; padding: 5px 12px; cursor: pointer; }
+    .seg button.on { background: #1a3a6b; color: #fff; }
+    .stats-title { font-size: 0.9rem; font-weight: 600; color: #4a5568; margin: 4px 0 8px; }
     .table-wrap { overflow: auto; max-height: 72vh; border-radius: 8px; border: 1px solid #e2e8f0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 9px 12px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; cursor: pointer; user-select: none; }
@@ -144,10 +151,22 @@
   </div>
 
   <div class="card" id="chart-card">
-    <h2>Outcomes Over Time</h2>
-    <div class="sub">Final written decisions by month, colored by outcome (reflects the filters above). Pending/unclassified decisions are excluded.</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+      <h2 style="margin:0">Outcomes Over Time</h2>
+      <div class="seg" id="chart-toggle">
+        <button type="button" data-m="volume" class="on" onclick="setChartMode('volume')">Volume</button>
+        <button type="button" data-m="rate" onclick="setChartMode('rate')">Petitioner win rate</button>
+      </div>
+    </div>
+    <div class="sub">Final written decisions by month (reflects the filters above). Pending/unclassified decisions are excluded.</div>
     <div id="chart-legend" class="chart-legend"></div>
     <div class="chart-wrap" id="chart"></div>
+  </div>
+
+  <div class="card" id="tc-card">
+    <h2>Outcomes by Technology Center</h2>
+    <div class="sub">Written-decision outcomes per technology center (classified decisions, reflecting the filters above).</div>
+    <div id="tc-table"></div>
   </div>
 
   <div class="card">
@@ -193,9 +212,15 @@ function ddCell(r) {
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
 function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
+// TC cell with the technology-center name on hover.
+function tcCell(tc) { tc = String(tc || '').trim(); if (!tc) return '<span class="ext">—</span>'; const name = TC_SHORT[tc]; return name ? `<span title="${esc(tc + ' — ' + name)}">${esc(tc)}</span>` : esc(tc); }
 
 let ALL = [];
 let sortKey = 'fwd_date', sortDir = 'desc';
+let outcomeFilter = '';   // set by clicking a KPI card
+let chartMode = 'volume'; // 'volume' (stacked counts) or 'rate' (petitioner win-rate line)
+function toggleOutcome(k) { outcomeFilter = outcomeFilter === k ? '' : k; tablePage = 1; render(); }
+function setChartMode(m) { chartMode = m; buildChart(BASE_ROWS); document.querySelectorAll('#chart-toggle button').forEach((b) => b.classList.toggle('on', b.dataset.m === m)); }
 
 // Short parenthetical labels for the Technology Center filter dropdown.
 const TC_SHORT = {
@@ -283,17 +308,23 @@ function buildKpi(rows) {
   for (const r of rows) c[outcomeKey(r)]++;
   const classified = c.total - c.unclassified;
   const pct = (n) => (classified ? (n / classified * 100).toFixed(1) + '%' : '—');
-  const card = (num, lbl, color, sub) => `<div class="kpi"><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}${sub ? '<br>' + sub : ''}</div></div>`;
+  // Outcome cards (key set) are clickable to filter the table; the Total card clears.
+  const card = (num, lbl, color, sub, key) => {
+    const clickable = key !== undefined;
+    const sel = clickable && key && outcomeFilter === key ? ' sel' : '';
+    const attrs = clickable ? ` onclick="toggleOutcome('${key}')" role="button" tabindex="0" title="Click to filter the table"` : '';
+    return `<div class="kpi${clickable ? ' clickable' : ''}${sel}"${attrs}><div class="num" style="color:${color}">${num}</div><div class="lbl">${lbl}${sub ? '<br>' + sub : ''}</div></div>`;
+  };
   const needExtract = rows.filter((r) => (r.extracted_v || 0) < EV).length;
   const pending = c.unclassified
     ? `<p class="disclaimer" style="color:#9c4221">${c.unclassified} of ${c.total} not yet classified — run ${needExtract ? '<code>/api/ptab?extract=1</code> then ' : ''}<code>/api/ptab?classify=1</code> (repeat each until done), then reload. Percentages below are of the ${classified} classified so far.</p>`
     : '';
   document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
-    ${card(c.total, 'Final Written Decisions', '#1a3a6b', c.unclassified ? c.unclassified + ' pending' : '')}
-    ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none))}
-    ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all))}
-    ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial))}
-    ${card(c.other, 'Other / Review', '#4a5568', pct(c.other))}
+    ${card(c.total, outcomeFilter ? 'All Final Written Decisions (clear)' : 'Final Written Decisions', '#1a3a6b', c.unclassified ? c.unclassified + ' pending' : '', '')}
+    ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none), 'po_none')}
+    ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all), 'petitioner_all')}
+    ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial), 'partial')}
+    ${card(c.other, 'Other / Review', '#4a5568', pct(c.other), 'other')}
   </div>${pending}`;
 }
 
@@ -319,9 +350,27 @@ function buildChart(rows) {
     const e = map.get(mk); e[k]++; e.total++; totals[k]++;
   }
   const months = [...map.keys()].sort();
+  if (!months.length) { leg.innerHTML = ''; el.innerHTML = '<div class="state">No classified decisions to chart for the current filters.</div>'; return; }
+  const W = Math.max(560, months.length * 44), H = 260, mL = 34, mR = 12, mT = 14, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+
+  if (chartMode === 'rate') {
+    leg.innerHTML = `<span><i style="background:#c53030"></i>Petitioner win rate (% of classified FWDs that month)</span>`;
+    const yfor = (v) => yBase - (v / 100) * ph;
+    let grid = '';
+    for (let i = 0; i <= 4; i++) { const v = 25 * i, y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}%</text>`; }
+    const n = months.length, px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
+    const rate = (m) => { const e = map.get(m); return e.total ? e.petitioner_all / e.total * 100 : 0; };
+    const line = n > 1 ? `<polyline points="${months.map((m, i) => `${px(i).toFixed(1)},${yfor(rate(m)).toFixed(1)}`).join(' ')}" fill="none" stroke="#c53030" stroke-width="2"/>` : '';
+    const dots = months.map((m, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(m)).toFixed(1)}" r="3.5" fill="#c53030"/>`).join('');
+    const every = Math.max(1, Math.ceil(n / 12));
+    const xl = months.map((m, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#718096">${monthLabel(m)}</text>` : '')).join('');
+    const hits = months.map((m, i) => { const e = map.get(m); return `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(m)).toFixed(1)}" r="12" fill="transparent"><title>${monthLabel(m)}: ${rate(m).toFixed(0)}% petitioner win (${e.petitioner_all} of ${e.total})</title></circle>`; }).join('');
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Petitioner win rate per month">${grid}${line}${dots}${xl}${hits}</svg>`;
+    return;
+  }
+
+  // Volume: stacked bars by outcome.
   leg.innerHTML = CHART_SEGS.map(([k, c, l]) => `<span><i style="background:${c}"></i>${l} (${totals[k]})</span>`).join('');
-  if (!months.length) { el.innerHTML = '<div class="state">No classified decisions to chart for the current filters.</div>'; return; }
-  const W = Math.max(560, months.length * 44), H = 260, mL = 32, mR = 12, mT = 12, mB = 40, pw = W - mL - mR, ph = H - mT - mB;
   const top = Math.max(1, ...months.map((m) => map.get(m).total));
   const bw = Math.min(30, (pw / months.length) * 0.6);
   let bars = '', xl = '';
@@ -330,21 +379,49 @@ function buildChart(rows) {
     for (const [k, c] of CHART_SEGS) { const v = e[k]; if (!v) continue; const h = v / top * ph; y -= h; bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${c}"><title>${monthLabel(m)}: ${e.total} (PO win ${e.po_none}, Petitioner win ${e.petitioner_all}, Partial ${e.partial}, Other ${e.other})</title></rect>`; }
     if (months.length <= 24 || i % 2 === 0) xl += `<text x="${cx.toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#718096">${monthLabel(m)}</text>`;
   });
-  const grid = `<line x1="${mL}" y1="${mT + ph}" x2="${W - mR}" y2="${mT + ph}" stroke="#cbd5e0"/>`
-    + `<text x="${mL - 5}" y="${mT + ph}" text-anchor="end" font-size="10" fill="#a0aec0">0</text>`
+  const grid = `<line x1="${mL}" y1="${yBase}" x2="${W - mR}" y2="${yBase}" stroke="#cbd5e0"/>`
+    + `<text x="${mL - 5}" y="${yBase}" text-anchor="end" font-size="10" fill="#a0aec0">0</text>`
     + `<text x="${mL - 5}" y="${mT + 9}" text-anchor="end" font-size="10" fill="#a0aec0">${top}</text>`;
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Final written decisions per month by outcome">${grid}${bars}${xl}</svg>`;
 }
 
+// #7 — outcome breakdown by Technology Center (reexam "By Group Art Unit" style).
+function buildTcTable(rows) {
+  const el = document.getElementById('tc-table'); if (!el) return;
+  const map = new Map();
+  for (const r of rows) {
+    const k = outcomeKey(r); if (k === 'unclassified') continue;
+    const tc = String(r.tech_center || '').trim() || '(Unknown)';
+    if (!map.has(tc)) map.set(tc, { po_none: 0, petitioner_all: 0, partial: 0, other: 0, total: 0 });
+    const e = map.get(tc); e[k]++; e.total++;
+  }
+  const entries = [...map.entries()].sort((a, b) => { if (a[0] === '(Unknown)') return 1; if (b[0] === '(Unknown)') return -1; return a[0].localeCompare(b[0], undefined, { numeric: true }); });
+  if (!entries.length) { el.innerHTML = '<div class="state">No classified decisions for the current filters.</div>'; return; }
+  const cell = (n, t) => `${n} (${t ? (n / t * 100).toFixed(0) : 0}%)`;
+  const trs = entries.map(([tc, e]) => `<tr>
+    <td>${tc === '(Unknown)' ? '<span class="ext">(Unknown)</span>' : tcCell(tc)}</td>
+    <td>${cell(e.petitioner_all, e.total)}</td><td>${cell(e.po_none, e.total)}</td>
+    <td>${cell(e.partial, e.total)}</td><td>${cell(e.other, e.total)}</td><td>${e.total}</td>
+  </tr>`).join('');
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr>
+    <th style="cursor:default">Technology Center</th><th style="cursor:default">Petitioner win</th><th style="cursor:default">PO win</th>
+    <th style="cursor:default">Partial</th><th style="cursor:default">Other</th><th style="cursor:default">Total</th>
+  </tr></thead><tbody>${trs}</tbody></table></div>`;
+}
+
 const TABLE_PAGE_SIZE = 100;
 let tablePage = 1;
-let VIEW_ROWS = [];
+let VIEW_ROWS = [], BASE_ROWS = [];
 
 function render() {
   writeUrl();
-  VIEW_ROWS = sorted(filtered());
-  buildKpi(VIEW_ROWS);
-  buildChart(VIEW_ROWS);
+  // BASE_ROWS = all filters EXCEPT the clicked-KPI outcome, so the KPI/chart/TC
+  // breakdowns always show the full picture; the table narrows to the outcome.
+  BASE_ROWS = sorted(filtered());
+  buildKpi(BASE_ROWS);
+  buildChart(BASE_ROWS);
+  buildTcTable(BASE_ROWS);
+  VIEW_ROWS = outcomeFilter ? BASE_ROWS.filter((r) => outcomeKey(r) === outcomeFilter) : BASE_ROWS;
   renderTable();
 }
 function renderTable() {
@@ -372,7 +449,7 @@ function renderTable() {
       <td>${pat}</td>
       <td>${r.po_name ? esc(r.po_name) : '<span class="ext">—</span>'}</td>
       <td>${r.petitioner_name ? esc(r.petitioner_name) : '<span class="ext">—</span>'}</td>
-      <td>${r.tech_center ? esc(r.tech_center) : '<span class="ext">—</span>'}</td>
+      <td>${tcCell(r.tech_center)}</td>
       <td>${fmtDate(r.institution_date)}</td>
       <td>${fmtDate(r.fwd_date)}${fwdLinks}</td>
       <td><span class="badge ${o.cls}">${o.label}</span></td>

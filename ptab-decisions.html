@@ -52,7 +52,9 @@
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
     .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
-    .chart-wrap { overflow-x: auto; }
+    .chart-wrap { overflow-x: auto; position: relative; }
+    .chart-tip { position: absolute; display: none; background: #1a3a6b; color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45; pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .chart-wrap svg .pt { cursor: pointer; }
     .chart-title { font-size: 0.9rem; font-weight: 600; color: #4a5568; margin: 0 0 4px; }
     .chart-grid { display: grid; grid-template-columns: 1fr; gap: 30px; }
     /* Unified top nav */
@@ -298,7 +300,7 @@ function rateData(rows, dateField, typeField, aType, bType, gran) {
   }
   return [...map.values()].sort((x, y) => x.ms - y.ms);
 }
-function rateLineSvg(data, gran, color) {
+function rateLineSvg(data, gran, color, labels) {
   const W = Math.max(520, data.length * 46), H = 250, mL = 40, mR = 16, mT = 16, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
   const yfor = (v) => yBase - (v / 100) * ph;
   let grid = '';
@@ -308,21 +310,39 @@ function rateLineSvg(data, gran, color) {
   const rate = (d) => { const t = d.a + d.b; return t ? d.a / t * 100 : 0; };
   const line = n > 1 ? `<polyline points="${data.map((d, i) => `${px(i).toFixed(1)},${yfor(rate(d)).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
   const dots = data.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(d)).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
-  const vals = n <= 16 ? data.map((d, i) => `<text x="${px(i).toFixed(1)}" y="${(yfor(rate(d)) - 9).toFixed(1)}" text-anchor="middle" font-size="10" fill="${color}">${rate(d).toFixed(0)}%</text>`).join('') : '';
   const every = Math.max(1, Math.ceil(n / 12));
   const xl = data.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
-  // Transparent hit-circles carry a native tooltip with the counts.
-  const hits = data.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(d)).toFixed(1)}" r="12" fill="transparent"><title>${esc(trendLabel(d.ms, gran))}: ${rate(d).toFixed(0)}% (${d.a} of ${d.a + d.b})</title></circle>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Rate over time">${grid}${line}${dots}${vals}${xl}${hits}</svg>`;
+  // Transparent hit-circles carry data-* consumed by the .chart-tip hover handler.
+  const hits = data.map((d, i) => `<circle class="pt" cx="${px(i).toFixed(1)}" cy="${yfor(rate(d)).toFixed(1)}" r="14" fill="transparent" data-m="${esc(trendLabel(d.ms, gran))}" data-a="${d.a}" data-b="${d.b}" data-t="${d.a + d.b}" data-r="${rate(d).toFixed(0)}" data-al="${esc(labels.a)}" data-bl="${esc(labels.b)}" data-rl="${esc(labels.r)}"></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Rate over time">${grid}${line}${dots}${xl}${hits}</svg>`;
+}
+// Render one chart into its .chart-wrap and wire the reexam-style hover tooltip.
+function attachChart(id, data, gran, color, labels) {
+  const el = document.getElementById(id);
+  if (!data.length) { el.innerHTML = '<div class="state">No decisions to chart for the current filters.</div>'; return; }
+  el.innerHTML = rateLineSvg(data, gran, color, labels) + '<div class="chart-tip"></div>';
+  const tip = el.querySelector('.chart-tip');
+  el.onmousemove = (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('pt')) {
+      const ds = t.dataset;
+      tip.innerHTML = `<strong>${esc(ds.m)}</strong><br>${esc(ds.al)}: ${ds.a}<br>${esc(ds.bl)}: ${ds.b}<br>Total: ${ds.t}<br>${esc(ds.rl)}: ${ds.r}%`;
+      tip.style.display = 'block';
+      const r = el.getBoundingClientRect();
+      let x = e.clientX - r.left + 12, y = e.clientY - r.top + 12;
+      if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 12;
+      tip.style.left = x + 'px'; tip.style.top = y + 'px';
+    } else { tip.style.display = 'none'; }
+  };
+  el.onmouseleave = () => { tip.style.display = 'none'; };
 }
 function buildCharts(rows) {
   const gran = periodGran();
   const gl = document.getElementById('gran-label'); if (gl) gl.textContent = gran;
   const dd = rateData(rows, 'dd_date', 'dd_type', 'deny', 'refer', gran);
   const inst = rateData(rows, 'inst_date', 'inst_type', 'granted', 'denied', gran);
-  const none = '<div class="state">No decisions to chart for the current filters.</div>';
-  document.getElementById('dd-chart').innerHTML = dd.length ? rateLineSvg(dd, gran, '#9b2c2c') : none;
-  document.getElementById('inst-chart').innerHTML = inst.length ? rateLineSvg(inst, gran, '#276749') : none;
+  attachChart('dd-chart', dd, gran, '#9b2c2c', { a: 'Discretionary denials', b: 'Referrals', r: 'Denial rate' });
+  attachChart('inst-chart', inst, gran, '#276749', { a: 'Instituted', b: 'Denied', r: 'Grant rate' });
 }
 
 function render() {

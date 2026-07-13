@@ -298,19 +298,22 @@ function rateData(rows, dateField, typeField, aType, bType, gran) {
   }
   return [...map.values()].sort((x, y) => x.ms - y.ms);
 }
-function rateBarSvg(data, gran, color) {
-  const W = Math.max(520, data.length * 46), H = 250, mL = 38, mR = 12, mT = 16, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+function rateLineSvg(data, gran, color) {
+  const W = Math.max(520, data.length * 46), H = 250, mL = 40, mR = 16, mT = 16, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
   const yfor = (v) => yBase - (v / 100) * ph;
   let grid = '';
   for (let i = 0; i <= 4; i++) { const v = 25 * i, y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}%</text>`; }
-  const n = data.length, bw = Math.min(34, (pw / n) * 0.6);
-  const cx = (i) => mL + pw * ((i + 0.5) / n);
+  const n = data.length;
+  const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
   const rate = (d) => { const t = d.a + d.b; return t ? d.a / t * 100 : 0; };
-  const bars = data.map((d, i) => { const r = rate(d); const h = (r / 100) * ph; return `<rect x="${(cx(i) - bw / 2).toFixed(1)}" y="${yfor(r).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}"><title>${esc(trendLabel(d.ms, gran))}: ${r.toFixed(0)}% (${d.a} of ${d.a + d.b})</title></rect>`; }).join('');
-  const vals = n <= 16 ? data.map((d, i) => `<text x="${cx(i).toFixed(1)}" y="${(yfor(rate(d)) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="#4a5568">${rate(d).toFixed(0)}%</text>`).join('') : '';
+  const line = n > 1 ? `<polyline points="${data.map((d, i) => `${px(i).toFixed(1)},${yfor(rate(d)).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
+  const dots = data.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(d)).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
+  const vals = n <= 16 ? data.map((d, i) => `<text x="${px(i).toFixed(1)}" y="${(yfor(rate(d)) - 9).toFixed(1)}" text-anchor="middle" font-size="10" fill="${color}">${rate(d).toFixed(0)}%</text>`).join('') : '';
   const every = Math.max(1, Math.ceil(n / 12));
-  const xl = data.map((d, i) => (i % every === 0 ? `<text x="${cx(i).toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Rate over time">${grid}${bars}${vals}${xl}</svg>`;
+  const xl = data.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(trendLabel(d.ms, gran))}</text>` : '')).join('');
+  // Transparent hit-circles carry a native tooltip with the counts.
+  const hits = data.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(d)).toFixed(1)}" r="12" fill="transparent"><title>${esc(trendLabel(d.ms, gran))}: ${rate(d).toFixed(0)}% (${d.a} of ${d.a + d.b})</title></circle>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Rate over time">${grid}${line}${dots}${vals}${xl}${hits}</svg>`;
 }
 function buildCharts(rows) {
   const gran = periodGran();
@@ -318,8 +321,8 @@ function buildCharts(rows) {
   const dd = rateData(rows, 'dd_date', 'dd_type', 'deny', 'refer', gran);
   const inst = rateData(rows, 'inst_date', 'inst_type', 'granted', 'denied', gran);
   const none = '<div class="state">No decisions to chart for the current filters.</div>';
-  document.getElementById('dd-chart').innerHTML = dd.length ? rateBarSvg(dd, gran, '#9b2c2c') : none;
-  document.getElementById('inst-chart').innerHTML = inst.length ? rateBarSvg(inst, gran, '#276749') : none;
+  document.getElementById('dd-chart').innerHTML = dd.length ? rateLineSvg(dd, gran, '#9b2c2c') : none;
+  document.getElementById('inst-chart').innerHTML = inst.length ? rateLineSvg(inst, gran, '#276749') : none;
 }
 
 function render() {

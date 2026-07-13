@@ -54,12 +54,11 @@
     .btn.secondary:hover { background: #cbd5e0; }
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 10px; line-height: 1.5; }
-    .status-strip { display: flex; flex-wrap: wrap; gap: 9px; margin: 2px 0 16px; }
-    .chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 8px; font-size: 0.79rem; font-weight: 600; border: 1px solid transparent; }
-    .chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-    .chip.ok { background: #f0fff4; color: #276749; border-color: #c6f6d5; } .chip.ok .dot { background: #38a169; }
-    .chip.warn { background: #fffaf0; color: #9c4221; border-color: #feebc8; } .chip.warn .dot { background: #dd6b20; }
-    .chip.neutral { background: #f7fafc; color: #4a5568; border-color: #e2e8f0; } .chip.neutral .dot { background: #a0aec0; }
+    .chart-wrap { overflow-x: auto; }
+    .chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 2px 0 12px; font-size: 0.8rem; color: #4a5568; }
+    .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .chart-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+    .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid #cbd5e0; border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
     /* Unified top nav */
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; align-items: flex-start; }
     .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
@@ -107,35 +106,42 @@
   <div class="card">
     <h2>Final Written Decision Outcomes After January 1, 2024</h2>
     <div class="sub" id="freshness">Outcome is parsed from the Board's decision.</div>
-    <div id="status"></div>
+    <div class="sub" id="refreshed">Data refreshed daily from the USPTO Open Data Portal.</div>
 
     <div class="filter-bar">
+      <div class="fb-group"><label for="period">Period</label>
+        <select id="period">
+          <option value="since2024">Since Jan 1, 2024</option>
+          <option value="since2025">Since Jan 1, 2025</option>
+          <option value="since2026">Since Jan 1, 2026</option>
+          <option value="last60">Last 60 days</option>
+          <option value="last30">Last 30 days</option>
+        </select>
+      </div>
       <div class="fb-group"><label for="from">FWD date from</label><input type="date" id="from" /></div>
       <div class="fb-group"><label for="to">FWD date to</label><input type="date" id="to" /></div>
+      <div class="fb-group"><label for="tc">Technology Center</label>
+        <select id="tc"><option value="">All Technology Centers</option></select>
+      </div>
       <div class="fb-group"><label>Trial type</label>
         <div class="types">
           <label><input type="checkbox" class="type-cb" value="IPR" checked> IPR</label>
           <label><input type="checkbox" class="type-cb" value="PGR" checked> PGR</label>
         </div>
       </div>
-      <div class="fb-group"><label for="outcome-f">Outcome</label>
-        <select id="outcome-f">
-          <option value="">All outcomes</option>
-          <option value="petitioner_all">Petitioner win</option>
-          <option value="po_none">Patent owner win</option>
-          <option value="partial">Partial</option>
-          <option value="other">Other / review</option>
-          <option value="unclassified">Pending</option>
-          <option value="review">⚠ Needs review (Other + errors)</option>
-        </select>
-      </div>
-      <div class="fb-group" style="flex:1;min-width:200px"><label for="search">Search</label><input type="search" id="search" placeholder="Trial no., patent, party…" /></div>
       <button class="btn secondary" id="reset">Reset filters</button>
       <button class="btn" id="export">Export .xlsx</button>
     </div>
 
     <div id="kpi"></div>
     <p class="disclaimer">Outcome key: <strong>Patent owner win</strong> = no challenged claims held unpatentable · <strong>Petitioner win</strong> = all challenged claims unpatentable · <strong>Partial</strong> = some claims unpatentable · <strong>Other</strong> = non-standard disposition (e.g. adverse judgment) — review the decision. Classification is heuristic (parsed from the FWD text); verify against the decision.</p>
+  </div>
+
+  <div class="card" id="chart-card">
+    <h2>Outcomes Over Time</h2>
+    <div class="sub">Final written decisions by month, colored by outcome (reflects the filters above). Pending/unclassified decisions are excluded.</div>
+    <div id="chart-legend" class="chart-legend"></div>
+    <div class="chart-wrap" id="chart"></div>
   </div>
 
   <div class="card">
@@ -145,6 +151,7 @@
         <input type="checkbox" id="dd-refer"> Show only proceedings with discretionary denial referrals
       </label>
     </div>
+    <input type="search" id="search" class="table-filter" placeholder="Filter by trial no., patent, or party…" aria-label="Filter cases" />
     <div id="body"><div class="state">Loading…</div></div>
   </div>
 </div>
@@ -181,61 +188,49 @@ function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d
 function ymd(raw) { const m = String(raw||'').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}${m[2]}${m[3]}` : ''; }
 
 let ALL = [];
-let SUMMARY = null, MAINTAIN_LAST_RUN = null;
 let sortKey = 'fwd_date', sortDir = 'desc';
 
-// Relative-time helpers for the pipeline status strip.
-function agoText(iso) {
-  if (!iso) return 'never run';
-  const t = new Date(iso).getTime(); if (isNaN(t)) return 'unknown';
-  const h = (Date.now() - t) / 3.6e6;
-  if (h < 1) return Math.max(1, Math.round(h * 60)) + ' min ago';
-  if (h < 48) return Math.round(h) + 'h ago';
-  return Math.round(h / 24) + 'd ago';
+// Short parenthetical labels for the Technology Center filter dropdown.
+const TC_SHORT = {
+  '1600': 'Biotech & Organic Chem', '1700': 'Chemical & Materials', '2100': 'Computers & Software',
+  '2400': 'Networks & Security', '2600': 'Communications', '2800': 'Semiconductors & Electrical',
+  '2900': 'Designs', '3600': 'Transportation & E-Commerce', '3700': 'Mechanical & Medical', '3900': 'Central Reexam Unit',
+};
+function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : tc; }
+function populateTc() {
+  const set = new Set();
+  for (const r of ALL) { const tc = String(r.tech_center || '').trim(); if (tc) set.add(tc); }
+  const tcs = [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  document.getElementById('tc').innerHTML =
+    ['<option value="">All Technology Centers</option>'].concat(tcs.map((t) => `<option value="${esc(t)}">${esc(tcOptionLabel(t))}</option>`)).join('');
 }
-function daysAgo(ymd) {
-  const t = new Date(String(ymd) + 'T00:00:00Z').getTime(); if (isNaN(t)) return '';
-  const d = Math.floor((Date.now() - t) / 8.64e7);
-  return d <= 0 ? 'today' : d + 'd ago';
-}
-function chip(cls, label) { return `<span class="chip ${cls}"><span class="dot"></span>${esc(label)}</span>`; }
-// Pipeline health: heartbeat + per-pass backlog + FWD freshness. Rendered once on load.
-function renderStatus() {
-  const el = document.getElementById('status'); if (!el) return;
-  const s = SUMMARY || {};
-  const ex = s.extractPending || 0, cl = s.pending || 0, dd = s.ddPending || 0;
-  const heartFresh = MAINTAIN_LAST_RUN && (Date.now() - new Date(MAINTAIN_LAST_RUN).getTime()) < 26 * 3.6e6;
-  const latest = ALL.reduce((m, r) => (r.fwd_date && r.fwd_date > m ? r.fwd_date : m), '');
-  const chips = [
-    chip(MAINTAIN_LAST_RUN ? (heartFresh ? 'ok' : 'warn') : 'warn', 'Daily maintain: ' + agoText(MAINTAIN_LAST_RUN)),
-    chip(ex ? 'warn' : 'ok', 'Extraction: ' + (ex ? ex + ' pending' : 'all done')),
-    chip(cl ? 'warn' : 'ok', 'Classification: ' + (cl ? cl + ' pending' : 'all done')),
-    chip(dd ? 'warn' : 'ok', 'DD check: ' + (dd ? dd + ' pending' : 'all done')),
-    chip('neutral', 'Latest FWD: ' + (latest ? fmtDate(latest) + ' · ' + daysAgo(latest) : '—')),
-  ];
-  el.innerHTML = `<div class="status-strip">${chips.join('')}</div>`;
+// Period → lower-bound YYYYMMDD, combined with the from/to boxes as an AND filter
+// (the later of the period floor and the "from" box wins).
+function periodFromYmd() {
+  const p = document.getElementById('period').value;
+  if (p === 'since2025') return '20250101';
+  if (p === 'since2026') return '20260101';
+  if (p === 'last60') return ymd(new Date(Date.now() - 60 * 86400000).toISOString());
+  if (p === 'last30') return ymd(new Date(Date.now() - 30 * 86400000).toISOString());
+  return '20240101'; // since2024 — the full set
 }
 
 function selectedTypes() { return [...document.querySelectorAll('.type-cb:checked')].map((c) => c.value); }
 function filtered() {
-  const from = ymd(document.getElementById('from').value);
   const to = ymd(document.getElementById('to').value);
+  const fromBox = ymd(document.getElementById('from').value);
+  const lower = [periodFromYmd(), fromBox].filter(Boolean).sort().pop();
   const types = new Set(selectedTypes());
   const onlyRefer = document.getElementById('dd-refer').checked;
-  const oc = document.getElementById('outcome-f').value;
+  const tc = document.getElementById('tc').value;
   const q = (document.getElementById('search').value || '').toLowerCase().trim();
   return ALL.filter((r) => {
     if (types.size && !types.has(r.trial_type)) return false;
     const d = ymd(r.fwd_date);
-    if (from && d && d < from) return false;
+    if (lower && d && d < lower) return false;
     if (to && d && d > to) return false;
+    if (tc && String(r.tech_center || '').trim() !== tc) return false;
     if (onlyRefer && ddKey(r) !== 'refer') return false; // only discretionary-denial referrals
-    if (oc) {
-      const k = outcomeKey(r);
-      // "review" = anything a human should look at: 'other' or a failed extraction/classify.
-      if (oc === 'review') { if (!(k === 'other' || r.text_source === 'error')) return false; }
-      else if (k !== oc) return false;
-    }
     if (q && !`${r.trial_number} ${r.patent_number} ${r.po_name} ${r.petitioner_name} ${r.application_number}`.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -254,7 +249,8 @@ function writeUrl() {
   const to = document.getElementById('to').value; if (to) p.set('to', to);
   const types = selectedTypes();
   if (types.length && types.length < 2) p.set('types', types.join(','));
-  const oc = document.getElementById('outcome-f').value; if (oc) p.set('outcome', oc);
+  const per = document.getElementById('period').value; if (per && per !== 'since2024') p.set('period', per);
+  const tc = document.getElementById('tc').value; if (tc) p.set('tc', tc);
   const q = document.getElementById('search').value.trim(); if (q) p.set('q', q);
   if (sortKey !== 'fwd_date' || sortDir !== 'desc') { p.set('sort', sortKey); p.set('dir', sortDir); }
   const qs = p.toString();
@@ -268,7 +264,8 @@ function readUrl() {
   if (p.get('to')) document.getElementById('to').value = p.get('to');
   const types = p.get('types');
   if (types) { const set = new Set(types.split(',')); document.querySelectorAll('.type-cb').forEach((c) => { c.checked = set.has(c.value); }); }
-  if (p.get('outcome')) document.getElementById('outcome-f').value = p.get('outcome');
+  if (p.get('period')) document.getElementById('period').value = p.get('period');
+  if (p.get('tc')) document.getElementById('tc').value = p.get('tc');
   if (p.get('q')) document.getElementById('search').value = p.get('q');
   const s = p.get('sort'), d = p.get('dir');
   if (SORT_KEYS.includes(s)) { sortKey = s; sortDir = d === 'asc' ? 'asc' : 'desc'; }
@@ -293,10 +290,48 @@ function buildKpi(rows) {
   </div>${pending}`;
 }
 
+// Monthly stacked bar of FWDs by outcome (classified only), reflecting the filters.
+const CHART_SEGS = [
+  ['po_none', '#38a169', 'Patent owner win'],
+  ['petitioner_all', '#e53e3e', 'Petitioner win'],
+  ['partial', '#dd6b20', 'Partial'],
+  ['other', '#a0aec0', 'Other'],
+];
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthKey(s) { const m = String(s || '').match(/(\d{4})-?(\d{2})/); return m ? m[1] + '-' + m[2] : ''; }
+function monthLabel(k) { const [y, mo] = k.split('-'); return MON[+mo - 1] + " '" + y.slice(2); }
+function buildChart(rows) {
+  const el = document.getElementById('chart'), leg = document.getElementById('chart-legend');
+  const map = new Map(); const totals = { po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
+  for (const r of rows) {
+    const k = outcomeKey(r); if (k === 'unclassified') continue;
+    const mk = monthKey(r.fwd_date); if (!mk) continue;
+    if (!map.has(mk)) map.set(mk, { po_none: 0, petitioner_all: 0, partial: 0, other: 0, total: 0 });
+    const e = map.get(mk); e[k]++; e.total++; totals[k]++;
+  }
+  const months = [...map.keys()].sort();
+  leg.innerHTML = CHART_SEGS.map(([k, c, l]) => `<span><i style="background:${c}"></i>${l} (${totals[k]})</span>`).join('');
+  if (!months.length) { el.innerHTML = '<div class="state">No classified decisions to chart for the current filters.</div>'; return; }
+  const W = Math.max(560, months.length * 44), H = 260, mL = 32, mR = 12, mT = 12, mB = 40, pw = W - mL - mR, ph = H - mT - mB;
+  const top = Math.max(1, ...months.map((m) => map.get(m).total));
+  const bw = Math.min(30, (pw / months.length) * 0.6);
+  let bars = '', xl = '';
+  months.forEach((m, i) => {
+    const e = map.get(m); const cx = mL + pw * ((i + 0.5) / months.length); let y = mT + ph;
+    for (const [k, c] of CHART_SEGS) { const v = e[k]; if (!v) continue; const h = v / top * ph; y -= h; bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${c}"><title>${monthLabel(m)}: ${e.total} (PO win ${e.po_none}, Petitioner win ${e.petitioner_all}, Partial ${e.partial}, Other ${e.other})</title></rect>`; }
+    if (months.length <= 24 || i % 2 === 0) xl += `<text x="${cx.toFixed(1)}" y="${H - mB + 15}" text-anchor="middle" font-size="10" fill="#718096">${monthLabel(m)}</text>`;
+  });
+  const grid = `<line x1="${mL}" y1="${mT + ph}" x2="${W - mR}" y2="${mT + ph}" stroke="#cbd5e0"/>`
+    + `<text x="${mL - 5}" y="${mT + ph}" text-anchor="end" font-size="10" fill="#a0aec0">0</text>`
+    + `<text x="${mL - 5}" y="${mT + 9}" text-anchor="end" font-size="10" fill="#a0aec0">${top}</text>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Final written decisions per month by outcome">${grid}${bars}${xl}</svg>`;
+}
+
 function render() {
   writeUrl();
   const rows = sorted(filtered());
   buildKpi(rows);
+  buildChart(rows);
   const body = document.getElementById('body');
   document.getElementById('list-heading').textContent = `Cases (${rows.length})`;
   if (!rows.length) { body.innerHTML = '<div class="state">No Final Written Decisions match your filters.</div>'; return; }
@@ -365,15 +400,17 @@ function exportXlsx() {
   XLSX.writeFile(wb, 'ptab-fwd-outcomes.xlsx');
 }
 
+document.getElementById('period').addEventListener('change', render);
 document.getElementById('from').addEventListener('change', render);
 document.getElementById('to').addEventListener('change', render);
+document.getElementById('tc').addEventListener('change', render);
 document.getElementById('dd-refer').addEventListener('change', render);
-document.getElementById('outcome-f').addEventListener('change', render);
 document.getElementById('search').addEventListener('input', render);
 document.querySelectorAll('.type-cb').forEach((c) => c.addEventListener('change', render));
 document.getElementById('reset').addEventListener('click', () => {
+  document.getElementById('period').value = 'since2024';
   document.getElementById('from').value = ''; document.getElementById('to').value = ''; document.getElementById('dd-refer').checked = false;
-  document.getElementById('outcome-f').value = ''; document.getElementById('search').value = '';
+  document.getElementById('tc').value = ''; document.getElementById('search').value = '';
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); render();
 });
 document.getElementById('export').addEventListener('click', exportXlsx);
@@ -387,14 +424,15 @@ document.getElementById('export').addEventListener('click', exportXlsx);
     EV = data.extractVersion || 1;
     DDV = data.ddCheckVersion || 1;
     ALL = data.rows || [];
-    SUMMARY = data.summary || null;
-    MAINTAIN_LAST_RUN = data.maintainLastRun || null;
-    renderStatus();
+    const latest = ALL.reduce((m, r) => (r.fwd_date && r.fwd_date > m ? r.fwd_date : m), '');
+    document.getElementById('refreshed').textContent = 'Data refreshed daily from the USPTO Open Data Portal.'
+      + (latest ? ' Most recent final written decision on file: ' + fmtDate(latest) + '.' : '');
     if (!ALL.length) {
       document.getElementById('body').innerHTML = '<div class="state">No FWDs recorded yet. Populate the tracker by running the PTAB scan (/api/ptab?scan=1), then reload.</div>';
       buildKpi([]);
       return;
     }
+    populateTc();
     readUrl();
     render();
   } catch (e) {

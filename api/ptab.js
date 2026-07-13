@@ -297,18 +297,23 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     const all = await listPtabFwd();
     const summary = { total: all.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0, extractPending: 0, dd: 0, ddPending: 0 };
+    let latestFwd = '';
     for (const r of all) {
+      if (r.fwd_date && r.fwd_date > latestFwd) latestFwd = r.fwd_date;
       if ((r.extracted_v || 0) < EXTRACT_V) summary.extractPending += 1;
       if ((r.classified_v || 0) < CLASSIFIER_V) summary.pending += 1;
       else summary[r.outcome] = (summary[r.outcome] || 0) + 1;
       if ((r.dd_checked_v || 0) < DD_CHECK_V) summary.ddPending += 1;
       else if (r.dd_decision && r.dd_decision !== 'none' && r.dd_decision !== 'error') summary.dd += 1;
     }
-    // Drop the bulky stored decision_text — the page never needs it.
-    const rows = all.map(({ decision_text, ...rest }) => rest);
     let maintainLastRun = null;
     try { maintainLastRun = await getMaintainLastRun(); } catch { /* optional */ }
-    res.status(200).json({ rows, summary, maintainLastRun, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V });
+    const meta = { summary, maintainLastRun, latestFwd, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V };
+    // ?summary=1 → lightweight (no rows), for the status dashboard.
+    if (q.summary) { res.status(200).json(meta); return; }
+    // Drop the bulky stored decision_text — the page never needs it.
+    const rows = all.map(({ decision_text, ...rest }) => rest);
+    res.status(200).json({ rows, ...meta });
   } catch (err) {
     res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
   }

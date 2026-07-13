@@ -53,14 +53,17 @@
   <a class="back-link" href="/uspto-search" onclick="if(history.length>1){history.back();return false;}">← Back to last page</a>
   <div class="card">
     <h2>Privacy Policy</h2>
-    <div class="effective">Effective date: June 19, 2026</div>
+    <div class="effective">Effective date: July 12, 2026</div>
 
-    <p>This is a free, non-commercial tool for searching publicly available U.S. patent
-    and ex parte reexamination data from the USPTO Open Data Portal, for monitoring specific
-    applications, for viewing and downloading file-wrapper documents, and for browsing
-    reexamination analytics (determinations, pre-order SNQ submissions, post-order patent owner
-    petitions, and office action timing). It also offers optional daily email alerts about ex parte
-    reexamination activity (determinations, office actions, certificates, and petitions). It
+    <p>This is a free, non-commercial tool for searching publicly available U.S. patent,
+    ex parte reexamination, and PTAB (Patent Trial and Appeal Board) trial data from the USPTO Open
+    Data Portal, for monitoring specific applications, for viewing and downloading file-wrapper and
+    PTAB documents, and for browsing reexamination and PTAB analytics (reexamination determinations,
+    pre-order SNQ submissions, post-order patent owner petitions, and office action timing; and PTAB
+    final written decisions, discretionary and institution decisions, and per-proceeding dockets). It
+    also offers optional daily email alerts about ex parte reexamination activity and PTAB decisions
+    (reexamination determinations, office actions, certificates, and petitions; PTAB discretionary and
+    institution decisions; and PTAB final written decisions). It
     displays <strong>no advertising</strong> and is not operated
     for profit. This policy explains what limited information the site handles.</p>
 
@@ -80,11 +83,12 @@
       <li>an optional <strong>label</strong> you assign, and</li>
       <li>the <strong>email address(es)</strong> you enter to receive new-filing alerts.</li>
     </ul>
-    <p><strong>(b) Daily reexamination email alerts.</strong> When you subscribe (the signup form
+    <p><strong>(b) Daily email alerts.</strong> When you subscribe (the signup form
     appears at the top of every page), we store your <strong>email address</strong> (and a private
     token used only to generate your unsubscribe link). This is used solely to send you a once-daily
-    email listing the prior day's relevant ex parte reexamination filings — determinations, office
-    actions, certificates, and petitions; no email is sent on days with none.</p>
+    email listing the prior day's relevant filings — ex parte reexamination determinations, office
+    actions, certificates, and petitions; PTAB discretionary and institution decisions; and PTAB
+    final written decisions; no email is sent on days with none.</p>
     <p>This information is stored only to operate these features. We do <strong>not</strong>
     sell, rent, or share it, and we do not use these email addresses for any purpose other than
     the alerts you requested.</p>
@@ -93,35 +97,37 @@
       <li><strong>Tracked-proceeding alerts.</strong> Use the <strong>one-click unsubscribe
       link</strong> included in every tracked-proceeding alert email, which removes your email
       address from <strong>all</strong> proceedings it was set to receive alerts for.</li>
-      <li><strong>Daily reexamination alerts.</strong> Use the <strong>one-click unsubscribe
+      <li><strong>Daily alerts.</strong> Use the <strong>one-click unsubscribe
       link</strong> included in every alert email, which deletes your email address from the
       list.</li>
     </ul>
 
     <h3>3. Searches, documents, and public records</h3>
-    <p>When you run a search, look up an application, or open or download a document, the request is
-    passed through the site to the USPTO Open Data Portal to return the result. The site does not
-    retain a history of your individual searches or document views. All patent, reexamination, and
-    document information shown or served by the site — including the reexamination determinations,
-    pre-order SNQ, post-order petitions, and office action timing pages — is <strong>public
-    record</strong> maintained by the USPTO.</p>
+    <p>When you run a search, look up an application or PTAB proceeding, or open or download a
+    document, the request is passed through the site to the USPTO Open Data Portal to return the
+    result. The site does not retain a history of your individual searches or document views. All
+    patent, reexamination, PTAB, and document information shown or served by the site — including the
+    reexamination determinations, pre-order SNQ, post-order petitions, and office action timing pages,
+    and the PTAB final written decision, discretionary/institution decision, and per-proceeding pages
+    — is <strong>public record</strong> maintained by the USPTO.</p>
 
     <h3>4. Service providers</h3>
     <p>The site relies on a few third-party services to function. Your use of the site is also
     subject to their respective privacy practices:</p>
     <ul>
-      <li><strong>USPTO Open Data Portal</strong> (<code>data.uspto.gov</code>) — source of all patent and reexamination data and documents.</li>
+      <li><strong>USPTO Open Data Portal</strong> (<code>data.uspto.gov</code>) — source of all patent, reexamination, and PTAB trial data and documents.</li>
       <li><strong>Vercel</strong> — website hosting. As the host, Vercel may automatically log standard technical request data (such as IP address, timestamp, and browser information) for security and operations, per Vercel's own privacy policy.</li>
-      <li><strong>Neon / Vercel Postgres</strong> — database storing the Tracked Proceedings and reexamination-alert subscription data described above, plus indexes of public reexamination records.</li>
+      <li><strong>Neon / Vercel Postgres</strong> — database storing the Tracked Proceedings and reexamination-alert subscription data described above, plus indexes of public reexamination and PTAB records (including extracted text of PTAB decisions used to classify outcomes).</li>
       <li><strong>Vercel Blob</strong> — file storage used to keep copies of certain <strong>public</strong> reexamination documents (e.g., text-searchable versions of Office of Petitions decisions).</li>
       <li><strong>Resend</strong> — email delivery service used to send the tracked-proceeding and reexamination alert emails to the addresses you provide.</li>
-      <li><strong>OCR.space</strong> — optical-character-recognition service used to extract text from scanned <strong>public</strong> reexamination documents (e.g., Office of Petitions decisions) so they can be analyzed. Only public USPTO documents are sent; no visitor or subscriber information is sent to this service.</li>
+      <li><strong>OCR.space</strong> — optical-character-recognition service used to extract text from scanned <strong>public</strong> reexamination and PTAB documents (e.g., Office of Petitions decisions and image-only PTAB decisions) so they can be analyzed. Only public USPTO documents are sent; no visitor or subscriber information is sent to this service.</li>
+      <li><strong>SheetJS</strong> (<code>cdn.sheetjs.com</code>) — a third-party CDN from which your browser loads a spreadsheet library on the analytics pages, used for the "Export .xlsx" feature. Loading it exposes standard request data (e.g., IP address) to the CDN under its own practices; no information about you is sent.</li>
     </ul>
     <p>We do not control, and are not responsible for, the independent data practices of these providers.</p>
 
     <h3>5. Data security and retention</h3>
     <p>Stored data is retained until you remove it — by unsubscribing your email address from
-    tracked-proceeding alerts, or by unsubscribing from reexamination alerts — or until it is
+    tracked-proceeding alerts, or by unsubscribing from the daily alerts — or until it is
     otherwise removed.
     We take reasonable measures to protect the limited information stored, but no method of
     transmission or storage is completely secure, and we cannot guarantee absolute security.</p>

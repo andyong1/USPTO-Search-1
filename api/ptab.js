@@ -338,7 +338,9 @@ export default async function handler(req, res) {
       // (octet-stream), which makes browsers download instead of rendering inline.
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `${q.dl ? 'attachment' : 'inline'}; filename="${fname}"`);
-      res.setHeader('Cache-Control', 'private, max-age=3600');
+      // Decision PDFs are immutable — let the edge cache and serve repeats instead
+      // of re-fetching from USPTO each time.
+      res.setHeader('Cache-Control', 'public, max-age=86400');
       res.status(200).send(Buffer.from(await up.arrayBuffer()));
       return;
     }

@@ -9,8 +9,11 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
-    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
-    header h1 { font-size: 1.2rem; font-weight: 600; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
     .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 20px; }
@@ -37,7 +40,18 @@
   </style>
 </head>
 <body>
-<header><h1>System Status — Reexam Tracker</h1></header>
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
 <div class="container">
   <div class="card" id="gate">
     <h2>Admin sign-in</h2>

@@ -1,0 +1,10 @@
+/* Shared site-nav component styles. Identical across every page that renders the
+   top navigation, so they live here (cached once) instead of being copied into each
+   page's inline <style>. Page-specific bits — the .site-nav container margin and any
+   small-screen overrides — stay inline on each page and override these as needed. */
+.site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
+.site-nav a:hover { background: #cbd5e0; }
+.site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+.nav-section { display: flex; flex-direction: column; gap: 6px; }
+.nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding-left: 3px; }
+.nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }

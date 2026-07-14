@@ -6,12 +6,15 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>PTAB Final Written Decisions (internal)</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
-    header { background: #1a3a6b; color: white; padding: 16px 24px; }
-    header h1 { font-size: 1.2rem; font-weight: 600; }
-    header p { font-size: 0.8rem; opacity: 0.8; margin-top: 3px; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
     .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 22px; }
@@ -73,20 +76,22 @@
     .pg.active { background: #1a3a6b; color: #fff; border-color: #1a3a6b; }
     /* Unified top nav */
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin: 0 0 22px; align-items: flex-start; }
-    .site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
-    .site-nav a:hover { background: #cbd5e0; }
-    .site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
-    .nav-section { display: flex; flex-direction: column; gap: 6px; }
-    .nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding-left: 3px; }
-    .nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
   <script src="/subscribe.js" defer></script>
+  <script src="/export.js" defer></script>
 </head>
 <body>
 <header>
-  <h1>PTAB Final Written Decisions</h1>
-  <p>AIA trials (IPR / PGR) with a FWD issued on or after January 1, 2024</p>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
 </header>
 
 <div class="container">
@@ -117,7 +122,7 @@
     </div>
   </nav>
   <div class="card">
-    <h2>Final Written Decision Outcomes After January 1, 2024</h2>
+    <h2>PTAB Final Written Decision Outcomes After January 1, 2024</h2>
     <div class="sub" id="freshness">Outcome is parsed from the Board's decision.</div>
     <div class="sub" id="refreshed">Data refreshed daily from the USPTO Open Data Portal.</div>
 
@@ -486,24 +491,21 @@ function pagerHtml(page, pages, start, end, total) {
   </div>`;
 }
 
-function exportXlsx() {
-  if (typeof XLSX === 'undefined') { alert('Spreadsheet library is still loading — try again in a moment.'); return; }
+function doExport() {
   const rows = sorted(filtered());
   const ddLabel = (r) => { const k = ddKey(r); return k === 'pending' ? 'not checked' : k === 'none' ? '' : k.charAt(0).toUpperCase() + k.slice(1); };
   const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Group Art Unit',
     'Patent Owner', 'Petitioner', 'PO Counsel', 'Petitioner Counsel', 'Petition Date', 'Institution Date',
     'FWD Date', 'Outcome', 'Outcome Detail', 'Director Discretionary Decision', 'FWD PDF URL'];
-  const aoa = [header, ...rows.map((r) => [
+  const aoa = rows.map((r) => [
     r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.group_art_unit,
     r.po_name, r.petitioner_name, r.po_counsel, r.petitioner_counsel, fmtDate(r.petition_date), fmtDate(r.institution_date),
     fmtDate(r.fwd_date), (OUTCOME[outcomeKey(r)] || OUTCOME.other).label, r.outcome_detail, ddLabel(r), r.fwd_pdf_url,
-  ])];
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 16, 40].map((w) => ({ wch: w }));
+  ]);
   const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
   for (const r of rows) c[outcomeKey(r)]++;
   const pct = (n) => (c.total ? +(n / c.total * 100).toFixed(1) : 0);
-  const sAoa = [
+  const summary = [
     ['PTAB Final Written Decisions — Summary'], [],
     ['Total FWDs', c.total],
     ['Patent Owner total wins (no claims unpatentable)', c.po_none, pct(c.po_none) + '%'],
@@ -512,11 +514,10 @@ function exportXlsx() {
     ['Other / review', c.other, pct(c.other) + '%'],
     [], ['Generated', new Date().toISOString().slice(0, 10)],
   ];
-  const sWs = XLSX.utils.aoa_to_sheet(sAoa); sWs['!cols'] = [{ wch: 46 }, { wch: 10 }, { wch: 8 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sWs, 'Summary');
-  XLSX.utils.book_append_sheet(wb, ws, 'FWDs');
-  XLSX.writeFile(wb, 'ptab-fwd-outcomes.xlsx');
+  exportXlsx('ptab-fwd-outcomes.xlsx', header, aoa, {
+    colWidths: [14, 6, 12, 14, 8, 10, 26, 26, 20, 20, 12, 13, 11, 16, 30, 16, 40],
+    sheetName: 'FWDs', summary, summaryCols: [46, 10, 8],
+  });
 }
 
 document.getElementById('period').addEventListener('change', applyFilters);
@@ -532,7 +533,7 @@ document.getElementById('reset').addEventListener('click', () => {
   document.getElementById('tc').value = ''; document.getElementById('search').value = '';
   document.querySelectorAll('.type-cb').forEach((c) => { c.checked = true; }); applyFilters();
 });
-document.getElementById('export').addEventListener('click', exportXlsx);
+document.getElementById('export').addEventListener('click', doExport);
 
 (async () => {
   try {

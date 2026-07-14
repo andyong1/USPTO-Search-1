@@ -32,7 +32,9 @@ import {
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
-import { fetchFwdPage, fetchInstitutionPage, fetchDdPage } from '../../lib/ptab.js';
+// Metadata-only helpers — import from the light module so this cron's bundle
+// doesn't pull in pdf-lib / pdf-parse / OCR (which live in lib/ptab.js).
+import { fetchFwdPage, fetchInstitutionPage, fetchDdPage } from '../../lib/ptab-fetch.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';

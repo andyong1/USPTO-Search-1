@@ -232,10 +232,12 @@
       <h2 style="margin:0">Detailed Listing of Reexamination Determinations</h2>
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
     </div>
-    <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="tablePage=1;renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
-    <label id="ptab-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer;margin-top:6px">
-      <input type="checkbox" id="ptab-only" onchange="tablePage=1;renderTable()" /> Show only rows with prior/parallel PTAB proceedings
-    </label>
+    <div id="listing-filter" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="tablePage=1;renderTable()" aria-label="Filter determinations" />
+      <label id="ptab-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="ptab-only" onchange="tablePage=1;renderTable()" /> Show only rows with prior/parallel PTAB proceedings
+      </label>
+    </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
@@ -850,7 +852,7 @@ function applyFilters() {
     document.getElementById('tc-select').addEventListener('change', (e) => { fTc = e.target.value; applyFilters(); });
     document.getElementById('requester-select').addEventListener('change', (e) => { fRequester = e.target.value; applyFilters(); });
     document.getElementById('csv-btn').style.display = '';
-    document.getElementById('table-filter').style.display = '';
+    document.getElementById('listing-filter').style.display = 'flex';
     readFiltersFromUrl();
     applyFilters();
     // Prior/parallel PTAB proceedings (from the compare endpoint) — annotate the

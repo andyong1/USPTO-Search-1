@@ -233,6 +233,9 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
     </div>
     <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or type…" oninput="tablePage=1;renderTable()" style="display:none;margin-top:14px" aria-label="Filter determinations" />
+    <label id="ptab-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer;margin-top:6px">
+      <input type="checkbox" id="ptab-only" onchange="tablePage=1;renderTable()" /> Show only rows with prior/parallel PTAB proceedings
+    </label>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
@@ -530,7 +533,9 @@ function sortReexam(key) {
 
 function filteredSorted() {
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
+  const ptabOnly = !!((document.getElementById('ptab-only') || {}).checked);
   let items = allDeterminations;
+  if (ptabOnly) items = items.filter((d) => linkByApp.has(d.application_number));
   if (q) {
     items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
       .some((v) => String(v || '').toLowerCase().includes(q)));
@@ -854,6 +859,7 @@ function applyFilters() {
     fetch('/api/ptab?compare=1').then((r) => (r.ok ? r.json() : null)).then((cd) => {
       if (!cd || !cd.links) return;
       linkByApp = new Map(cd.links.map((l) => [l.appNum, l]));
+      const cb = document.getElementById('ptab-only-wrap'); if (cb) cb.style.display = 'flex';
       applyFilters();
     }).catch(() => {});
   } catch (e) {

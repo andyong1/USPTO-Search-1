@@ -52,6 +52,7 @@
     .b-den { background: #fed7d7; color: #9b2c2c; } .b-fwd { background: #e9d8fd; color: #553c9a; }
     .b-inst { background: #feebc8; color: #9c4221; } .b-other { background: #e2e8f0; color: #4a5568; }
     .b-po { background: #c6f6d5; color: #276749; }
+    .rx-ord { background: #c6f6d5; color: #276749; } .rx-den { background: #fed7d7; color: #c53030; }
     .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
     .ipr-item .dt { font-size: 0.72rem; color: #94a3b8; }
     .pipe-summary { font-size: 0.86rem; color: #2d3748; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; line-height: 1.5; }
@@ -96,7 +97,16 @@
 
   <div class="card" id="h2h-card">
     <h2>Ex Parte Reexamination vs. IPR — Head to Head</h2>
-    <div class="sub">Two routes to challenge an issued patent, compared over a common window: IPR institution decisions and ex parte reexamination determinations dated on or after Jan 1, 2025.</div>
+    <div class="sub">Two routes to challenge an issued patent, compared over a common, selectable window — IPR institution decisions vs. ex parte reexamination determinations.</div>
+    <div class="filter-bar" style="margin-bottom:4px">
+      <div class="fb-group"><label for="h2h-period">Period</label>
+        <select id="h2h-period">
+          <option value="since2025">Since Jan 1, 2025</option>
+          <option value="since2026">Since Jan 1, 2026</option>
+          <option value="last60">Last 60 days</option>
+          <option value="last30">Last 30 days</option>
+        </select></div>
+    </div>
     <div id="h2h-body"><div class="state">Loading…</div></div>
   </div>
 
@@ -273,30 +283,57 @@ function iprBadge(x) {
   return '<span class="badge b-other">Petition filed</span>';
 }
 function patNorm(p) { return String(p || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); }
-
-function renderPipeline(data) {
-  const links = data.links || [], cov = data.coverage || {};
-  const covNote = `Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams; PTAB data begins Jan 1, 2024, so earlier IPRs aren't linked.`;
-  if (!links.length) { el('pipeline-body').innerHTML = `<div class="state">No reexaminations matched a tracked PTAB proceeding yet.</div><p class="disclaimer">${esc(covNote)}</p>`; return; }
-  const denied = links.filter((l) => l.category === 'ipr_denied').length;
-  const summary = `<div class="pipe-summary"><strong>${links.length}</strong> reexamination${links.length === 1 ? '' : 's'} linked to a PTAB proceeding on the same patent — <strong>${denied}</strong> where the PTAB challenge was denied (institution or discretionary) before reexam. <span style="color:#64748b">${esc(covNote)}</span></div>`;
-  const rows = links.map((l) => {
-    const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
-    const rx = `<a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a><div class="dt">${esc((l.reexam_type || '').replace(/_/g, ' '))}${l.reexam_date ? ' · ' + esc(l.reexam_date) : ''}</div>`;
-    const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(x.fwd_date || x.institution_date || x.petition_date || '')}</span></div>`).join('');
-    const seq = l.iprFirst === true ? 'IPR first' : l.iprFirst === false ? 'reexam first' : '—';
-    return `<tr class="${l.category === 'ipr_denied' ? 'denied' : ''}"><td>${patCell}</td><td>${rx}</td><td>${esc((l.requester || '').replace(/_/g, ' ') || '—')}</td><td>${iprs}</td><td class="dt">${seq}</td></tr>`;
-  }).join('');
-  el('pipeline-body').innerHTML = summary + `<div class="table-wrap"><table class="link-table"><thead><tr><th>Patent</th><th>Reexamination</th><th>Requester</th><th>Prior / parallel PTAB proceeding(s)</th><th>Sequence</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+function ymd(s) { const m = String(s || '').match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : ''; }
+function rxBadge(type) {
+  const t = String(type || '');
+  if (/ordered/i.test(t)) return '<span class="badge rx-ord">Reexam ordered</span>';
+  if (/denied/i.test(t)) return '<span class="badge rx-den">Reexam denied</span>';
+  return t ? `<span class="badge b-other">${esc(t.replace(/_/g, ' '))}</span>` : '';
 }
 
+function renderPipeline(data) {
+  const links = (data.links || []).slice().sort((a, b) => ymd(b.reexam_date).localeCompare(ymd(a.reexam_date)));
+  const cov = data.coverage || {};
+  const covNote = `Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams; PTAB data begins Jan 1, 2024, so earlier IPRs aren't linked.`;
+  if (!links.length) { el('pipeline-body').innerHTML = `<div class="state">No reexaminations matched a tracked PTAB proceeding yet.</div><p class="disclaimer">${esc(covNote)}</p>`; return; }
+  const denied = links.filter((l) => l.category === 'ipr_denied');
+  const deniedGranted = denied.filter((l) => /ordered/i.test(l.reexam_type || '')).length;
+  const dgPct = denied.length ? Math.round(deniedGranted / denied.length * 100) : 0;
+  const deniedLine = denied.length
+    ? ` <strong>${dgPct}%</strong> of reexaminations (${deniedGranted} of ${denied.length}) were granted where the earlier PTAB challenge was denied (institution or discretionary).`
+    : '';
+  const summary = `<div class="pipe-summary"><strong>${links.length}</strong> reexamination${links.length === 1 ? '' : 's'} linked to a PTAB proceeding on the same patent — <strong>${denied.length}</strong> where the PTAB challenge was denied (institution or discretionary) before reexam.${deniedLine} <span style="color:#64748b">${esc(covNote)}</span></div>`;
+  const rows = links.map((l) => {
+    const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
+    const rx = `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a>${rxBadge(l.reexam_type)}<span class="dt">${esc(ymd(l.reexam_date))}</span></div>`;
+    const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');
+    return `<tr class="${l.category === 'ipr_denied' ? 'denied' : ''}"><td>${patCell}</td><td>${rx}</td><td>${iprs}</td></tr>`;
+  }).join('');
+  el('pipeline-body').innerHTML = summary + `<div class="table-wrap"><table class="link-table"><thead><tr><th>Patent</th><th>Reexamination</th><th>Prior / parallel PTAB proceeding(s)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function sinceForPeriod(p) {
+  if (p === 'since2026') return '2026-01-01';
+  if (p === 'last60') return new Date(Date.now() - 60 * DAY).toISOString().slice(0, 10);
+  if (p === 'last30') return new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10);
+  return '2025-01-01';
+}
+async function loadCompare(since, withLinks) {
+  const res = await fetch('/api/ptab?compare=1' + (since ? '&since=' + since : ''));
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  renderH2H(data.headToHead);
+  if (withLinks) renderPipeline(data);
+}
 (async () => {
+  const sel = el('h2h-period');
+  if (sel) sel.addEventListener('change', async () => {
+    el('h2h-body').innerHTML = '<div class="state">Loading…</div>';
+    try { await loadCompare(sinceForPeriod(sel.value), false); }
+    catch (e) { el('h2h-body').innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>'; }
+  });
   try {
-    const res = await fetch('/api/ptab?compare=1');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    renderH2H(data.headToHead);
-    renderPipeline(data);
+    await loadCompare('2025-01-01', true);
   } catch (e) {
     el('h2h-body').innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
     el('pipeline-body').innerHTML = '';

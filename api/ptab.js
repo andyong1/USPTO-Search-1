@@ -20,6 +20,7 @@
 //   GET /api/ptab?filings=1       → read for the /filings-trends page ({ reexam:[], ipr:[], updatedAt }).
 //   GET /api/ptab?compare=1       → EPR-vs-IPR head-to-head aggregates + IPR→reexam patent linkage
 //                                   (joins reexam underlying_patent to ptab_decisions/ptab_fwd patent_number).
+//                                   &since=YYYY-MM-DD sets the head-to-head window lower bound (default 2025-01-01).
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
@@ -437,7 +438,7 @@ export default async function handler(req, res) {
       // programs are compared over the same span: IPR institution decisions and
       // EPR reexamination determinations dated on/after SINCE. Each other metric
       // is filtered on its own terminal-event date (FWD / certificate / filing day).
-      const SINCE = '2025-01-01';
+      const SINCE = /^\d{4}-\d{2}-\d{2}$/.test(String(q.since || '')) ? String(q.since) : '2025-01-01';
       const inWin = (dt) => !!dt && String(dt) >= SINCE;
 
       const filingsTotals = { reexam: 0, ipr: 0 };

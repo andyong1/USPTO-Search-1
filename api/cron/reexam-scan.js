@@ -25,7 +25,7 @@ import {
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
-  upsertPtabInstitution, upsertPtabDd,
+  upsertPtabInstitution, upsertPtabDd, getPtabKv, setPtabKv,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
@@ -464,6 +464,26 @@ export default async function handler(req, res) {
       patentProceedings = { checked, upserted, due: patents.length };
     } catch (e) { patentProceedings = { error: String(e.message || e) }; }
 
+    // 3j) Rolling decisions sweep: walk a stored offset through the institution +
+    // discretionary decision history (one page per feed per run), upserting each,
+    // so ptab_decisions self-heals across ALL history independent of the daily
+    // maintain window. New decisions are also captured by the digest upsert above.
+    let decisionsSweep = { skipped: true };
+    try {
+      const swDeadline = Math.min(Date.now() + 8000, runDeadline);
+      decisionsSweep = {};
+      for (const feed of ['inst', 'dd']) {
+        if (Date.now() > swDeadline) break;
+        const key = 'dscan_off_' + feed;
+        const off = parseInt((await getPtabKv(key)) || '0', 10) || 0;
+        const page = feed === 'dd' ? await fetchDdPage({ offset: off, limit: 100 }) : await fetchInstitutionPage({ offset: off, limit: 100 });
+        for (const r of page.rows) { try { if (feed === 'dd') await upsertPtabDd(r); else await upsertPtabInstitution(r); } catch { /* skip bad row */ } }
+        const next = page.fetched < 100 ? 0 : off + 100; // wrap to newest at the end
+        await setPtabKv(key, String(next));
+        decisionsSweep[feed] = { offset: off, fetched: page.fetched, upserted: page.rows.length, next };
+      }
+    } catch (e) { decisionsSweep = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -485,6 +505,7 @@ export default async function handler(req, res) {
       petition325d,
       petitionRefresh,
       patentProceedings,
+      decisionsSweep,
       errors,
     });
   } catch (err) {

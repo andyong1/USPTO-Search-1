@@ -132,11 +132,21 @@ function fileLink(d, download) {
   return base;
 }
 
+// The USPTO metadata institutionDecisionDate is often blank for newer proceedings,
+// so fall back to the date of the "Institution Decision" document in the docket.
+function instDecisionDoc() { return DOCS.find((d) => /institution\s+decision/i.test(d.type || d.title || '')); }
+function institutionDate() { return META.institutionDate || (instDecisionDoc() || {}).filingDate || ''; }
+
 // Derive key milestones for the timeline from metadata + the docket.
 function milestones() {
   const ev = [];
   if (META.petitionDate) ev.push({ label: 'Petition filed', date: META.petitionDate });
-  if (META.institutionDate) ev.push({ label: 'Institution decision', date: META.institutionDate });
+  const instDate = institutionDate();
+  if (instDate) {
+    const idoc = instDecisionDoc();
+    const im = idoc && String(idoc.type || idoc.title).match(/Institution\s+Decision\s*:?\s*([A-Za-z]+)/i);
+    ev.push({ label: 'Institution decision' + (im ? ' — ' + titleCase(im[1]) : ''), date: instDate });
+  }
   const ddDoc = DOCS.find((d) => /Director\s+Discretionary\s+Decision/i.test(d.type || d.title));
   if (ddDoc) {
     const m = String(ddDoc.type || ddDoc.title).match(/Director\s+Discretionary\s+Decision\s*:?\s*([A-Za-z][A-Za-z-]*)/i);
@@ -187,7 +197,7 @@ function headerCard() {
       ${cell('Petitioner', (esc(m.petitionerName) || '—') + (m.petitionerCounsel ? `<div class="ext" style="font-size:0.8rem">Counsel: ${esc(m.petitionerCounsel)}</div>` : ''))}
       ${cell('Inventor', esc(m.inventor) || '—')}
       ${cell('Petition filed', fmtDate(m.petitionDate))}
-      ${cell('Institution decision', fmtDate(m.institutionDate))}
+      ${cell('Institution decision', fmtDate(institutionDate()))}
       ${cell('Latest decision', fmtDate(m.latestDecisionDate))}
     </div>
     ${fwdLinks}

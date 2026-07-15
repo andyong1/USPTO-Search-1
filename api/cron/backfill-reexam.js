@@ -13,7 +13,7 @@ import {
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
   getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText, getConclusionText,
   getCertsNeedingEngine2, countCertsNeedingEngine2, markCertEngine2,
-  getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter,
+  getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
@@ -138,7 +138,8 @@ export default async function handler(req, res) {
         }));
       }
       const remaining = await countTechCenterToCheck();
-      res.status(200).json({ ok: true, mode: 'techcenter', repooled, checked, resolved, remaining, done: remaining === 0 });
+      const breakdown = await reexamPatentResolutionBreakdown();
+      res.status(200).json({ ok: true, mode: 'techcenter', repooled, checked, resolved, remaining, done: remaining === 0, breakdown });
       return;
     }
 

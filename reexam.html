@@ -46,7 +46,9 @@
     .badge.b-inst { background: #feebc8; color: #9c4221; }
     .badge.b-other { background: #e2e8f0; color: #4a5568; }
     .badge.b-po { background: #c6f6d5; color: #276749; }
-    .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+    .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
+    .ptab-more { display: inline-block; margin-top: 3px; font-size: 0.75rem; color: #1a3a6b; font-weight: 600; cursor: pointer; }
+    .ptab-more:hover { text-decoration: underline; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     th.sortable { cursor: pointer; user-select: none; }
@@ -605,23 +607,32 @@ function requesterCell(d) {
 // /api/ptab?compare=1 (keyed by reexam control no.). Badge reflects the most
 // recent decision (FWD > institution > discretionary); a referral is not a denial.
 let linkByApp = new Map();
-function ymd(s) { const m = String(s || '').match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : ''; }
+// Short status label; colour carries the FWD outcome nuance. Most recent decision
+// wins (FWD > institution > discretionary); a referral is not a denial.
 function iprBadge(x) {
   const s = x.statusText || '';
-  if (x.fwd_date || s === 'Final Written Decision') { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-fwd', 'FWD issued'] }; const y = m[x.outcome] || ['b-fwd', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
+  if (x.fwd_date || s === 'Final Written Decision') { const c = x.outcome === 'po_none' ? 'b-po' : x.outcome === 'partial' ? 'b-inst' : 'b-fwd'; return `<span class="badge ${c}">FWD</span>`; }
   if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
-  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
-  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
-  if (x.dd_type === 'refer') return '<span class="badge b-other">Discretionary: referred</span>';
+  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Denied</span>';
+  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Disc. denied</span>';
+  if (x.dd_type === 'refer') return '<span class="badge b-other">Referred</span>';
   if (s === 'Terminated-Settled') return '<span class="badge b-other">Settled</span>';
   if (s === 'Terminated') return '<span class="badge b-other">Terminated</span>';
-  if (s === 'Pending') return '<span class="badge b-other">Petition pending</span>';
-  return '<span class="badge b-other">Petition filed</span>';
+  if (s === 'Pending') return '<span class="badge b-other">Pending</span>';
+  return '<span class="badge b-other">Petition</span>';
 }
+function expandPtab(elm) { const ex = elm.previousElementSibling; if (ex) ex.hidden = false; elm.remove(); }
+// One line per proceeding (trial + short status); no date. Show the 2 most-notable
+// (iprs arrive sorted most-notable first) and tuck the rest behind "+N more".
 function ptabCell(d) {
   const link = linkByApp.get(d.application_number || '');
-  if (!link || !link.iprs || !link.iprs.length) return '<span class="ext">—</span>';
-  return link.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="ext" style="margin-left:0;font-size:0.72rem">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');
+  const iprs = (link && link.iprs) || [];
+  if (!iprs.length) return '<span class="ext">—</span>';
+  const item = (x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}</div>`;
+  const shown = iprs.slice(0, 2).map(item).join('');
+  if (iprs.length <= 2) return shown;
+  const extra = iprs.slice(2).map(item).join('');
+  return `${shown}<div class="ipr-extra" hidden>${extra}</div><a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${iprs.length - 2} more</a>`;
 }
 
 function renderTable() {

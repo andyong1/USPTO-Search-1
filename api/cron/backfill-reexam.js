@@ -118,8 +118,8 @@ export default async function handler(req, res) {
     // ?techcenter=1 — backfill the underlying-patent technology center for all
     // determinations (two-hop: reexam continuity -> underlying app -> group art
     // unit -> TC). Resumable; run until done is true.
-    //   &retry=1 first re-pools rows that were checked but never resolved a TC
-    //   (e.g. the second-hop call was throttled), so they get another attempt.
+    //   &retry=1 first re-pools rows that aren't fully resolved — no TC, or a TC but
+    //   no underlying patent — so they get another attempt with the current resolver.
     // Lower concurrency than other modes because each app makes TWO USPTO calls;
     // running 5 in parallel (~10 in flight) trips ODP rate limits and silently
     // leaves blanks.

@@ -96,7 +96,7 @@
 
   <div class="card" id="h2h-card">
     <h2>Ex Parte Reexamination vs. IPR — Head to Head</h2>
-    <div class="sub">Two routes to challenge an issued patent, compared across the data this site tracks. IPR figures cover proceedings since Jan 1, 2024; reexam figures since determination tracking began.</div>
+    <div class="sub">Two routes to challenge an issued patent, compared over a common window: IPR institution decisions and ex parte reexamination determinations dated on or after Jan 1, 2025.</div>
     <div id="h2h-body"><div class="state">Loading…</div></div>
   </div>
 
@@ -260,7 +260,8 @@ function renderH2H(h) {
   const numTable = `<table class="cmp">${head}<tbody>${rows.map((r) => `<tr><td class="metric">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
   const stratHead = `<thead><tr><th>Factor</th><th class="epr">Ex Parte Reexam</th><th class="ipr">IPR</th></tr></thead>`;
   const stratTable = `<div class="cmp-title">Strategic differences</div><table class="cmp">${stratHead}<tbody>${strat.map((r) => `<tr><td class="metric">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
-  el('h2h-body').innerHTML = numTable + stratTable + `<p class="disclaimer">Rates are computed from this site's tracked data (not official USPTO totals); denominators are shown. "All claims cancelled/unpatentable" compares reexam certificates cancelling every claim against IPR final written decisions finding all instituted claims unpatentable.</p>`;
+  const sinceLabel = (function (s) { if (!s) return 'Jan 1, 2025'; const p = s.split('-'); const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; return `${MO[+p[1] - 1]} ${+p[2]}, ${p[0]}`; })(h.since);
+  el('h2h-body').innerHTML = numTable + stratTable + `<p class="disclaimer">Rates are computed from this site's tracked data (not official USPTO totals), counting events dated on or after ${esc(sinceLabel)}; denominators are shown. "All claims cancelled/unpatentable" compares reexam certificates cancelling every claim against IPR final written decisions finding all instituted claims unpatentable.</p>`;
 }
 
 function iprBadge(x) {

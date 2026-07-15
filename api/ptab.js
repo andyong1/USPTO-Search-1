@@ -433,32 +433,40 @@ export default async function handler(req, res) {
       const byPatent = new Map();
       for (const t of trials.values()) { const k = norm(t.patent); if (!k) continue; if (!byPatent.has(k)) byPatent.set(k, []); byPatent.get(k).push(t); }
 
-      // Head-to-head aggregates.
+      // Head-to-head aggregates — restricted to a common window so the two
+      // programs are compared over the same span: IPR institution decisions and
+      // EPR reexamination determinations dated on/after SINCE. Each other metric
+      // is filtered on its own terminal-event date (FWD / certificate / filing day).
+      const SINCE = '2025-01-01';
+      const inWin = (dt) => !!dt && String(dt) >= SINCE;
+
       const filingsTotals = { reexam: 0, ipr: 0 };
-      for (const r of filings) if (filingsTotals[r.kind] != null) filingsTotals[r.kind] += r.count;
+      for (const r of filings) if (filingsTotals[r.kind] != null && inWin(r.d)) filingsTotals[r.kind] += r.count;
 
       let instGranted = 0, instDenied = 0, ddDeny = 0, ddRefer = 0;
       for (const d of decisions) {
-        if (d.inst_type === 'granted') instGranted++; else if (d.inst_type === 'denied') instDenied++;
-        if (d.dd_type === 'deny') ddDeny++; else if (d.dd_type === 'refer') ddRefer++;
+        if (inWin(d.inst_date)) { if (d.inst_type === 'granted') instGranted++; else if (d.inst_type === 'denied') instDenied++; }
+        if (inWin(d.dd_date)) { if (d.dd_type === 'deny') ddDeny++; else if (d.dd_type === 'refer') ddRefer++; }
       }
       const instTot = instGranted + instDenied;
+      const decInWindow = decisions.filter((d) => inWin(d.inst_date) || inWin(d.dd_date)).length;
 
       let pAll = 0, pPartial = 0, pNone = 0, pOther = 0;
       for (const f of fwd) {
+        if (!inWin(f.fwd_date)) continue;
         if (f.outcome === 'petitioner_all') pAll++; else if (f.outcome === 'partial') pPartial++;
         else if (f.outcome === 'po_none') pNone++; else if (f.outcome === 'other') pOther++;
       }
       const fwdClassified = pAll + pPartial + pNone + pOther;
-      const iprPend = median(fwd.map((f) => days(f.petition_date, f.fwd_date)).filter((x) => x != null));
+      const iprPend = median(fwd.filter((f) => inWin(f.fwd_date)).map((f) => days(f.petition_date, f.fwd_date)).filter((x) => x != null));
 
       let eprOrdered = 0, eprDenied = 0;
-      for (const d of dets) { const t = String(d.determination_type || ''); if (/ordered/i.test(t)) eprOrdered++; else if (/denied/i.test(t)) eprDenied++; }
+      for (const d of dets) { if (!inWin(d.official_date)) continue; const t = String(d.determination_type || ''); if (/ordered/i.test(t)) eprOrdered++; else if (/denied/i.test(t)) eprDenied++; }
       const eprTot = eprOrdered + eprDenied;
-      const parsed = dets.filter((d) => has(d.outcome_summary));
+      const parsed = dets.filter((d) => has(d.outcome_summary) && inWin(d.cert_date));
       let eprAllCancel = 0, eprAnyCancel = 0;
       for (const d of parsed) if (has(d.claims_cancelled)) { eprAnyCancel++; if (!(has(d.claims_confirmed) || has(d.claims_amended) || has(d.claims_new))) eprAllCancel++; }
-      const eprPend = median(dets.map((d) => days(d.filing_date, d.cert_date)).filter((x) => x != null));
+      const eprPend = median(dets.filter((d) => inWin(d.cert_date)).map((d) => days(d.filing_date, d.cert_date)).filter((x) => x != null));
 
       // IPR→EPR linkage rows (one per reexam determination with a resolved patent
       // that matches ≥1 PTAB proceeding). Category = most-notable matched status.
@@ -491,12 +499,13 @@ export default async function handler(req, res) {
 
       res.status(200).json({
         headToHead: {
+          since: SINCE,
           filings: filingsTotals,
           institution: {
             ipr: { granted: instGranted, denied: instDenied, total: instTot, pct: pct(instGranted, instTot) },
             epr: { ordered: eprOrdered, denied: eprDenied, total: eprTot, pct: pct(eprOrdered, eprTot) },
           },
-          discretionary: { ipr: { deny: ddDeny, refer: ddRefer, total: decisions.length, pct: pct(ddDeny + ddRefer, decisions.length) } },
+          discretionary: { ipr: { deny: ddDeny, refer: ddRefer, total: decInWindow, pct: pct(ddDeny + ddRefer, decInWindow) } },
           claimCancel: {
             ipr: { allUnpatentable: pAll, classified: fwdClassified, pct: pct(pAll, fwdClassified) },
             epr: { allCancelled: eprAllCancel, anyCancelled: eprAnyCancel, parsed: parsed.length, pct: pct(eprAllCancel, parsed.length) },

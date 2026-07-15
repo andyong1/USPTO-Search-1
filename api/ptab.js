@@ -28,7 +28,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
   upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings,
-  listRecentDeterminations, listPtabFwdBrief } from '../lib/db.js';
+  listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
   fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
@@ -273,6 +273,12 @@ export default async function handler(req, res) {
         }
       } catch { /* best-effort */ }
       out.decisions = { upserted: decProc };
+
+      // 6) Fill blank FWD institution dates from the decisions catalog (in-DB join,
+      // no USPTO calls) — USPTO's metadata institution date is often blank for newer
+      // proceedings even when an Institution Decision document exists.
+      try { out.instBackfill = { updated: await backfillFwdInstitutionDates() }; }
+      catch (e) { out.instBackfill = { error: String(e.message || e) }; }
 
       const [remExtract, remClassify, remDd] = await Promise.all([
         countPtabFwdToExtract(EV), countPtabFwdToClassify(CV), countPtabFwdToCheckDD(DDV, DD_CUTOFF),

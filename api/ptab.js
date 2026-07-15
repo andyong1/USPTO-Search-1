@@ -18,13 +18,16 @@
 //   GET /api/ptab?fscan=1         → filings-trends scan: DAILY counts of ex parte reexams + IPR
 //                                   petitions since 2024 (CRON_SECRET-gated, concurrent, resumable).
 //   GET /api/ptab?filings=1       → read for the /filings-trends page ({ reexam:[], ipr:[], updatedAt }).
+//   GET /api/ptab?compare=1       → EPR-vs-IPR head-to-head aggregates + IPR→reexam patent linkage
+//                                   (joins reexam underlying_patent to ptab_decisions/ptab_fwd patent_number).
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
-  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings } from '../lib/db.js';
+  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings,
+  listRecentDeterminations, listPtabFwdBrief } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
   fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
@@ -394,6 +397,116 @@ export default async function handler(req, res) {
         if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) updatedAt = r.updated_at;
       }
       res.status(200).json({ ...series, updatedAt });
+      return;
+    }
+
+    // ── EPR-vs-IPR head-to-head + IPR→reexam linkage (for /filings-trends) ──
+    // Joins the reexamined patent (reexam_tech_center.underlying_patent) to PTAB
+    // proceedings on the same patent (ptab_decisions + ptab_fwd). PTAB data begins
+    // 2024-01-01, so links to older IPRs aren't visible (surfaced via `coverage`).
+    if (q.compare) {
+      res.setHeader('Cache-Control', 'no-store');
+      const [dets, decisions, fwd, filings] = await Promise.all([
+        listRecentDeterminations(), listPtabDecisions(), listPtabFwdBrief(), listFilings(),
+      ]);
+      const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const has = (x) => x != null && String(x).trim() !== '';
+      const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); };
+      const days = (a, b) => { const A = Date.parse(a), B = Date.parse(b); return (isFinite(A) && isFinite(B) && B >= A) ? Math.round((B - A) / 86400000) : null; };
+      const pct = (n, d) => (d ? +(n / d * 100).toFixed(1) : null);
+
+      // Merge PTAB proceedings (institution/discretionary + FWD) by trial number.
+      const trials = new Map();
+      for (const d of decisions) trials.set(d.trial_number, {
+        trial: d.trial_number, type: d.trial_type, patent: d.patent_number,
+        petition_date: d.petition_date, institution_date: d.institution_date,
+        inst_type: d.inst_type, dd_type: d.dd_type, fwd_date: null, outcome: null,
+      });
+      for (const f of fwd) {
+        const t = trials.get(f.trial_number) || { trial: f.trial_number, type: f.trial_type, patent: f.patent_number, petition_date: f.petition_date, institution_date: f.institution_date, inst_type: null, dd_type: null };
+        t.fwd_date = f.fwd_date; t.outcome = f.outcome;
+        t.patent = t.patent || f.patent_number;
+        t.petition_date = t.petition_date || f.petition_date;
+        t.institution_date = t.institution_date || f.institution_date;
+        trials.set(f.trial_number, t);
+      }
+      const byPatent = new Map();
+      for (const t of trials.values()) { const k = norm(t.patent); if (!k) continue; if (!byPatent.has(k)) byPatent.set(k, []); byPatent.get(k).push(t); }
+
+      // Head-to-head aggregates.
+      const filingsTotals = { reexam: 0, ipr: 0 };
+      for (const r of filings) if (filingsTotals[r.kind] != null) filingsTotals[r.kind] += r.count;
+
+      let instGranted = 0, instDenied = 0, ddDeny = 0, ddRefer = 0;
+      for (const d of decisions) {
+        if (d.inst_type === 'granted') instGranted++; else if (d.inst_type === 'denied') instDenied++;
+        if (d.dd_type === 'deny') ddDeny++; else if (d.dd_type === 'refer') ddRefer++;
+      }
+      const instTot = instGranted + instDenied;
+
+      let pAll = 0, pPartial = 0, pNone = 0, pOther = 0;
+      for (const f of fwd) {
+        if (f.outcome === 'petitioner_all') pAll++; else if (f.outcome === 'partial') pPartial++;
+        else if (f.outcome === 'po_none') pNone++; else if (f.outcome === 'other') pOther++;
+      }
+      const fwdClassified = pAll + pPartial + pNone + pOther;
+      const iprPend = median(fwd.map((f) => days(f.petition_date, f.fwd_date)).filter((x) => x != null));
+
+      let eprOrdered = 0, eprDenied = 0;
+      for (const d of dets) { const t = String(d.determination_type || ''); if (/ordered/i.test(t)) eprOrdered++; else if (/denied/i.test(t)) eprDenied++; }
+      const eprTot = eprOrdered + eprDenied;
+      const parsed = dets.filter((d) => has(d.outcome_summary));
+      let eprAllCancel = 0, eprAnyCancel = 0;
+      for (const d of parsed) if (has(d.claims_cancelled)) { eprAnyCancel++; if (!(has(d.claims_confirmed) || has(d.claims_amended) || has(d.claims_new))) eprAllCancel++; }
+      const eprPend = median(dets.map((d) => days(d.filing_date, d.cert_date)).filter((x) => x != null));
+
+      // IPR→EPR linkage rows (one per reexam determination with a resolved patent
+      // that matches ≥1 PTAB proceeding). Category = most-notable matched status.
+      const rank = { ipr_denied: 0, ipr_fwd: 1, ipr_instituted: 2, ipr_other: 3 };
+      const links = [];
+      for (const d of dets) {
+        const k = norm(d.underlying_patent); if (!k) continue;
+        const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
+        const mapped = iprs.map((t) => {
+          let status;
+          if (t.inst_type === 'denied' || t.dd_type === 'deny' || t.dd_type === 'refer') status = 'ipr_denied';
+          else if (t.fwd_date) status = 'ipr_fwd';
+          else if (t.inst_type === 'granted') status = 'ipr_instituted';
+          else status = 'ipr_other';
+          return { trial: t.trial, type: t.type, status, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date };
+        }).sort((a, b) => rank[a.status] - rank[b.status]);
+        const reexamDate = d.filing_date || d.official_date;
+        const iprEarliest = mapped.map((m) => m.petition_date).filter(Boolean).sort()[0] || null;
+        links.push({
+          appNum: d.application_number, patent: d.underlying_patent,
+          reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
+          requester: d.requester_type, category: mapped[0].status,
+          iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
+        });
+      }
+      links.sort((a, b) => (rank[a.category] - rank[b.category]) || String(b.reexam_date || '').localeCompare(String(a.reexam_date || '')));
+
+      let updatedAt = null;
+      for (const r of filings) if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) updatedAt = r.updated_at;
+
+      res.status(200).json({
+        headToHead: {
+          filings: filingsTotals,
+          institution: {
+            ipr: { granted: instGranted, denied: instDenied, total: instTot, pct: pct(instGranted, instTot) },
+            epr: { ordered: eprOrdered, denied: eprDenied, total: eprTot, pct: pct(eprOrdered, eprTot) },
+          },
+          discretionary: { ipr: { deny: ddDeny, refer: ddRefer, total: decisions.length, pct: pct(ddDeny + ddRefer, decisions.length) } },
+          claimCancel: {
+            ipr: { allUnpatentable: pAll, classified: fwdClassified, pct: pct(pAll, fwdClassified) },
+            epr: { allCancelled: eprAllCancel, anyCancelled: eprAnyCancel, parsed: parsed.length, pct: pct(eprAllCancel, parsed.length) },
+          },
+          pendencyDays: { ipr: iprPend, epr: eprPend },
+        },
+        links,
+        coverage: { reexamsWithPatent: dets.filter((d) => has(d.underlying_patent)).length, reexamsTotal: dets.length, iprTrials: trials.size, linked: links.length },
+        updatedAt,
+      });
       return;
     }
 

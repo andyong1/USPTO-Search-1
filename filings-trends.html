@@ -32,6 +32,30 @@
     .chart-wrap svg .pt { cursor: pointer; }
     .state { text-align: center; padding: 40px 20px; color: #64748b; }
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 12px; line-height: 1.5; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .cmp { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .cmp th, .cmp td { padding: 9px 12px; border-top: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
+    .cmp thead th { border-top: none; background: #edf2f7; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: #4a5568; }
+    .cmp thead th.epr { color: #1a3a6b; } .cmp thead th.ipr { color: #9b2c2c; }
+    .cmp td.metric { font-weight: 600; color: #4a5568; width: 34%; }
+    .cmp .big { font-size: 1.05rem; font-weight: 700; color: #1a3a6b; }
+    .cmp .den { display: block; font-size: 0.72rem; color: #94a3b8; font-weight: 400; margin-top: 1px; }
+    .cmp .na { color: #94a3b8; font-weight: 700; }
+    .cmp-title { font-size: 0.82rem; font-weight: 600; color: #4a5568; margin: 18px 0 4px; }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 10px; }
+    .link-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .link-table th { position: sticky; top: 0; z-index: 1; background: #edf2f7; padding: 8px 10px; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.03em; color: #4a5568; white-space: nowrap; }
+    .link-table td { padding: 8px 10px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    .link-table tr.denied td { background: #fff5f5; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 11px; font-size: 0.71rem; font-weight: 600; white-space: nowrap; }
+    .b-den { background: #fed7d7; color: #9b2c2c; } .b-fwd { background: #e9d8fd; color: #553c9a; }
+    .b-inst { background: #feebc8; color: #9c4221; } .b-other { background: #e2e8f0; color: #4a5568; }
+    .b-po { background: #c6f6d5; color: #276749; }
+    .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+    .ipr-item .dt { font-size: 0.72rem; color: #94a3b8; }
+    .pipe-summary { font-size: 0.86rem; color: #2d3748; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; line-height: 1.5; }
+    .pipe-summary strong { color: #9b2c2c; }
     footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
     footer a { color: #1a3a6b; text-decoration: none; }
   </style>
@@ -68,6 +92,18 @@
     <div class="total-lbl" id="ipr-total-lbl">total in selected period</div>
     <div class="chart-wrap" id="ipr-chart"><div class="state">Loading…</div></div>
     <p class="disclaimer" id="note">Counts are cached daily; the current day/period may be partial. Aggregated by day, week, or month depending on the selected span. Compiled from USPTO data — informational only.</p>
+  </div>
+
+  <div class="card" id="h2h-card">
+    <h2>Ex Parte Reexamination vs. IPR — Head to Head</h2>
+    <div class="sub">Two routes to challenge an issued patent, compared across the data this site tracks. IPR figures cover proceedings since Jan 1, 2024; reexam figures since determination tracking began.</div>
+    <div id="h2h-body"><div class="state">Loading…</div></div>
+  </div>
+
+  <div class="card" id="pipeline-card">
+    <h2>IPR → Reexamination Pipeline</h2>
+    <div class="sub">Reexaminations whose underlying patent also faced a PTAB proceeding (IPR/PGR) on the same patent — surfacing patents where the PTAB challenge was <strong>denied</strong> before reexamination was pursued.</div>
+    <div id="pipeline-body"><div class="state">Loading…</div></div>
   </div>
 
   <footer><a href="/privacy">Privacy Policy</a></footer>
@@ -195,6 +231,74 @@ function wireControls(prefix, color, unit) {
     if (data.updatedAt) el('note').textContent += ' Last refreshed ' + new Date(data.updatedAt).toLocaleDateString('en-US') + '.';
   } catch (e) {
     for (const id of ['reexam-chart', 'ipr-chart']) el(id).innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+  }
+})();
+
+// ── EPR-vs-IPR head-to-head + IPR→reexam pipeline ──
+function fmtPct(o) { return o && o.pct != null ? o.pct + '%' : '—'; }
+function cell(big, den) { return `<span class="big">${esc(big)}</span>${den ? `<span class="den">${esc(den)}</span>` : ''}`; }
+
+function renderH2H(h) {
+  const inst = h.institution, cc = h.claimCancel, dd = h.discretionary, pend = h.pendencyDays, f = h.filings;
+  const rows = [
+    ['Filings tracked', cell((f.reexam || 0).toLocaleString(), 'ex parte reexams'), cell((f.ipr || 0).toLocaleString(), 'IPR petitions')],
+    ['Instituted / ordered', cell(fmtPct(inst.epr), inst.epr.total ? `${inst.epr.ordered} of ${inst.epr.total} determinations` : 'no data'), cell(fmtPct(inst.ipr), inst.ipr.total ? `${inst.ipr.granted} of ${inst.ipr.total} decisions` : 'no data')],
+    ['All claims cancelled / unpatentable', cell(fmtPct(cc.epr), cc.epr.parsed ? `${cc.epr.allCancelled} of ${cc.epr.parsed} certificates` : 'no data'), cell(fmtPct(cc.ipr), cc.ipr.classified ? `${cc.ipr.allUnpatentable} of ${cc.ipr.classified} FWDs` : 'no data')],
+    ['Discretionary denial', `<span class="na">None</span><span class="den">not applicable to reexam</span>`, cell(fmtPct(dd.ipr), dd.ipr.total ? `${dd.ipr.deny + dd.ipr.refer} of ${dd.ipr.total} decisions` : 'no data')],
+    ['Median pendency', cell(pend.epr != null ? pend.epr + ' days' : '—', 'filing → certificate'), cell(pend.ipr != null ? pend.ipr + ' days' : '—', 'petition → FWD')],
+  ];
+  const strat = [
+    ['Estoppel', 'None', '§315(e): petitioner estopped on grounds raised or that reasonably could have been raised'],
+    ['1-year time bar', 'None', '§315(b): barred >1 yr after service of an infringement complaint'],
+    ['Discretionary denial', 'None', 'Fintiv / §314(a) / §325(d) / "settled expectations"'],
+    ['Who may request', 'Anyone (incl. anonymously) or the patent owner', 'Petitioner; real party in interest must be named'],
+    ['Requester role after filing', 'Limited — proceeding is ex parte', 'Full adversarial party'],
+    ['Decided by', 'Central Reexamination Unit examiner', 'Panel of APJs'],
+    ['Appeal', 'Patent owner only → Fed. Cir.', 'Either party → Fed. Cir.'],
+  ];
+  const head = `<thead><tr><th>Metric</th><th class="epr">Ex Parte Reexam</th><th class="ipr">IPR</th></tr></thead>`;
+  const numTable = `<table class="cmp">${head}<tbody>${rows.map((r) => `<tr><td class="metric">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</tbody></table>`;
+  const stratHead = `<thead><tr><th>Factor</th><th class="epr">Ex Parte Reexam</th><th class="ipr">IPR</th></tr></thead>`;
+  const stratTable = `<div class="cmp-title">Strategic differences</div><table class="cmp">${stratHead}<tbody>${strat.map((r) => `<tr><td class="metric">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')}</tbody></table>`;
+  el('h2h-body').innerHTML = numTable + stratTable + `<p class="disclaimer">Rates are computed from this site's tracked data (not official USPTO totals); denominators are shown. "All claims cancelled/unpatentable" compares reexam certificates cancelling every claim against IPR final written decisions finding all instituted claims unpatentable.</p>`;
+}
+
+function iprBadge(x) {
+  if (x.dd_type === 'deny') return '<span class="badge b-den">Discretionary denial</span>';
+  if (x.dd_type === 'refer') return '<span class="badge b-den">Discretionary: referred</span>';
+  if (x.inst_type === 'denied') return '<span class="badge b-den">Institution denied</span>';
+  if (x.fwd_date) { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-other', 'FWD issued'] }; const y = m[x.outcome] || ['b-other', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
+  if (x.inst_type === 'granted') return '<span class="badge b-inst">Instituted</span>';
+  return '<span class="badge b-other">Petition filed</span>';
+}
+function patNorm(p) { return String(p || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); }
+
+function renderPipeline(data) {
+  const links = data.links || [], cov = data.coverage || {};
+  const covNote = `Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams; PTAB data begins Jan 1, 2024, so earlier IPRs aren't linked.`;
+  if (!links.length) { el('pipeline-body').innerHTML = `<div class="state">No reexaminations matched a tracked PTAB proceeding yet.</div><p class="disclaimer">${esc(covNote)}</p>`; return; }
+  const denied = links.filter((l) => l.category === 'ipr_denied').length;
+  const summary = `<div class="pipe-summary"><strong>${links.length}</strong> reexamination${links.length === 1 ? '' : 's'} linked to a PTAB proceeding on the same patent — <strong>${denied}</strong> where the PTAB challenge was denied (institution or discretionary) before reexam. <span style="color:#64748b">${esc(covNote)}</span></div>`;
+  const rows = links.map((l) => {
+    const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
+    const rx = `<a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a><div class="dt">${esc((l.reexam_type || '').replace(/_/g, ' '))}${l.reexam_date ? ' · ' + esc(l.reexam_date) : ''}</div>`;
+    const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(x.fwd_date || x.institution_date || x.petition_date || '')}</span></div>`).join('');
+    const seq = l.iprFirst === true ? 'IPR first' : l.iprFirst === false ? 'reexam first' : '—';
+    return `<tr class="${l.category === 'ipr_denied' ? 'denied' : ''}"><td>${patCell}</td><td>${rx}</td><td>${esc((l.requester || '').replace(/_/g, ' ') || '—')}</td><td>${iprs}</td><td class="dt">${seq}</td></tr>`;
+  }).join('');
+  el('pipeline-body').innerHTML = summary + `<div class="table-wrap"><table class="link-table"><thead><tr><th>Patent</th><th>Reexamination</th><th>Requester</th><th>Prior / parallel PTAB proceeding(s)</th><th>Sequence</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+(async () => {
+  try {
+    const res = await fetch('/api/ptab?compare=1');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderH2H(data.headToHead);
+    renderPipeline(data);
+  } catch (e) {
+    el('h2h-body').innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
+    el('pipeline-body').innerHTML = '';
   }
 })();
 </script>

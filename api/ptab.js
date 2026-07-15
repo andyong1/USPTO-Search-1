@@ -19,8 +19,11 @@
 //                                   petitions since 2024 (CRON_SECRET-gated, concurrent, resumable).
 //   GET /api/ptab?filings=1       → read for the /filings-trends page ({ reexam:[], ipr:[], updatedAt }).
 //   GET /api/ptab?compare=1       → EPR-vs-IPR head-to-head aggregates + IPR→reexam patent linkage
-//                                   (joins reexam underlying_patent to ptab_decisions/ptab_fwd patent_number).
+//                                   (joins reexam underlying_patent to ptab_decisions/ptab_fwd + patent_proceedings).
 //                                   &since=YYYY-MM-DD sets the head-to-head window lower bound (default 2025-01-01).
+//   GET /api/ptab?pscan=1         → patent-proceedings scan: for each reexam's underlying patent, pull EVERY PTAB
+//                                   proceeding on that patent (all AIA years) so the pipeline links pre-2024 IPRs.
+//                                   CRON_SECRET-gated, resumable, ~22s-bounded; re-checks each patent ~every 14 days.
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
@@ -28,10 +31,12 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
   upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings,
-  listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates } from '../lib/db.js';
+  listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates,
+  upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
+  markPatentProceedingsScanned, patentProceedingsCoverage } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
-  fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
+  fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, fetchProceedingsByPatent, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
@@ -393,6 +398,33 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Patent-proceedings scan (all-AIA-year PTAB proceedings per reexam patent) ──
+    // Resumable + time-bounded. Iterates reexam underlying-patents (least-recently
+    // scanned first), pulls every PTAB proceeding on each patent, and upserts them.
+    if (q.pscan) {
+      if (!gate(req, res)) return;
+      const STALE = new Date(Date.now() - 14 * 86400000).toISOString(); // re-check each patent ~every 14 days
+      const deadline = Date.now() + 22000;
+      const BATCH = 400;
+      const patents = await getPatentsToScanForProceedings(BATCH, STALE);
+      let processed = 0, upserted = 0, i = 0; const errors = [];
+      async function worker() {
+        while (i < patents.length && Date.now() < deadline) {
+          const patent = patents[i++];
+          try {
+            const rows = await fetchProceedingsByPatent(patent);
+            for (const r of rows) { try { await upsertPatentProceeding(r); upserted++; } catch { /* skip bad row */ } }
+            await markPatentProceedingsScanned(patent);
+            processed++;
+          } catch (e) { if (errors.length < 6) errors.push({ patent, error: String(e.message || e) }); }
+        }
+      }
+      await Promise.all(Array.from({ length: 4 }, worker));
+      const remaining = patents.length - processed;
+      res.status(200).json({ ok: true, mode: 'pscan', processed, upserted, remaining, done: remaining <= 0 && patents.length < BATCH, errors });
+      return;
+    }
+
     // ── Filings trends read (daily series per kind) ──
     if (q.filings) {
       res.setHeader('Cache-Control', 'no-store');
@@ -413,8 +445,9 @@ export default async function handler(req, res) {
     // 2024-01-01, so links to older IPRs aren't visible (surfaced via `coverage`).
     if (q.compare) {
       res.setHeader('Cache-Control', 'no-store');
-      const [dets, decisions, fwd, filings] = await Promise.all([
+      const [dets, decisions, fwd, filings, patentProcs, ppCov] = await Promise.all([
         listRecentDeterminations(), listPtabDecisions(), listPtabFwdBrief(), listFilings(),
+        listPatentProceedings(), patentProceedingsCoverage(),
       ]);
       const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const has = (x) => x != null && String(x).trim() !== '';
@@ -436,6 +469,17 @@ export default async function handler(req, res) {
         t.petition_date = t.petition_date || f.petition_date;
         t.institution_date = t.institution_date || f.institution_date;
         trials.set(f.trial_number, t);
+      }
+      // Fold in all-AIA-year proceedings (incl. pre-2024) from the per-patent scan.
+      // Adds trialStatusCategory as `status`; never clears the richer 2024+ fields.
+      for (const pp of patentProcs) {
+        const t = trials.get(pp.trial_number) || { trial: pp.trial_number, type: pp.trial_type, patent: pp.patent_number, petition_date: pp.petition_date, institution_date: pp.institution_date, inst_type: null, dd_type: null, fwd_date: null, outcome: null };
+        t.status = pp.status;
+        t.type = t.type || pp.trial_type;
+        t.patent = t.patent || pp.patent_number;
+        t.petition_date = t.petition_date || pp.petition_date;
+        t.institution_date = t.institution_date || pp.institution_date;
+        trials.set(pp.trial_number, t);
       }
       const byPatent = new Map();
       for (const t of trials.values()) { const k = norm(t.patent); if (!k) continue; if (!byPatent.has(k)) byPatent.set(k, []); byPatent.get(k).push(t); }
@@ -479,25 +523,29 @@ export default async function handler(req, res) {
 
       // IPR→EPR linkage rows (one per reexam determination with a resolved patent
       // that matches ≥1 PTAB proceeding). Category = most-notable matched status.
-      const rank = { ipr_denied: 0, ipr_fwd: 1, ipr_instituted: 2, ipr_other: 3 };
+      // Category from the richer 2024+ fields when present, else the all-years
+      // trialStatusCategory (`status`) captured by the per-patent scan.
+      const rank = { ipr_denied: 0, ipr_fwd: 1, ipr_instituted: 2, ipr_settled: 3, ipr_other: 4 };
       const links = [];
       for (const d of dets) {
         const k = norm(d.underlying_patent); if (!k) continue;
         const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
         const mapped = iprs.map((t) => {
-          let status;
-          if (t.inst_type === 'denied' || t.dd_type === 'deny' || t.dd_type === 'refer') status = 'ipr_denied';
-          else if (t.fwd_date) status = 'ipr_fwd';
-          else if (t.inst_type === 'granted') status = 'ipr_instituted';
-          else status = 'ipr_other';
-          return { trial: t.trial, type: t.type, status, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date };
-        }).sort((a, b) => rank[a.status] - rank[b.status]);
+          const st = t.status || '';
+          let cat;
+          if (t.inst_type === 'denied' || t.dd_type === 'deny' || t.dd_type === 'refer' || st === 'Institution Denied' || st === 'Discretionary Denial') cat = 'ipr_denied';
+          else if (t.fwd_date || st === 'Final Written Decision') cat = 'ipr_fwd';
+          else if (t.inst_type === 'granted' || st === 'Trial Instituted') cat = 'ipr_instituted';
+          else if (st === 'Terminated-Settled' || st === 'Terminated') cat = 'ipr_settled';
+          else cat = 'ipr_other';
+          return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date };
+        }).sort((a, b) => rank[a.cat] - rank[b.cat]);
         const reexamDate = d.filing_date || d.official_date;
         const iprEarliest = mapped.map((m) => m.petition_date).filter(Boolean).sort()[0] || null;
         links.push({
           appNum: d.application_number, patent: d.underlying_patent,
           reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
-          requester: d.requester_type, category: mapped[0].status,
+          requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
         });
       }
@@ -522,7 +570,7 @@ export default async function handler(req, res) {
           pendencyDays: { ipr: iprPend, epr: eprPend, iprN: iprPendArr.length, eprN: eprPendArr.length },
         },
         links,
-        coverage: { reexamsWithPatent: dets.filter((d) => has(d.underlying_patent)).length, reexamsTotal: dets.length, iprTrials: trials.size, linked: links.length },
+        coverage: { reexamsWithPatent: dets.filter((d) => has(d.underlying_patent)).length, reexamsTotal: dets.length, iprTrials: trials.size, linked: links.length, patentsScanned: ppCov.scanned, patentsTotal: ppCov.total },
         updatedAt,
       });
       return;

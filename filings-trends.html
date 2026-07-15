@@ -275,11 +275,17 @@ function renderH2H(h) {
 }
 
 function iprBadge(x) {
-  if (x.dd_type === 'deny') return '<span class="badge b-den">Discretionary denial</span>';
+  // Prefer the richer 2024+ fields; fall back to trialStatusCategory (statusText)
+  // for proceedings that come only from the all-years per-patent scan.
+  const s = x.statusText || '';
+  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
   if (x.dd_type === 'refer') return '<span class="badge b-den">Discretionary: referred</span>';
-  if (x.inst_type === 'denied') return '<span class="badge b-den">Institution denied</span>';
-  if (x.fwd_date) { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-other', 'FWD issued'] }; const y = m[x.outcome] || ['b-other', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
-  if (x.inst_type === 'granted') return '<span class="badge b-inst">Instituted</span>';
+  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
+  if (x.fwd_date || s === 'Final Written Decision') { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-fwd', 'FWD issued'] }; const y = m[x.outcome] || ['b-fwd', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
+  if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
+  if (s === 'Terminated-Settled') return '<span class="badge b-other">Settled</span>';
+  if (s === 'Terminated') return '<span class="badge b-other">Terminated</span>';
+  if (s === 'Pending') return '<span class="badge b-other">Petition pending</span>';
   return '<span class="badge b-other">Petition filed</span>';
 }
 function patNorm(p) { return String(p || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); }
@@ -294,7 +300,7 @@ function rxBadge(type) {
 function renderPipeline(data) {
   const links = (data.links || []).slice().sort((a, b) => ymd(b.reexam_date).localeCompare(ymd(a.reexam_date)));
   const cov = data.coverage || {};
-  const covNote = `Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams; PTAB data begins Jan 1, 2024, so earlier IPRs aren't linked.`;
+  const covNote = `Prior/parallel PTAB proceedings are matched across all AIA years (2012–present); patents scanned ${cov.patentsScanned || 0} of ${cov.patentsTotal || 0}. Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams.`;
   if (!links.length) { el('pipeline-body').innerHTML = `<div class="state">No reexaminations matched a tracked PTAB proceeding yet.</div><p class="disclaimer">${esc(covNote)}</p>`; return; }
   const denied = links.filter((l) => l.category === 'ipr_denied');
   const deniedGranted = denied.filter((l) => /ordered/i.test(l.reexam_type || '')).length;

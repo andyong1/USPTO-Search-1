@@ -288,7 +288,7 @@ function buildKpi(list) {
     ${card(list.length, 'Total Determinations')}
     ${card(pct(ordered, tot) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
     ${card(pct(denied, tot) + '%', 'Denied', denied + ' of ' + tot)}
-    ${card(withPtab.length ? pct(withPtabOrd, withPtab.length) + '%' : '—', 'Grant Rate · Prior/Parallel PTAB', withPtab.length ? withPtabOrd + ' of ' + withPtab.length : 'no matches')}
+    ${card(withPtab.length ? pct(withPtabOrd, withPtab.length) + '%' : '—', 'Grant Rate · Prior/Parallel PTAB Proceeding', withPtab.length ? withPtabOrd + ' of ' + withPtab.length : 'no matches')}
     ${card(withDd.length ? pct(withDdOrd, withDd.length) + '%' : '—', 'Grant Rate · Prior Discretionary Denial', withDd.length ? withDdOrd + ' of ' + withDd.length : 'no matches')}
   </div>`;
 }

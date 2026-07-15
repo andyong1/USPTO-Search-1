@@ -24,6 +24,7 @@ import {
   getDocEventsByOfficialDate,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
+  getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
@@ -34,7 +35,7 @@ import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fet
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
 // Metadata-only helpers — import from the light module so this cron's bundle
 // doesn't pull in pdf-lib / pdf-parse / OCR (which live in lib/ptab.js).
-import { fetchFwdPage, fetchInstitutionPage, fetchDdPage } from '../../lib/ptab-fetch.js';
+import { fetchFwdPage, fetchInstitutionPage, fetchDdPage, fetchProceedingsByPatent } from '../../lib/ptab-fetch.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
@@ -435,6 +436,28 @@ export default async function handler(req, res) {
       petitionRefresh = { checked: apps.length, refreshed };
     } catch (e) { petitionRefresh = { error: String(e.message || e) }; }
 
+    // 3i) Pull all-AIA-year PTAB proceedings for a batch of reexam patents (least-
+    // recently-scanned first) so the IPR→reexam pipeline stays current. Resumable;
+    // each patent is re-checked ~every 14 days, and new patents are picked up as
+    // their reexams resolve an underlying_patent above.
+    let patentProceedings = { skipped: true };
+    try {
+      const STALE = new Date(Date.now() - 14 * 86400000).toISOString();
+      const ppDeadline = Math.min(Date.now() + 10000, runDeadline);
+      const patents = await getPatentsToScanForProceedings(60, STALE);
+      let checked = 0, upserted = 0;
+      for (const patent of patents) {
+        if (Date.now() > ppDeadline) break;
+        try {
+          const prcs = await fetchProceedingsByPatent(patent);
+          for (const r of prcs) { try { await upsertPatentProceeding(r); upserted++; } catch { /* skip bad row */ } }
+          await markPatentProceedingsScanned(patent);
+          checked++;
+        } catch { /* retry next run */ }
+      }
+      patentProceedings = { checked, upserted, due: patents.length };
+    } catch (e) { patentProceedings = { error: String(e.message || e) }; }
+
     // Counts so you can right-size the batch: remaining = still-to-scan this cycle.
     const counts = await reexamCounts();
 
@@ -455,6 +478,7 @@ export default async function handler(req, res) {
       techCenters,
       petition325d,
       petitionRefresh,
+      patentProceedings,
       errors,
     });
   } catch (err) {

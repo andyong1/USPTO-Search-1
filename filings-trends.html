@@ -253,9 +253,9 @@ function renderH2H(h) {
   const rows = [
     ['Filings tracked', cell((f.reexam || 0).toLocaleString(), 'ex parte reexams'), cell((f.ipr || 0).toLocaleString(), 'IPR petitions')],
     ['Instituted / ordered', cell(fmtPct(inst.epr), inst.epr.total ? `${inst.epr.ordered} of ${inst.epr.total} determinations` : 'no data'), cell(fmtPct(inst.ipr), inst.ipr.total ? `${inst.ipr.granted} of ${inst.ipr.total} decisions` : 'no data')],
-    ['All claims cancelled / unpatentable', cell(fmtPct(cc.epr), cc.epr.parsed ? `${cc.epr.allCancelled} of ${cc.epr.parsed} certificates` : 'no data'), cell(fmtPct(cc.ipr), cc.ipr.classified ? `${cc.ipr.allUnpatentable} of ${cc.ipr.classified} FWDs` : 'no data')],
     ['Discretionary denial', `<span class="na">None</span><span class="den">not applicable to reexam</span>`, cell(fmtPct(dd.ipr), dd.ipr.total ? `${dd.ipr.deny + dd.ipr.refer} of ${dd.ipr.total} decisions` : 'no data')],
-    ['Median pendency', cell(pend.epr != null ? pend.epr + ' days' : '—', 'filing → certificate'), cell(pend.ipr != null ? pend.ipr + ' days' : '—', 'petition → FWD')],
+    ['All claims cancelled / unpatentable', cell(fmtPct(cc.epr), cc.epr.parsed ? `${cc.epr.allCancelled} of ${cc.epr.parsed} certificates` : 'no data'), cell(fmtPct(cc.ipr), cc.ipr.classified ? `${cc.ipr.allUnpatentable} of ${cc.ipr.classified} FWDs` : 'no data')],
+    ['Median pendency', cell(pend.epr != null ? pend.epr + ' days' : '—', `filing → certificate · n=${pend.eprN || 0}`), cell(pend.ipr != null ? pend.ipr + ' days' : '—', `petition → FWD · n=${pend.iprN || 0}`)],
   ];
   const strat = [
     ['Estoppel', 'None', '§315(e): petitioner estopped on grounds raised or that reasonably could have been raised'],

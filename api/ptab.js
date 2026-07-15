@@ -465,7 +465,8 @@ export default async function handler(req, res) {
         else if (f.outcome === 'po_none') pNone++; else if (f.outcome === 'other') pOther++;
       }
       const fwdClassified = pAll + pPartial + pNone + pOther;
-      const iprPend = median(fwd.filter((f) => inWin(f.fwd_date)).map((f) => days(f.petition_date, f.fwd_date)).filter((x) => x != null));
+      const iprPendArr = fwd.filter((f) => inWin(f.fwd_date)).map((f) => days(f.petition_date, f.fwd_date)).filter((x) => x != null);
+      const iprPend = median(iprPendArr);
 
       let eprOrdered = 0, eprDenied = 0;
       for (const d of dets) { if (!inWin(d.official_date)) continue; const t = String(d.determination_type || ''); if (/ordered/i.test(t)) eprOrdered++; else if (/denied/i.test(t)) eprDenied++; }
@@ -473,7 +474,8 @@ export default async function handler(req, res) {
       const parsed = dets.filter((d) => has(d.outcome_summary) && inWin(d.cert_date));
       let eprAllCancel = 0, eprAnyCancel = 0;
       for (const d of parsed) if (has(d.claims_cancelled)) { eprAnyCancel++; if (!(has(d.claims_confirmed) || has(d.claims_amended) || has(d.claims_new))) eprAllCancel++; }
-      const eprPend = median(dets.filter((d) => inWin(d.cert_date)).map((d) => days(d.filing_date, d.cert_date)).filter((x) => x != null));
+      const eprPendArr = dets.filter((d) => inWin(d.cert_date)).map((d) => days(d.filing_date, d.cert_date)).filter((x) => x != null);
+      const eprPend = median(eprPendArr);
 
       // IPR→EPR linkage rows (one per reexam determination with a resolved patent
       // that matches ≥1 PTAB proceeding). Category = most-notable matched status.
@@ -517,7 +519,7 @@ export default async function handler(req, res) {
             ipr: { allUnpatentable: pAll, classified: fwdClassified, pct: pct(pAll, fwdClassified) },
             epr: { allCancelled: eprAllCancel, anyCancelled: eprAnyCancel, parsed: parsed.length, pct: pct(eprAllCancel, parsed.length) },
           },
-          pendencyDays: { ipr: iprPend, epr: eprPend },
+          pendencyDays: { ipr: iprPend, epr: eprPend, iprN: iprPendArr.length, eprN: eprPendArr.length },
         },
         links,
         coverage: { reexamsWithPatent: dets.filter((d) => has(d.underlying_patent)).length, reexamsTotal: dets.length, iprTrials: trials.size, linked: links.length },

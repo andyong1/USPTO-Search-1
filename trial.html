@@ -136,6 +136,18 @@ function fileLink(d, download) {
 // so fall back to the date of the "Institution Decision" document in the docket.
 function instDecisionDoc() { return DOCS.find((d) => /institution\s+decision/i.test(d.type || d.title || '')); }
 function institutionDate() { return META.institutionDate || (instDecisionDoc() || {}).filingDate || ''; }
+function institutionOutcome() { const d = instDecisionDoc(); const m = d && String(d.type || d.title).match(/Institution\s+Decision\s*:?\s*([A-Za-z]+)/i); return m ? m[1].toLowerCase() : ''; }
+// USPTO's trialStatusCategory lags for newer proceedings (still "Pending" after an
+// institution decision has issued). Reflect a known grant/denial, but never override
+// a more specific status (settled / terminated / FWD).
+function effectiveStatus() {
+  const s = META.status || '', io = institutionOutcome();
+  if (!s || /pending/i.test(s)) {
+    if (/grant/i.test(io)) return 'Trial Instituted';
+    if (/den/i.test(io)) return 'Institution Denied';
+  }
+  return s;
+}
 
 // Derive key milestones for the timeline from metadata + the docket.
 function milestones() {
@@ -175,7 +187,8 @@ function headerCard() {
     ? `<span class="badge ${OUTCOME[STORED.outcome].cls}">${OUTCOME[STORED.outcome].label}</span>` : '';
   const ddBadge = STORED && STORED.dd_decision && !['none','error',''].includes(String(STORED.dd_decision).toLowerCase())
     ? `<span class="badge o-dd">Disc. decision: ${esc(titleCase(STORED.dd_decision))}</span>` : '';
-  const statusBadge = m.status ? `<span class="badge ${statusClass(m.status)}">${esc(m.status)}</span>` : '';
+  const es = effectiveStatus();
+  const statusBadge = es ? `<span class="badge ${statusClass(es)}">${esc(es)}</span>` : '';
   const cell = (k, v) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const fwdUrl = STORED && STORED.fwd_pdf_url;
   const fwdLinks = fwdUrl

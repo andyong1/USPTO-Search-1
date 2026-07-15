@@ -525,17 +525,21 @@ export default async function handler(req, res) {
       // that matches ≥1 PTAB proceeding). Category = most-notable matched status.
       // Category from the richer 2024+ fields when present, else the all-years
       // trialStatusCategory (`status`) captured by the per-patent scan.
-      const rank = { ipr_denied: 0, ipr_fwd: 1, ipr_instituted: 2, ipr_settled: 3, ipr_other: 4 };
+      const rank = { ipr_denied: 0, ipr_fwd: 1, ipr_instituted: 2, ipr_referred: 3, ipr_settled: 4, ipr_other: 5 };
       const links = [];
       for (const d of dets) {
         const k = norm(d.underlying_patent); if (!k) continue;
         const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
         const mapped = iprs.map((t) => {
           const st = t.status || '';
+          // Reflect the MOST RECENT decision: FWD > institution > discretionary.
+          // A "refer" is superseded once the Board institutes, and is not a denial.
           let cat;
-          if (t.inst_type === 'denied' || t.dd_type === 'deny' || t.dd_type === 'refer' || st === 'Institution Denied' || st === 'Discretionary Denial') cat = 'ipr_denied';
-          else if (t.fwd_date || st === 'Final Written Decision') cat = 'ipr_fwd';
+          if (t.fwd_date || st === 'Final Written Decision') cat = 'ipr_fwd';
           else if (t.inst_type === 'granted' || st === 'Trial Instituted') cat = 'ipr_instituted';
+          else if (t.inst_type === 'denied' || st === 'Institution Denied') cat = 'ipr_denied';
+          else if (t.dd_type === 'deny' || st === 'Discretionary Denial') cat = 'ipr_denied';
+          else if (t.dd_type === 'refer') cat = 'ipr_referred';
           else if (st === 'Terminated-Settled' || st === 'Terminated') cat = 'ipr_settled';
           else cat = 'ipr_other';
           return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date };

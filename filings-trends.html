@@ -278,11 +278,13 @@ function iprBadge(x) {
   // Prefer the richer 2024+ fields; fall back to trialStatusCategory (statusText)
   // for proceedings that come only from the all-years per-patent scan.
   const s = x.statusText || '';
-  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
-  if (x.dd_type === 'refer') return '<span class="badge b-den">Discretionary: referred</span>';
-  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
+  // Most recent decision wins: FWD > institution > discretionary. A "refer" is
+  // superseded once the Board institutes, and is not a denial (neutral colour).
   if (x.fwd_date || s === 'Final Written Decision') { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-fwd', 'FWD issued'] }; const y = m[x.outcome] || ['b-fwd', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
   if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
+  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
+  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
+  if (x.dd_type === 'refer') return '<span class="badge b-other">Discretionary: referred</span>';
   if (s === 'Terminated-Settled') return '<span class="badge b-other">Settled</span>';
   if (s === 'Terminated') return '<span class="badge b-other">Terminated</span>';
   if (s === 'Pending') return '<span class="badge b-other">Petition pending</span>';

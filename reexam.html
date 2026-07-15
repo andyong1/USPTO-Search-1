@@ -41,6 +41,12 @@
     .badge.po { background: #bee3f8; color: #2c5282; }
     .badge.tp { background: #feebc8; color: #9c4221; }
     .badge.dir { background: #b2f5ea; color: #285e61; }
+    .badge.b-den { background: #fed7d7; color: #9b2c2c; }
+    .badge.b-fwd { background: #e9d8fd; color: #553c9a; }
+    .badge.b-inst { background: #feebc8; color: #9c4221; }
+    .badge.b-other { background: #e2e8f0; color: #4a5568; }
+    .badge.b-po { background: #c6f6d5; color: #276749; }
+    .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
     .state { text-align: center; padding: 40px 20px; color: #718096; }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 6px 0 8px; }
     th.sortable { cursor: pointer; user-select: none; }
@@ -53,7 +59,7 @@
     }
     .chart-wrap svg .pt { cursor: pointer; }
     /* KPI summary strip */
-    .kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 22px; }
     @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr 1fr; } }
     .filter-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 16px; }
     .filter-bar .fb-group { display: flex; align-items: center; gap: 8px; }
@@ -263,25 +269,27 @@ function withinDays(raw, days) {
 // KPI summary strip: headline figures for the currently-selected period/art unit.
 function buildKpi(list) {
   const el = document.getElementById('stats-kpi');
-  const ordered = list.filter((d) => /ordered/i.test(d.determination_type || '')).length;
+  const isOrdered = (d) => /ordered/i.test(d.determination_type || '');
+  const ordered = list.filter(isOrdered).length;
   const denied = list.filter((d) => /denied/i.test(d.determination_type || '')).length;
   const tot = ordered + denied || list.length;
-  const pct = (n) => (tot ? (n / tot * 100).toFixed(1) : '0.0');
-  const days = [];
-  for (const d of list) {
-    const f = parseDate(d.filing_date), o = parseDate(d.official_date);
-    if (!isNaN(f) && !isNaN(o) && o >= f) days.push((o - f) / 86400000);
-  }
-  days.sort((a, b) => a - b);
-  const medPend = days.length ? Math.round(days[Math.floor(days.length / 2)]) : null;
-  const mo = (d) => (d / 30.44).toFixed(1); // days → months (avg month ≈ 30.44 days)
+  const pct = (n, d) => (d ? (n / d * 100).toFixed(1) : '0.0');
+  // Conditional grant rates: of reexams whose patent had a prior/parallel PTAB
+  // proceeding — and specifically a prior discretionary denial — how many were
+  // ordered. Populated once the /api/ptab?compare=1 links load.
+  const withPtab = list.filter((d) => linkByApp.has(d.application_number));
+  const withPtabOrd = withPtab.filter(isOrdered).length;
+  const isDiscDenial = (x) => x.dd_type === 'deny' || x.statusText === 'Discretionary Denial';
+  const withDd = list.filter((d) => { const l = linkByApp.get(d.application_number); return l && l.iprs && l.iprs.some(isDiscDenial); });
+  const withDdOrd = withDd.filter(isOrdered).length;
 
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
     ${card(list.length, 'Total Determinations')}
-    ${card(pct(ordered) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
-    ${card(pct(denied) + '%', 'Denied', denied + ' of ' + tot)}
-    ${`<div class="kpi"><div class="num">${medPend != null ? medPend : '—'}</div>${medPend != null ? `<div class="sub" style="color:#718096;font-weight:600">≈ ${mo(medPend)} months</div>` : ''}<div class="lbl">Median Pendency to Determination</div><div class="sub">${medPend != null ? 'days (n=' + days.length + ')' : 'no data'}</div></div>`}
+    ${card(pct(ordered, tot) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
+    ${card(pct(denied, tot) + '%', 'Denied', denied + ' of ' + tot)}
+    ${card(withPtab.length ? pct(withPtabOrd, withPtab.length) + '%' : '—', 'Grant Rate · Prior/Parallel PTAB', withPtab.length ? withPtabOrd + ' of ' + withPtab.length : 'no matches')}
+    ${card(withDd.length ? pct(withDdOrd, withDd.length) + '%' : '—', 'Grant Rate · Prior Discretionary Denial', withDd.length ? withDdOrd + ' of ' + withDd.length : 'no matches')}
   </div>`;
 }
 
@@ -593,6 +601,29 @@ function requesterCell(d) {
   return '<span class="ext">—</span>';
 }
 
+// Prior / parallel PTAB proceedings on the reexamined patent — populated from
+// /api/ptab?compare=1 (keyed by reexam control no.). Badge reflects the most
+// recent decision (FWD > institution > discretionary); a referral is not a denial.
+let linkByApp = new Map();
+function ymd(s) { const m = String(s || '').match(/\d{4}-\d{2}-\d{2}/); return m ? m[0] : ''; }
+function iprBadge(x) {
+  const s = x.statusText || '';
+  if (x.fwd_date || s === 'Final Written Decision') { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-fwd', 'FWD issued'] }; const y = m[x.outcome] || ['b-fwd', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
+  if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
+  if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
+  if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
+  if (x.dd_type === 'refer') return '<span class="badge b-other">Discretionary: referred</span>';
+  if (s === 'Terminated-Settled') return '<span class="badge b-other">Settled</span>';
+  if (s === 'Terminated') return '<span class="badge b-other">Terminated</span>';
+  if (s === 'Pending') return '<span class="badge b-other">Petition pending</span>';
+  return '<span class="badge b-other">Petition filed</span>';
+}
+function ptabCell(d) {
+  const link = linkByApp.get(d.application_number || '');
+  if (!link || !link.iprs || !link.iprs.length) return '<span class="ext">—</span>';
+  return link.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="ext" style="margin-left:0;font-size:0.72rem">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');
+}
+
 function renderTable() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
@@ -635,6 +666,7 @@ function renderTable() {
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td>${tcCell(d.tech_center)}</td>
       <td>${requesterCell(d)}</td>
+      <td>${ptabCell(d)}</td>
     </tr>`;
   }).join('');
 
@@ -647,6 +679,7 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('group_art_unit')}" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester_type')}" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
+      <th>Prior / parallel PTAB proceeding(s)</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
   if (total > TABLE_PAGE_SIZE) body.innerHTML += pagerHtml(tablePage, pageCount, start, end, total);
@@ -804,6 +837,14 @@ function applyFilters() {
     document.getElementById('table-filter').style.display = '';
     readFiltersFromUrl();
     applyFilters();
+    // Prior/parallel PTAB proceedings (from the compare endpoint) — annotate the
+    // table's last column + the two conditional-grant-rate KPIs once loaded. The
+    // page is fully usable without it, so this is best-effort and non-blocking.
+    fetch('/api/ptab?compare=1').then((r) => (r.ok ? r.json() : null)).then((cd) => {
+      if (!cd || !cd.links) return;
+      linkByApp = new Map(cd.links.map((l) => [l.appNum, l]));
+      applyFilters();
+    }).catch(() => {});
   } catch (e) {
     body.innerHTML = '<div class="state">Could not load determinations (' + esc(e.message) + ').</div>';
   }

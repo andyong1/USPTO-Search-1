@@ -25,6 +25,7 @@ import {
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
+  upsertPtabInstitution, upsertPtabDd,
   getOrderedReexamsToCheckPetitions,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
@@ -115,6 +116,11 @@ async function maybeSendSubscriberDigest(req) {
       fetchInstitutionPage({ from: targetDate, to: targetDate, offset: 0, limit: 100 }),
       fetchDdPage({ from: targetDate, to: targetDate, offset: 0, limit: 100 }),
     ]);
+    // Persist what the digest surfaces so the /ptab-decisions table matches the
+    // email — the digest fetch was otherwise display-only, so decisions issued
+    // outside the daily maintain window could show in the email but never store.
+    for (const r of dd.rows) { try { await upsertPtabDd(r); } catch { /* skip bad row */ } }
+    for (const r of inst.rows) { try { await upsertPtabInstitution(r); } catch { /* skip bad row */ } }
     push(dd.rows, 'Discretionary', 'dd_type');
     push(inst.rows, 'Institution', 'inst_type');
   } catch (e) { ptabDecisionEvents = []; }

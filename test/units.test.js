@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
-import { analyzePetition, classifyRequester } from '../lib/uspto.js';
+import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
+import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
@@ -287,4 +288,61 @@ test('analyzePetition — RXPET. outside the 20-day window is not the petition',
   const docs = [{ documentCode: 'RXPET.', officialDate: '2026-03-01', documentIdentifier: 'late' }];
   const r = analyzePetition(docs, '2026-01-01'); // 59 days later
   assert.equal(r.petition, null);
+});
+
+
+// ── Audit-remediation coverage (DA-16) ──────────────────────────────
+
+test('determinationLabel — case-normalized determination codes (DA-12)', () => {
+  assert.equal(determinationLabel('RXREXO'), 'Reexam Ordered');
+  assert.equal(determinationLabel('rxrexo'), 'Reexam Ordered');
+  assert.equal(determinationLabel(' RxReXd '), 'Reexam Denied');
+  assert.equal(determinationLabel('RXCERT'), null);
+  assert.equal(determinationLabel(''), null);
+  assert.equal(determinationLabel(null), null);
+});
+
+test('detect325d — requires the (d) subsection specifically (DA-8)', () => {
+  assert.equal(detect325d('35 U.S.C. § 325(d)'), true);
+  assert.equal(detect325d('section 325 ( d )'), true);
+  assert.equal(detect325d('35 U.S.C. 325(a) estoppel provisions'), false);
+  assert.equal(detect325d('as discussed in section 325 above'), false);
+});
+
+test('validateSearchShape — contract violations throw, valid shapes pass (DA-3)', () => {
+  assert.deepEqual(validateSearchShape({ count: 0, patentFileWrapperDataBag: [] }), { count: 0, patentFileWrapperDataBag: [] });
+  assert.ok(validateSearchShape({ count: 12 })); // count-only responses are valid
+  assert.throws(() => validateSearchShape(null));
+  assert.throws(() => validateSearchShape('<html>error</html>'));
+  assert.throws(() => validateSearchShape({ patentFileWrapperDataBag: 'oops' }));
+  assert.throws(() => validateSearchShape({ unrelated: true })); // no bag, no count
+});
+
+test('secure helpers — constant-time compare + unsubscribe tokens (SEC-2/SEC-4)', () => {
+  assert.equal(safeEqual('abc', 'abc'), true);
+  assert.equal(safeEqual('abc', 'abd'), false);
+  assert.equal(safeEqual('', ''), true);
+  const prev = process.env.CRON_SECRET;
+  process.env.CRON_SECRET = 'test-secret';
+  try {
+    const t = unsubToken('User@Example.com');
+    assert.equal(t.length, 32);
+    assert.equal(unsubTokenOk('user@example.com', t), true); // email case-insensitive
+    assert.equal(unsubTokenOk('other@example.com', t), false);
+    assert.equal(unsubTokenOk('user@example.com', 'wrong'), false);
+    assert.equal(unsubTokenOk('user@example.com', ''), false);
+  } finally {
+    if (prev === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = prev;
+  }
+});
+
+test('unsubToken — no CRON_SECRET => no token, nothing verifies (fail closed)', () => {
+  const prev = process.env.CRON_SECRET;
+  delete process.env.CRON_SECRET;
+  try {
+    assert.equal(unsubToken('a@b.com'), '');
+    assert.equal(unsubTokenOk('a@b.com', ''), false);
+  } finally {
+    if (prev !== undefined) process.env.CRON_SECRET = prev;
+  }
 });

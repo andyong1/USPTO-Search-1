@@ -3,6 +3,7 @@
 //   GET /api/reexam-preorder  →  { submissions: [...], totalFiled, cutoff }
 import { listPreorder, preorderEffectStats, getPreorderCounts, PREORDER_CUTOFF } from '../lib/db.js';
 import { fetchPreorderCoverage } from '../lib/uspto.js';
+import { clientErrorDetail } from '../lib/secure.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -26,6 +27,6 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     res.status(200).json({ submissions, effect, totalFiled, deadlinePassed, cutoff: PREORDER_CUTOFF });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load pre-order submissions.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Failed to load pre-order submissions.', detail: clientErrorDetail(err) });
   }
 }

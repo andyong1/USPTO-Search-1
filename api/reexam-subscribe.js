@@ -13,31 +13,17 @@ import {
   listRecentDeterminations,
 } from '../lib/db.js';
 import { sendReexamSubscriberDigest } from '../lib/email.js';
+import { rateLimited } from '../lib/ratelimit.js';
+import { clientErrorDetail } from '../lib/secure.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Light in-memory per-IP rate limit for subscribe/test (best-effort: persists
-// only within a warm serverless instance, which is enough to blunt scripted abuse).
-const RL_WINDOW_MS = 60 * 1000;
-const RL_MAX = 5; // subscribe/test attempts per IP per window
-const rlHits = new Map();
-function rateLimited(req) {
-  const fwd = req.headers['x-forwarded-for'] || '';
-  const ip = (Array.isArray(fwd) ? fwd[0] : String(fwd)).split(',')[0].trim()
-    || req.headers['x-real-ip'] || 'unknown';
-  const now = Date.now();
-  const arr = (rlHits.get(ip) || []).filter((t) => now - t < RL_WINDOW_MS);
-  arr.push(now);
-  rlHits.set(ip, arr);
-  if (rlHits.size > 5000) { // crude memory cap
-    for (const [k, v] of rlHits) { if (!v.length || now - v[v.length - 1] > RL_WINDOW_MS) rlHits.delete(k); }
-  }
-  return arr.length > RL_MAX;
-}
 
-function baseUrl(req) {
+
+function baseUrl() {
+  // Env-only (SEC-7): never derive links from the client-controlled Host header.
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   return host ? `https://${host}` : '';
 }
 
@@ -164,6 +150,6 @@ export default async function handler(req, res) {
         : 'Subscribed. You will receive a daily email the morning after any new relevant filings issue.',
     });
   } catch (err) {
-    res.status(500).json({ ok: false, error: 'Request failed.', detail: String(err.message || err) });
+    res.status(500).json({ ok: false, error: 'Request failed.', detail: clientErrorDetail(err) });
   }
 }

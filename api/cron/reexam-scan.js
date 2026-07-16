@@ -41,6 +41,7 @@ import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/pet
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
+import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 export const config = { maxDuration: 60 };
 
@@ -63,9 +64,10 @@ const ymdInTZ = (d, tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year
 const hourInTZ = (d, tz) => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(d));
 function previousDay(ymd) { const [y, m, d] = String(ymd).split('-').map(Number); const a = new Date(Date.UTC(y, m - 1, d)); a.setUTCDate(a.getUTCDate() - 1); return a.toISOString().slice(0, 10); }
 function prettyDate(ymd) { const [y, m, d] = String(ymd).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' }); }
-function baseUrl(req) {
+function baseUrl() {
+  // Env-only (SEC-7): never derive links from the client-controlled Host header.
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   return host ? `https://${host}` : '';
 }
 
@@ -246,12 +248,9 @@ async function scanOne(appNum, filingDate) {
 }
 
 export default async function handler(req, res) {
-  // Accept the secret from the Authorization header (with or without "Bearer ")
-  // or from a ?key= query param. Whitespace is trimmed. Enforced only if set.
-  const secret = (process.env.CRON_SECRET || '').trim();
-  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    || (req.query && req.query.key) || '').trim();
-  if (secret && provided !== secret) {
+  // CRON gate — fails closed when CRON_SECRET is unset; constant-time compare.
+  // Accepts Authorization: Bearer or (transitionally) ?key= (SEC-1/3/4).
+  if (!cronOk(req)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -509,6 +508,6 @@ export default async function handler(req, res) {
       errors,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Reexam scan failed.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Reexam scan failed.', detail: clientErrorDetail(err) });
   }
 }

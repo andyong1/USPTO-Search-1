@@ -6,6 +6,7 @@
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
 import { listRecentDeterminations, listPostOrderPetitions, listReexamActions } from '../lib/db.js';
+import { clientErrorDetail } from '../lib/secure.js';
 
 const san = (s) => String(s || '').replace(/[^0-9A-Za-z._-]/g, '_');
 const ymd = (s) => { const m = String(s || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : 'nodate'; };
@@ -23,7 +24,10 @@ export default async function handler(req, res) {
     // every determination + office-action PDF into reexam-docs/ locally. Needs only
     // curl.exe (built into Windows 10/11) — no Node, npm, or PowerShell scripts.
     if (req.query && req.query.manifest) {
-      const base = (process.env.APP_BASE_URL || `https://${req.headers.host}`).replace(/\/$/, '');
+      // Env-only base (SEC-7): never derive links from the client-controlled Host
+      // header. Requires APP_BASE_URL (or Vercel's production URL) to be set.
+      const base = (process.env.APP_BASE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')).replace(/\/$/, '');
+      if (!base) { res.status(500).json({ error: 'APP_BASE_URL is not configured.' }); return; }
       const [dets, acts] = [await listRecentDeterminations(), await listReexamActions()];
       const lines = [];
       const add = (appNum, docId, dir, name) => {
@@ -55,6 +59,6 @@ export default async function handler(req, res) {
     const determinations = await listRecentDeterminations(); // no limit
     res.status(200).json({ determinations });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to load.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Failed to load.', detail: clientErrorDetail(err) });
   }
 }

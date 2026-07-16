@@ -9,6 +9,7 @@ import {
   upsertReexams, recordDetermination,
 } from '../../lib/db.js';
 import { fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
+import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
@@ -19,10 +20,9 @@ const TIME_BUDGET_MS = 50000;
 const PREORDER_CODE = 'RX.PRO.PO';
 
 export default async function handler(req, res) {
-  const secret = (process.env.CRON_SECRET || '').trim();
-  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    || (req.query && req.query.key) || '').trim();
-  if (secret && provided !== secret) {
+  // CRON gate — fails closed when CRON_SECRET is unset; constant-time compare.
+  // Accepts Authorization: Bearer or (transitionally) ?key= (SEC-1/3/4).
+  if (!cronOk(req)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -110,6 +110,6 @@ export default async function handler(req, res) {
     const remaining = await countReexamsForPreorderBackfill();
     res.status(200).json({ ok: true, cutoff: PREORDER_CUTOFF, reset, processed, found, remaining, done: remaining === 0 });
   } catch (err) {
-    res.status(500).json({ error: 'Pre-order backfill failed.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Pre-order backfill failed.', detail: clientErrorDetail(err) });
   }
 }

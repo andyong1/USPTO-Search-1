@@ -1098,19 +1098,39 @@ function renderFindings(list) {
     <tbody>${rows}</tbody></table></div>`;
 }
 
+// Tracking mutations are admin-gated server-side. Prompt once per session for
+// the admin password (same sessionStorage key as the /status page) and send it
+// as X-Admin-Password; a 401 clears it so the next try re-prompts.
+const ADMIN_PW_KEY = 'reexamAdminPw';
+function adminPw() {
+  let pw = sessionStorage.getItem(ADMIN_PW_KEY);
+  if (!pw) {
+    pw = prompt('Admin password (required to modify tracked proceedings):') || '';
+    if (pw) sessionStorage.setItem(ADMIN_PW_KEY, pw.trim());
+  }
+  return (pw || '').trim();
+}
+function adminAuthFailed() {
+  sessionStorage.removeItem(ADMIN_PW_KEY);
+  alert('Incorrect or missing admin password.');
+}
+
 async function addWatch() {
   const appNum = document.getElementById('tr-appnum').value.replace(/[^0-9A-Za-z]/g, '');
   const label  = document.getElementById('tr-label').value.trim();
   const recipients = document.getElementById('tr-recipients').value.trim();
   if (!appNum) { alert('Enter an application number to track.'); return; }
+  const pw = adminPw();
+  if (!pw) return;
 
   trackLoading(true);
   try {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
       body: JSON.stringify({ applicationNumber: appNum, label, recipients }),
     });
+    if (res.status === 401) { adminAuthFailed(); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     document.getElementById('tr-appnum').value = '';
@@ -1132,24 +1152,30 @@ async function addWatch() {
 }
 
 async function ackFindings() {
+  const pw = adminPw();
+  if (!pw) return;
   try {
-    await fetch('/api/watchlist', {
+    const res = await fetch('/api/watchlist', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
       body: JSON.stringify({ action: 'acknowledge' }),
     });
+    if (res.status === 401) { adminAuthFailed(); return; }
     loadWatchlist();
   } catch (e) { alert('Could not update: ' + e.message); }
 }
 
 // Mark a single finding as seen.
 async function ackOne(appNum, documentId) {
+  const pw = adminPw();
+  if (!pw) return;
   try {
-    await fetch('/api/watchlist', {
+    const res = await fetch('/api/watchlist', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
       body: JSON.stringify({ action: 'acknowledge', applicationNumber: appNum, documentIdentifier: documentId }),
     });
+    if (res.status === 401) { adminAuthFailed(); return; }
     loadWatchlist();
   } catch (e) { alert('Could not update: ' + e.message); }
 }

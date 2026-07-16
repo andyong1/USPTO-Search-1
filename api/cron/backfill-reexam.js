@@ -23,6 +23,7 @@ import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
+import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 export const config = { maxDuration: 60 };
 
@@ -41,10 +42,9 @@ const TIME_BUDGET_MS = 50000; // stop before the 60s function limit
 const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
 export default async function handler(req, res) {
-  const secret = (process.env.CRON_SECRET || '').trim();
-  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    || (req.query && req.query.key) || '').trim();
-  if (secret && provided !== secret) {
+  // CRON gate — fails closed when CRON_SECRET is unset; constant-time compare.
+  // Accepts Authorization: Bearer or (transitionally) ?key= (SEC-1/3/4).
+  if (!cronOk(req)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -462,6 +462,6 @@ export default async function handler(req, res) {
     const remaining = (await getAppsMissingDeterminationMeta(100000)).length;
     res.status(200).json({ ok: true, reset, processed, remaining, done: remaining === 0 });
   } catch (err) {
-    res.status(500).json({ error: 'Backfill failed.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Backfill failed.', detail: clientErrorDetail(err) });
   }
 }

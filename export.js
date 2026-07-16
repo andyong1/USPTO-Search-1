@@ -10,6 +10,9 @@
 //     opts.summaryCols – column widths for the summary sheet
 (function () {
   var SRC = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  // Subresource Integrity (SEC-6): sha384 of the pinned 0.20.3 build, so a
+  // compromised/altered CDN file is refused. Recompute if SRC ever changes.
+  var SRI = 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
   var loading;
   function ensureSheetJs() {
     if (window.XLSX) return Promise.resolve();
@@ -17,6 +20,7 @@
     loading = new Promise(function (resolve, reject) {
       var s = document.createElement('script');
       s.src = SRC; s.defer = true;
+      s.integrity = SRI; s.crossOrigin = 'anonymous';
       s.onload = resolve;
       s.onerror = function () { reject(new Error('Could not load the spreadsheet library — check your connection and try again.')); };
       document.head.appendChild(s);

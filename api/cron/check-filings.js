@@ -11,23 +11,22 @@
 
 import { listWatched, syncApplication } from '../../lib/db.js';
 import { sendDigestTo, parseRecipients } from '../../lib/email.js';
+import { cronOk, clientErrorDetail, unsubToken } from '../../lib/secure.js';
 
 // Give the job more time than the default (in case of many tracked applications).
 export const config = { maxDuration: 60 };
 
-function baseUrl(req) {
+function baseUrl() {
+  // Env-only (SEC-7): never derive links from the client-controlled Host header.
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/$/, '');
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || (req && req.headers && req.headers.host);
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL;
   return host ? `https://${host}` : '';
 }
 
 export default async function handler(req, res) {
-  // Accept the secret from the Authorization header (with or without "Bearer ")
-  // or from a ?key= query param. Whitespace is trimmed. Enforced only if set.
-  const secret = (process.env.CRON_SECRET || '').trim();
-  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    || (req.query && req.query.key) || '').trim();
-  if (secret && provided !== secret) {
+  // CRON gate — fails closed when CRON_SECRET is unset; constant-time compare.
+  // Accepts Authorization: Bearer or (transitionally) ?key= (SEC-1/3/4).
+  if (!cronOk(req)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -71,7 +70,9 @@ export default async function handler(req, res) {
     const base = baseUrl(req);
     const emails = [];
     for (const g of byRecipient.values()) {
-      const unsubscribeUrl = base ? `${base}/api/watchlist?unsubscribeAlerts=${encodeURIComponent(g.email)}` : '';
+      // Per-recipient HMAC token (SEC-2): the unsubscribe endpoint only honors
+      // links that carry it, so knowing an email address alone can't unsubscribe it.
+      const unsubscribeUrl = base ? `${base}/api/watchlist?unsubscribeAlerts=${encodeURIComponent(g.email)}&t=${encodeURIComponent(unsubToken(g.email))}` : '';
       try { emails.push(await sendDigestTo([g.email], g.docs, { unsubscribeUrl })); }
       catch (e) { emails.push({ error: String(e.message || e) }); }
     }
@@ -85,6 +86,6 @@ export default async function handler(req, res) {
       results,
     });
   } catch (err) {
-    res.status(500).json({ error: 'Cron run failed.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'Cron run failed.', detail: clientErrorDetail(err) });
   }
 }

@@ -2,6 +2,8 @@
 // GET /api/application?appNum=16123456&section=meta-data
 // Forwards to https://api.uspto.gov/api/v1/patent/applications/{appNum}[/{section}]
 
+import { clientErrorDetail } from '../lib/secure.js';
+
 const BASE = 'https://api.uspto.gov/api/v1/patent/applications';
 
 const ALLOWED_SECTIONS = new Set([
@@ -53,7 +55,7 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'application/json');
     res.send(text);
   } catch (err) {
-    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : String(err) });
+    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : clientErrorDetail(err) });
   } finally {
     clearTimeout(timer);
   }

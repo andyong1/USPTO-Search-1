@@ -15,6 +15,7 @@
 // request is retried once, and an inline failure returns a readable HTML notice.
 
 import { Readable } from 'node:stream';
+import { clientErrorDetail } from '../lib/secure.js';
 
 export const config = { maxDuration: 60 };
 
@@ -101,7 +102,7 @@ export default async function handler(req, res) {
       upstream = await fetchHeaders(url, { headers: { 'X-API-KEY': apiKey } }, CONNECT_TIMEOUT_MS);
     } catch (err) {
       lastStatus = 504; // aborted / network error
-      lastDetail = String(err.message || err);
+      lastDetail = clientErrorDetail(err);
     }
 
     if (upstream && !upstream.ok) {

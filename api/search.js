@@ -2,6 +2,8 @@
 // Holds the X-API-KEY server-side so it never reaches the browser, and sidesteps CORS.
 // Works on Vercel (api/ directory) out of the box. Node 18+ has global fetch.
 
+import { clientErrorDetail } from '../lib/secure.js';
+
 const UPSTREAM = 'https://api.uspto.gov/api/v1/patent/applications/search';
 
 export default async function handler(req, res) {
@@ -43,7 +45,7 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'application/json');
     res.send(text);
   } catch (err) {
-    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : String(err) });
+    res.status(502).json({ error: 'Proxy request to USPTO failed.', detail: controller.signal.aborted ? 'timed out' : clientErrorDetail(err) });
   } finally {
     clearTimeout(timer);
   }

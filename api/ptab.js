@@ -35,15 +35,15 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
   markPatentProceedingsScanned, patentProceedingsCoverage } from '../lib/db.js';
 import { getApiKey } from '../lib/uspto.js';
+import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
   fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, fetchProceedingsByPatent, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
 
+// Fails closed when CRON_SECRET is unset; constant-time compare (SEC-1/3/4).
 function gate(req, res) {
-  const secret = (process.env.CRON_SECRET || '').trim();
-  const provided = ((req.headers.authorization || '').replace(/^Bearer\s+/i, '') || (req.query && req.query.key) || '').trim();
-  if (secret && provided !== secret) { res.status(401).json({ error: 'Unauthorized' }); return false; }
+  if (!cronOk(req)) { res.status(401).json({ error: 'Unauthorized' }); return false; }
   return true;
 }
 
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
           const { outcome, detail } = classifyFwd(text);
           await setPtabFwdOutcome(trial, outcome, detail, CLASSIFIER_V);
           res.status(200).json({ ok: true, mode: 'extract', trial, source, textLength: (text || '').length, outcome, detail });
-        } catch (e) { res.status(502).json({ error: 'Extract failed.', detail: String(e.message || e) }); }
+        } catch (e) { res.status(502).json({ error: 'Extract failed.', detail: clientErrorDetail(e) }); }
         return;
       }
       const CONCURRENCY = 5;
@@ -184,7 +184,7 @@ export default async function handler(req, res) {
         const trial = String(q.trial).toUpperCase().trim();
         if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(trial)) { res.status(400).json({ error: 'Invalid trial number.' }); return; }
         try { const dd = await fetchDdDecision(trial); await setPtabFwdDD(trial, dd, V); res.status(200).json({ ok: true, mode: 'dd', trial, dd_decision: dd, ddCheckVersion: V }); }
-        catch (e) { res.status(502).json({ error: 'DD check failed.', detail: String(e.message || e) }); }
+        catch (e) { res.status(502).json({ error: 'DD check failed.', detail: clientErrorDetail(e) }); }
         return;
       }
       const markedOld = await markOldFwdNoDD(V, DD_CUTOFF); // pre-DD-process FWDs → 'none' (no fetch)
@@ -301,7 +301,7 @@ export default async function handler(req, res) {
       if (!/^[A-Z]{2,4}\d{4}-\d{5}$/.test(trial)) { res.status(400).json({ error: 'Invalid trial number.' }); return; }
       let detail;
       try { detail = await fetchTrialDetail(trial); }
-      catch (e) { res.status(502).json({ error: 'Trial fetch failed.', detail: String(e.message || e) }); return; }
+      catch (e) { res.status(502).json({ error: 'Trial fetch failed.', detail: clientErrorDetail(e) }); return; }
       let stored = null;
       try {
         const s = await getPtabFwdByTrial(trial);
@@ -344,7 +344,7 @@ export default async function handler(req, res) {
       const timer = setTimeout(() => controller.abort(), 25000);
       let up;
       try { up = await fetch(url, { headers: { 'X-API-KEY': getApiKey() }, signal: controller.signal }); }
-      catch (e) { res.status(502).json({ error: 'PDF fetch failed.', detail: controller.signal.aborted ? 'timed out' : String(e) }); return; }
+      catch (e) { res.status(502).json({ error: 'PDF fetch failed.', detail: controller.signal.aborted ? 'timed out' : clientErrorDetail(e) }); return; }
       finally { clearTimeout(timer); }
       if (!up.ok) { res.status(up.status).json({ error: 'PDF not available.' }); return; }
       let fname = String(q.name || 'final-written-decision.pdf').replace(/[^A-Za-z0-9._-]/g, '') || 'final-written-decision.pdf';
@@ -615,6 +615,6 @@ export default async function handler(req, res) {
     const rows = all.map(({ decision_text, ...rest }) => rest);
     res.status(200).json({ rows, ...meta });
   } catch (err) {
-    res.status(500).json({ error: 'PTAB request failed.', detail: String(err.message || err) });
+    res.status(500).json({ error: 'PTAB request failed.', detail: clientErrorDetail(err) });
   }
 }

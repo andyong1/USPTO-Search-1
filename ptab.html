@@ -27,7 +27,7 @@
     .fb-group input[type=search] { width: 100%; }
     .types { display: flex; gap: 14px; align-items: center; }
     .types label { font-weight: 500; font-size: 0.9rem; display: inline-flex; gap: 5px; align-items: center; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 6px 0 4px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 6px 0 4px; }
     @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
@@ -189,11 +189,14 @@
 
 <script>
 const OUTCOME = {
-  po_none:        { label: 'Patent owner win', cls: 'o-po' },
-  petitioner_all: { label: 'Petitioner win',   cls: 'o-pet' },
-  partial:        { label: 'Partial',          cls: 'o-partial' },
-  other:          { label: 'Other / review',   cls: 'o-other' },
-  unclassified:   { label: 'Pending',          cls: 'o-pending' },
+  po_none:          { label: 'Patent owner win',    cls: 'o-po' },
+  petitioner_all:   { label: 'Petitioner win',      cls: 'o-pet' },
+  partial:          { label: 'Partial',             cls: 'o-partial' },
+  adverse_judgment: { label: 'Adverse judgment',    cls: 'o-pet' },
+  settled:          { label: 'Settled / terminated', cls: 'o-other' },
+  needs_review:     { label: 'Needs review',        cls: 'o-pending' },
+  other:            { label: 'Other / review',      cls: 'o-other' },
+  unclassified:     { label: 'Pending',             cls: 'o-pending' },
 };
 let CV = 1; // classifier version from the API; rows below it are still pending
 let EV = 1; // text-extraction version; rows below it still need the extract pass
@@ -309,10 +312,13 @@ function readUrl() {
 }
 
 function buildKpi(rows) {
-  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, adverse_judgment: 0, settled: 0, needs_review: 0, other: 0, unclassified: 0 };
   for (const r of rows) c[outcomeKey(r)]++;
   const classified = c.total - c.unclassified;
-  const pct = (n) => (classified ? (n / classified * 100).toFixed(1) + '%' : '—');
+  // Win-rate percentages are of DETERMINATIVE outcomes only (DA-5): settled /
+  // needs-review / legacy-other rows are counted but never summed into a rate.
+  const determinative = c.po_none + c.petitioner_all + c.partial + c.adverse_judgment;
+  const pct = (n) => (determinative ? (n / determinative * 100).toFixed(1) + '%' : '—');
   // Outcome cards (key set) are clickable to filter the table; the Total card clears.
   const card = (num, lbl, color, sub, key) => {
     const clickable = key !== undefined;
@@ -329,7 +335,8 @@ function buildKpi(rows) {
     ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none), 'po_none')}
     ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all), 'petitioner_all')}
     ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial), 'partial')}
-    ${card(c.other, 'Other / Review', '#4a5568', pct(c.other), 'other')}
+    ${card(c.adverse_judgment, 'Adverse Judgments', '#9b2c2c', pct(c.adverse_judgment), 'adverse_judgment')}
+    ${card(c.settled + c.needs_review + c.other, 'Settled / Review', '#4a5568', 'not in win rates')}
   </div>${pending}`;
 }
 
@@ -349,7 +356,10 @@ function buildChart(rows) {
   const el = document.getElementById('chart'), leg = document.getElementById('chart-legend');
   const map = new Map(); const totals = { po_none: 0, petitioner_all: 0, partial: 0, other: 0 };
   for (const r of rows) {
-    const k = outcomeKey(r); if (k === 'unclassified') continue;
+    const k0 = outcomeKey(r); if (k0 === 'unclassified') continue;
+    // Chart buckets: core merits outcomes; everything else (adverse judgment,
+    // settled, needs-review, legacy other) rolls into the 'other' band visually.
+    const k = (k0 === 'po_none' || k0 === 'petitioner_all' || k0 === 'partial') ? k0 : 'other';
     const mk = monthKey(r.fwd_date); if (!mk) continue;
     if (!map.has(mk)) map.set(mk, { po_none: 0, petitioner_all: 0, partial: 0, other: 0, total: 0 });
     const e = map.get(mk); e[k]++; e.total++; totals[k]++;
@@ -359,12 +369,12 @@ function buildChart(rows) {
   const W = Math.max(560, months.length * 44), H = 260, mL = 34, mR = 12, mT = 14, mB = 40, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
 
   if (chartMode === 'rate') {
-    leg.innerHTML = `<span><i style="background:#c53030"></i>Petitioner win rate (% of classified FWDs that month)</span>`;
+    leg.innerHTML = `<span><i style="background:#c53030"></i>Petitioner win rate (% of determinative outcomes that month)</span>`;
     const yfor = (v) => yBase - (v / 100) * ph;
     let grid = '';
     for (let i = 0; i <= 4; i++) { const v = 25 * i, y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}%</text>`; }
     const n = months.length, px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
-    const rate = (m) => { const e = map.get(m); return e.total ? e.petitioner_all / e.total * 100 : 0; };
+    const rate = (m) => { const e = map.get(m); const d = e.po_none + e.petitioner_all + e.partial; return d ? e.petitioner_all / d * 100 : 0; }; // determinative denominator (DA-5)
     const line = n > 1 ? `<polyline points="${months.map((m, i) => `${px(i).toFixed(1)},${yfor(rate(m)).toFixed(1)}`).join(' ')}" fill="none" stroke="#c53030" stroke-width="2"/>` : '';
     const dots = months.map((m, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(rate(m)).toFixed(1)}" r="3.5" fill="#c53030"/>`).join('');
     const every = Math.max(1, Math.ceil(n / 12));
@@ -457,7 +467,7 @@ function renderTable() {
       <td>${tcCell(r.tech_center)}</td>
       <td>${fmtDate(r.institution_date)}</td>
       <td>${fmtDate(r.fwd_date)}${fwdLinks}</td>
-      <td><span class="badge ${o.cls}">${o.label}</span></td>
+      <td><span class="badge ${o.cls}">${o.label}</span>${r.prior_outcome ? ` <span class="badge o-pending" title="A newer decision superseded an earlier classified FWD (prior outcome: ${esc(r.prior_outcome)}, ${esc(fmtDate(r.prior_fwd_date))}) — verify.">Superseded — review</span>` : ''}</td>
       <td>${ddCell(r)}</td>
     </tr>`;
   }).join('');
@@ -502,16 +512,20 @@ function doExport() {
     r.po_name, r.petitioner_name, r.po_counsel, r.petitioner_counsel, fmtDate(r.petition_date), fmtDate(r.institution_date),
     fmtDate(r.fwd_date), (OUTCOME[outcomeKey(r)] || OUTCOME.other).label, r.outcome_detail, ddLabel(r), r.fwd_pdf_url,
   ]);
-  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, other: 0, unclassified: 0 };
+  const c = { total: rows.length, po_none: 0, petitioner_all: 0, partial: 0, adverse_judgment: 0, settled: 0, needs_review: 0, other: 0, unclassified: 0 };
   for (const r of rows) c[outcomeKey(r)]++;
-  const pct = (n) => (c.total ? +(n / c.total * 100).toFixed(1) : 0);
+  const determinative = c.po_none + c.petitioner_all + c.partial + c.adverse_judgment;
+  const pct = (n) => (determinative ? +(n / determinative * 100).toFixed(1) : 0);
   const summary = [
     ['PTAB Final Written Decisions — Summary'], [],
     ['Total FWDs', c.total],
+    ['Percentages are of determinative outcomes (excludes settled / needs review)', determinative],
     ['Patent Owner total wins (no claims unpatentable)', c.po_none, pct(c.po_none) + '%'],
     ['Petitioner total wins (all claims unpatentable)', c.petitioner_all, pct(c.petitioner_all) + '%'],
     ['Partial (some claims unpatentable)', c.partial, pct(c.partial) + '%'],
-    ['Other / review', c.other, pct(c.other) + '%'],
+    ['Adverse judgments', c.adverse_judgment, pct(c.adverse_judgment) + '%'],
+    ['Settled / terminated', c.settled],
+    ['Needs review / other', c.needs_review + c.other],
     [], ['Generated', new Date().toISOString().slice(0, 10)],
   ];
   exportXlsx('ptab-fwd-outcomes.xlsx', header, aoa, {

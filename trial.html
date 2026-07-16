@@ -84,10 +84,13 @@
 
 <script>
 const OUTCOME = {
-  po_none:        { label: 'Patent owner win', cls: 'o-po' },
-  petitioner_all: { label: 'Petitioner win',   cls: 'o-pet' },
-  partial:        { label: 'Partial',          cls: 'o-partial' },
-  other:          { label: 'Other / review',   cls: 'o-other' },
+  po_none:          { label: 'Patent owner win', cls: 'o-po' },
+  petitioner_all:   { label: 'Petitioner win',   cls: 'o-pet' },
+  partial:          { label: 'Partial',          cls: 'o-partial' },
+  adverse_judgment: { label: 'Adverse judgment', cls: 'o-pet' },
+  settled:          { label: 'Settled / terminated', cls: 'o-other' },
+  needs_review:     { label: 'Needs review',     cls: 'o-pending' },
+  other:            { label: 'Other / review',   cls: 'o-other' },
 };
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }

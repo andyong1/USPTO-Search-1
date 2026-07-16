@@ -67,9 +67,16 @@ test('classifyFwd — quantifier disposition (singular claim / stated in ORDER)'
   // Negation guard on the new verbs: "has not demonstrated ... unpatentable" => PO win.
   assert.equal(classifyFwd('Petitioner has not demonstrated that each of the challenged claims is unpatentable.').outcome, 'po_none');
 });
-test('classifyFwd — non-standard disposition => other', () => {
-  assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'other');
-  assert.equal(classifyFwd('').outcome, 'other');
+test('classifyFwd — adverse judgment is its own outcome (DA-5)', () => {
+  assert.equal(classifyFwd('Judgment — Final Written Decision — Adverse Judgment After Institution').outcome, 'adverse_judgment');
+});
+test('classifyFwd — settlement termination is its own outcome (DA-5)', () => {
+  assert.equal(classifyFwd('Termination of the proceeding in view of settlement between the parties under 35 U.S.C. 317.').outcome, 'settled');
+  assert.equal(classifyFwd('Order granting the joint motion to terminate the proceeding.').outcome, 'settled');
+});
+test('classifyFwd — unmatched text => needs_review, not other (DA-5)', () => {
+  assert.equal(classifyFwd('The proceeding is dismissed as moot following disclaimer of all claims.').outcome, 'needs_review');
+  assert.equal(classifyFwd('').outcome, 'needs_review');
 });
 
 // classifyRequester takes a flat list of USPTO code strings (union of document +

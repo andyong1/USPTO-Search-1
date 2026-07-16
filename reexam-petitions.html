@@ -256,7 +256,7 @@ function render() {
   const ariaSort = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const rows = items.map((p) => {
     const num = p.application_number || '';
-    const petCell = p.petition_doc_id ? `${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
+    const petCell = p.petition_doc_id ? `${p.review_flag ? '<span class="badge" style="background:#fefcbf;color:#744210" title="Petition role was assigned from a same-date tie between multiple candidate papers — verify.">⚠ review</span> ' : ''}${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
     const oppCell = p.opposition_doc_id ? `${fmtDate(p.opposition_date)}${docLinks(num, p.opposition_doc_id, 'Requestor Opposition')}` : dash;
     let decCell = dash;
     if (p.decision_doc_id) {

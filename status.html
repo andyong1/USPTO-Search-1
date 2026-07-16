@@ -180,6 +180,7 @@ function ptabCardHtml(p) {
     </div>
     <table style="margin-top:14px">
       <tr><td>Total FWDs on file</td><td>${s.total ?? '—'}</td></tr>
+      ${p.fwdReconciliation ? `<tr><td>FWD catalog drift (stored trials vs feed records)</td><td>${p.fwdReconciliation.storedTrials} vs ${p.fwdReconciliation.reportedRecords ?? '—'} <span class="muted">record-grain slack expected</span></td></tr>` : ''}
       <tr><td>Most recent FWD on file</td><td>${fmtDate(p.latestFwd)}</td></tr>
       <tr><td>Daily maintain last run</td><td>${fmtTs(p.maintainLastRun)}</td></tr>
     </table>

@@ -228,6 +228,7 @@ function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : t
 
 // KPI cards (avg/median grant->first action, grant->final action) for a set of rows.
 function statCards(rows) {
+  rows = rows.filter((p) => !p.review_flag); // outliers excluded from timing stats (DA-11)
   const nonfDays = rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
   const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
   const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
@@ -247,6 +248,7 @@ function statCards(rows) {
 // Time-to-first-action distribution buckets + average office actions per reexam.
 function buildDistribution(rows) {
   const el = document.getElementById('dist');
+  rows = rows.filter((p) => !p.review_flag); // outliers excluded from timing stats (DA-11)
   const nonfDays = rows.map((p) => daysBetween(p.order_date, p.nonf_date)).filter((d) => d != null);
   const finlDays = rows.map((p) => daysBetween(p.order_date, p.finl_date)).filter((d) => d != null);
   const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
@@ -398,7 +400,7 @@ function render() {
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
-      <td>${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
+      <td>${p.review_flag ? '<span class="badge" style="background:#fefcbf;color:#744210" title="Outlier flagged for review (same-day non-final/final dates or implausible action count) — excluded from the timing statistics above.">⚠ review</span> ' : ''}${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
       <td>${cell(num, p.finl_date, daysBetween(p.order_date, p.finl_date), p.finl_doc_id, 'Final Office Action')}</td>
       <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>

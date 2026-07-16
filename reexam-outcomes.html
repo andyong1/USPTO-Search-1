@@ -129,7 +129,7 @@
 
   <div class="card">
     <h2>Reexamination Final Outcomes</h2>
-    <div class="sub">Claim disposition at the ex parte reexamination certificate — which claims were confirmed, cancelled, amended, or newly added. A proceeding appears here once its certificate has issued.</div>
+    <div class="sub">Claim disposition at the ex parte reexamination certificate — which claims were confirmed, cancelled, amended, or newly added. A proceeding appears here once its certificate has issued. Dispositions are parsed from the certificate (most are scanned images read via OCR) — treat them as a lead and verify against the certificate PDF before relying on specific claim numbers.</div>
     <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Parsed from certificate text (OCR) — heuristic and informational only, not legal advice; verify against the official certificate.</p>
     <div id="freshness" class="sub" style="margin-bottom:14px"></div>
     <div class="filter-bar">
@@ -502,7 +502,7 @@ function render() {
   const pageItems = items.slice(start, end);
   const rows = pageItems.map((d) => {
     const num = d.application_number || '';
-    const outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
+    const outcome = has(d.outcome_summary) ? `${esc(d.outcome_summary)} <span class="ext" style="margin-left:4px" title="Parsed from the certificate via OCR${d.cert_ocr_engine === '2' ? ' (engine 2)' : ''} — verify against the PDF.">OCR</span>` : '<span class="ext" style="margin-left:0">outcome pending</span>';
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>

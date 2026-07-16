@@ -30,7 +30,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
-  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings,
+  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings, getPtabKv, setPtabKv,
   listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates,
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
   markPatentProceedingsScanned, patentProceedingsCoverage } from '../lib/db.js';
@@ -229,6 +229,9 @@ export default async function handler(req, res) {
           if (page.fetched < 100) break;
         }
         out.scan = { upserted, reportedTotal };
+        // Drift indicator (DA-10): reported FWD-feed record count vs stored trials
+        // (record grain != trial grain — expect slack, never strict equality).
+        if (reportedTotal != null) { try { await setPtabKv('fwd_reported_count', String(reportedTotal)); } catch { /* best-effort */ } }
       } catch (e) { out.scan = { error: String(e.message || e) }; }
 
       // 2) Extract pending FWD PDFs (bounded by the shared deadline).
@@ -608,7 +611,12 @@ export default async function handler(req, res) {
     }
     let maintainLastRun = null;
     try { maintainLastRun = await getMaintainLastRun(); } catch { /* optional */ }
-    const meta = { summary, maintainLastRun, latestFwd, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V };
+    // Catalog drift indicator (DA-10): stored distinct trials vs the FWD feed's
+    // reported record count. Record grain != trial grain, so slack is expected —
+    // this flags large drift, it is not a strict-equality check.
+    let fwdReconciliation = null;
+    try { const rep = await getPtabKv('fwd_reported_count'); if (rep != null) fwdReconciliation = { storedTrials: all.length, reportedRecords: parseInt(rep, 10) || null }; } catch { /* optional */ }
+    const meta = { summary, maintainLastRun, latestFwd, fwdReconciliation, classifierVersion: CLASSIFIER_V, extractVersion: EXTRACT_V, ddCheckVersion: DD_CHECK_V };
     // ?summary=1 → lightweight (no rows), for the status dashboard.
     if (q.summary) { res.status(200).json(meta); return; }
     // Drop the bulky stored decision_text — the page never needs it.

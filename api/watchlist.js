@@ -1,14 +1,16 @@
 // CRUD for the proceedings you track + listing detected new filings.
 //   GET    /api/watchlist                                              → { watched, findings }
-//   POST   /api/watchlist  { applicationNumber, label, recipients }    → add + baseline sync  [admin]
-//   POST   /api/watchlist  { action: "updateRecipients", applicationNumber, recipients }      [admin]
+//   POST   /api/watchlist  { applicationNumber, label, recipients }    → add + baseline sync  [rate-limited]
+//   POST   /api/watchlist  { action: "updateRecipients", applicationNumber, recipients }      [rate-limited]
 //   POST   /api/watchlist  { action: "acknowledge" [, applicationNumber, documentIdentifier] } [admin]
 //   DELETE /api/watchlist?applicationNumber=...                        → stop tracking        [admin]
 //
 // "[admin]" actions require the X-Admin-Password header to match the
 // ADMIN_PASSWORD env var. Auth fails CLOSED: with no ADMIN_PASSWORD configured,
-// admin actions are refused (SEC-1). Unsubscribe-from-alerts is public but
-// token-gated (HMAC per recipient, SEC-2) and rate-limited.
+// admin actions are refused (SEC-1). Add/track and updateRecipients are public
+// (no admin password) but rate-limited — they accept arbitrary alert-recipient
+// emails, so the cap blunts scripted abuse. Unsubscribe-from-alerts is public
+// but token-gated (HMAC per recipient, SEC-2) and rate-limited.
 
 import {
   listWatched, addWatched, removeWatched, setRecipients, removeRecipientFromAllWatched,
@@ -162,7 +164,9 @@ export default async function handler(req, res) {
       }
 
       if (body.action === 'updateRecipients') {
-        if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+        // Public (no admin password) but rate-limited: sets alert-recipient emails
+        // that the cron sends from our verified domain, so blunt scripted abuse.
+        if (rateLimited(req, 10)) { res.status(429).json({ error: 'Too many requests. Please wait a minute and try again.' }); return; }
         const num = String(body.applicationNumber || '').replace(/[^0-9A-Za-z/]/g, '');
         if (!num) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
         await setRecipients(num, normalizeRecipients(body.recipients));
@@ -171,9 +175,10 @@ export default async function handler(req, res) {
         return;
       }
 
-      // Add/track a proceeding — admin-gated (SEC-2): it accepts arbitrary
-      // recipient emails that the alert cron then mails from our sender domain.
-      if (!isAdmin(req)) { res.status(401).json({ error: 'Incorrect or missing admin password.' }); return; }
+      // Add/track a proceeding — public (no admin password) but rate-limited: it
+      // accepts arbitrary recipient emails that the alert cron then mails from our
+      // verified sender domain, so cap scripted abuse.
+      if (rateLimited(req, 10)) { res.status(429).json({ error: 'Too many requests. Please wait a minute and try again.' }); return; }
       const appNum = String(body.applicationNumber || '').replace(/[^0-9A-Za-z/]/g, '');
       if (!appNum) { res.status(400).json({ error: 'applicationNumber is required.' }); return; }
 

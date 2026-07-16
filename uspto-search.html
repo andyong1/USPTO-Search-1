@@ -1120,17 +1120,15 @@ async function addWatch() {
   const label  = document.getElementById('tr-label').value.trim();
   const recipients = document.getElementById('tr-recipients').value.trim();
   if (!appNum) { alert('Enter an application number to track.'); return; }
-  const pw = adminPw();
-  if (!pw) return;
 
   trackLoading(true);
   try {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ applicationNumber: appNum, label, recipients }),
     });
-    if (res.status === 401) { adminAuthFailed(); return; }
+    if (res.status === 429) { alert('Too many requests. Please wait a minute and try again.'); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     document.getElementById('tr-appnum').value = '';

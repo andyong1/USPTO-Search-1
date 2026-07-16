@@ -278,9 +278,13 @@ function withinDays(raw, days) {
 function buildKpi(list) {
   const el = document.getElementById('stats-kpi');
   const isOrdered = (d) => /ordered/i.test(d.determination_type || '');
-  const ordered = list.filter(isOrdered).length;
-  const denied = list.filter((d) => /denied/i.test(d.determination_type || '')).length;
-  const tot = ordered + denied || list.length;
+  // Grant rate over series 90/ only — a 96-series RX.SE.ORDER is Director-ordered
+  // by statute, not an examiner determination, and has no denial counterpart.
+  const se = list.filter(isSeries96);
+  const l90 = list.filter((d) => !isSeries96(d));
+  const ordered = l90.filter(isOrdered).length;
+  const denied = l90.filter((d) => /denied/i.test(d.determination_type || '')).length;
+  const tot = ordered + denied || l90.length;
   const pct = (n, d) => (d ? (n / d * 100).toFixed(1) : '0.0');
   // Conditional grant rates: of reexams whose patent had a prior/parallel PTAB
   // proceeding — and specifically a prior discretionary denial — how many were
@@ -293,7 +297,7 @@ function buildKpi(list) {
 
   const card = (num, lbl, sub) => `<div class="kpi"><div class="num">${num}</div><div class="lbl">${esc(lbl)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>`;
   el.innerHTML = `<div class="kpi-strip">
-    ${card(list.length, 'Total Determinations')}
+    ${card(list.length, 'Total Determinations', se.length ? se.length + ' via supplemental exam (96/)' : '')}
     ${card(pct(ordered, tot) + '%', 'Grant Rate (Ordered)', ordered + ' of ' + tot)}
     ${card(pct(denied, tot) + '%', 'Denied', denied + ' of ' + tot)}
     ${card(withPtab.length ? pct(withPtabOrd, withPtab.length) + '%' : '—', 'Grant Rate · Prior/Parallel PTAB Proceeding', withPtab.length ? withPtabOrd + ' of ' + withPtab.length : 'no matches')}
@@ -600,6 +604,8 @@ function tcOptionLabel(tc) { return TC_SHORT[tc] ? `${tc} (${TC_SHORT[tc]})` : t
 // event, third-party from RXOSUB.R "requested by third party requester" (and
 // kin), patent owner from a request receipt with no third-party code, else unknown.
 const REQUESTER_LABEL = { patent_owner: 'Patent owner', third_party: 'Third party', director: 'Director', unknown: 'Unknown' };
+// Series 96/ = supplemental-examination-resulting reexam (control number prefix).
+function isSeries96(d) { return String(d.application_number || '').replace(/[^0-9]/g, '').startsWith('96'); }
 function requesterKey(d) {
   const r = String(d.requester_type || '').toLowerCase();
   return (r === 'patent_owner' || r === 'third_party' || r === 'director') ? r : 'unknown';
@@ -807,12 +813,17 @@ function applyFilters() {
   if (fRequester) subset = subset.filter((d) => requesterKey(d) === fRequester);
   const h = document.getElementById('stats-heading');
   if (h) h.textContent = 'Statistics — ' + label + (fArtUnit ? ' · Art Unit ' + fArtUnit : '') + (fTc ? ' · TC ' + fTc : '');
+  // Series 96/ (supplemental-exam-resulting) reexams are listed and counted, but
+  // excluded from grant-rate / AU / examiner / trend / pendency statistics: the
+  // ordering mechanism is statutory (35 U.S.C. 257(b)), not an examiner SNQ
+  // grant/denial, so mixing them would distort the 90-series rates (DA-4).
+  const stats90 = subset.filter((d) => !isSeries96(d));
   buildKpi(subset);
-  document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(subset);
-  buildExaminerSection(subset);
-  buildTrend(subset, gran);
-  buildPendency(subset);
-  buildRequester(subset);
+  document.getElementById('stats-au').innerHTML = statsByArtUnitHtml(stats90);
+  buildExaminerSection(stats90);
+  buildTrend(stats90, gran);
+  buildPendency(stats90);
+  buildRequester(stats90);
   allDeterminations = subset; // scopes the detailed listing + CSV export
   tablePage = 1;
   renderTable();

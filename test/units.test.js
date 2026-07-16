@@ -297,6 +297,8 @@ test('determinationLabel — case-normalized determination codes (DA-12)', () =>
   assert.equal(determinationLabel('RXREXO'), 'Reexam Ordered');
   assert.equal(determinationLabel('rxrexo'), 'Reexam Ordered');
   assert.equal(determinationLabel(' RxReXd '), 'Reexam Denied');
+  assert.equal(determinationLabel('RX.SE.ORDER'), 'Reexam Ordered (Suppl. Exam)'); // probe-verified 96-series order code (DA-4)
+  assert.equal(determinationLabel('rx.se.order'), 'Reexam Ordered (Suppl. Exam)');
   assert.equal(determinationLabel('RXCERT'), null);
   assert.equal(determinationLabel(''), null);
   assert.equal(determinationLabel(null), null);

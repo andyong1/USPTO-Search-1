@@ -257,6 +257,13 @@ async function scanOne(appNum, filingDate) {
   }
   // Requester type (patent owner vs third-party): the reliable signal is the
   // RXOSUB.R transaction event, so union the documents with the transactions feed.
+  // Series 96/ (supplemental examination) is requestable ONLY by the patent owner
+  // by statute (35 U.S.C. 257(a)) — classify directly, no transactions call.
+  if (String(appNum).replace(/[^0-9]/g, '').startsWith('96')) {
+    await setRequesterType(appNum, 'patent_owner');
+    await markReexamScanned(appNum, true);
+    return found;
+  }
   // If the transactions fetch FAILS, do not classify from documents alone (DA-3/
   // DA-7): a docs-only guess can be wrong (e.g. patent_owner without the decisive
   // RXOSUB.R signal). Leaving requester_type NULL lets the backfill re-resolve it.

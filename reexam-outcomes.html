@@ -502,7 +502,7 @@ function render() {
   const pageItems = items.slice(start, end);
   const rows = pageItems.map((d) => {
     const num = d.application_number || '';
-    const outcome = has(d.outcome_summary) ? `${esc(d.outcome_summary)} <span class="ext" style="margin-left:4px" title="Parsed from the certificate via OCR${d.cert_ocr_engine === '2' ? ' (engine 2)' : ''} — verify against the PDF.">OCR</span>` : '<span class="ext" style="margin-left:0">outcome pending</span>';
+    const outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>

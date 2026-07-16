@@ -281,7 +281,7 @@ function iprBadge(x) {
   // Most recent decision wins: FWD > institution > discretionary. A "refer" is
   // superseded once the Board institutes, and is not a denial (neutral colour).
   if (x.fwd_date || s === 'Final Written Decision') { const m = { petitioner_all: ['b-fwd', 'FWD: all claims unpatentable'], po_none: ['b-po', 'FWD: patent owner win'], partial: ['b-inst', 'FWD: partial'], other: ['b-fwd', 'FWD issued'] }; const y = m[x.outcome] || ['b-fwd', 'FWD issued']; return `<span class="badge ${y[0]}">${y[1]}</span>`; }
-  if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
+  if (x.inst_type === 'granted' || x.inst_type === 'granted_in_part' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
   if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Institution denied</span>';
   if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Discretionary denial</span>';
   if (x.dd_type === 'refer') return '<span class="badge b-other">Discretionary: referred</span>';

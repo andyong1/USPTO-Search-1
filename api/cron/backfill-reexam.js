@@ -16,7 +16,7 @@ import {
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, determinationLabel } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectCertificateOutcome } from '../../lib/conclusions.js';
 import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome.js';
@@ -39,7 +39,6 @@ function dispositionWindow(txt) {
 
 const CONCURRENCY = 5;
 const TIME_BUDGET_MS = 50000; // stop before the 60s function limit
-const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
 export default async function handler(req, res) {
   // CRON gate — fails closed when CRON_SECRET is unset; constant-time compare.
@@ -374,13 +373,13 @@ export default async function handler(req, res) {
         await Promise.all(batch.map(async (row) => {
           try {
             const docs = await fetchDocuments(row.application_number);
-            const detDocs = docs.filter((d) => DET_CODES[d.documentCode]);
+            const detDocs = docs.filter((d) => determinationLabel(d.documentCode)); // case-normalized (DA-12)
             if (detDocs.length) {
               const meta = await fetchMetaData(row.application_number).catch(() => ({}));
               for (const d of detDocs) {
                 const isNew = await recordDetermination({
                   applicationNumber: row.application_number, documentIdentifier: d.documentIdentifier,
-                  code: d.documentCode, type: DET_CODES[d.documentCode], officialDate: d.officialDate,
+                  code: d.documentCode, type: determinationLabel(d.documentCode), officialDate: d.officialDate,
                   groupArtUnit: meta.groupArtUnit, examiner: meta.examiner,
                 });
                 if (isNew) found++;

@@ -362,7 +362,7 @@ export default async function handler(req, res) {
 
     // ── Filings trends scan (DAILY counts: ex parte reexams + IPR petitions) ──
     // One count query per day per kind. Newest-first, concurrent, and skips days
-    // already stored (a past day's count is fixed) except the most recent two, so
+    // already stored (a past day's count is fixed) except the trailing 7 days, so
     // the one-time backfill drains over a few runs and steady state is tiny.
     if (q.fscan) {
       if (!gate(req, res)) return;
@@ -375,7 +375,7 @@ export default async function handler(req, res) {
       const work = [];
       for (let t = todayMs; t >= START; t -= DAY) {
         const d = dayStr(t);
-        const recent = t >= todayMs - DAY; // always refresh today + yesterday
+        const recent = t >= todayMs - 6 * DAY; // rolling 7-day refresh — late-arriving counts settle (DA-9)
         for (const kind of ['reexam', 'ipr']) if (recent || !stored.has(kind + ':' + d)) work.push({ kind, d });
       }
       const CONCURRENCY = 4;
@@ -496,7 +496,7 @@ export default async function handler(req, res) {
 
       let instGranted = 0, instDenied = 0, ddDeny = 0, ddRefer = 0;
       for (const d of decisions) {
-        if (inWin(d.inst_date)) { if (d.inst_type === 'granted') instGranted++; else if (d.inst_type === 'denied') instDenied++; }
+        if (inWin(d.inst_date)) { if (d.inst_type === 'granted' || d.inst_type === 'granted_in_part') instGranted++; else if (d.inst_type === 'denied') instDenied++; }
         if (inWin(d.dd_date)) { if (d.dd_type === 'deny') ddDeny++; else if (d.dd_type === 'refer') ddRefer++; }
       }
       const instTot = instGranted + instDenied;
@@ -536,7 +536,7 @@ export default async function handler(req, res) {
           // A "refer" is superseded once the Board institutes, and is not a denial.
           let cat;
           if (t.fwd_date || st === 'Final Written Decision') cat = 'ipr_fwd';
-          else if (t.inst_type === 'granted' || st === 'Trial Instituted') cat = 'ipr_instituted';
+          else if (t.inst_type === 'granted' || t.inst_type === 'granted_in_part' || st === 'Trial Instituted') cat = 'ipr_instituted';
           else if (t.inst_type === 'denied' || st === 'Institution Denied') cat = 'ipr_denied';
           else if (t.dd_type === 'deny' || st === 'Discretionary Denial') cat = 'ipr_denied';
           else if (t.dd_type === 'refer') cat = 'ipr_referred';
@@ -587,7 +587,7 @@ export default async function handler(req, res) {
       const dsummary = { total: drows.length, dd_deny: 0, dd_refer: 0, inst_granted: 0, inst_denied: 0 };
       for (const r of drows) {
         if (r.dd_type === 'deny') dsummary.dd_deny++; else if (r.dd_type === 'refer') dsummary.dd_refer++;
-        if (r.inst_type === 'granted') dsummary.inst_granted++; else if (r.inst_type === 'denied') dsummary.inst_denied++;
+        if (r.inst_type === 'granted' || r.inst_type === 'granted_in_part') dsummary.inst_granted++; else if (r.inst_type === 'denied') dsummary.inst_denied++;
       }
       res.status(200).json({ rows: drows, summary: dsummary });
       return;

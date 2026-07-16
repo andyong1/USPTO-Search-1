@@ -619,7 +619,7 @@ let linkByApp = new Map();
 function iprBadge(x) {
   const s = x.statusText || '';
   if (x.fwd_date || s === 'Final Written Decision') { const c = x.outcome === 'po_none' ? 'b-po' : x.outcome === 'partial' ? 'b-inst' : 'b-fwd'; return `<span class="badge ${c}">FWD</span>`; }
-  if (x.inst_type === 'granted' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
+  if (x.inst_type === 'granted' || x.inst_type === 'granted_in_part' || s === 'Trial Instituted') return '<span class="badge b-inst">Instituted</span>';
   if (x.inst_type === 'denied' || s === 'Institution Denied') return '<span class="badge b-den">Denied</span>';
   if (x.dd_type === 'deny' || s === 'Discretionary Denial') return '<span class="badge b-den">Disc. denied</span>';
   if (x.dd_type === 'refer') return '<span class="badge b-other">Referred</span>';

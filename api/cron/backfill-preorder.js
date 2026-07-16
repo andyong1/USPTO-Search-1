@@ -8,10 +8,8 @@ import {
   updatePreorderPetition, countReexamsForPreorderBackfill, resetPreorderChecked, PREORDER_CUTOFF,
   upsertReexams, recordDetermination,
 } from '../../lib/db.js';
-import { fetchDocuments, fetchMetaData, analyzePetition } from '../../lib/uspto.js';
+import { fetchDocuments, fetchMetaData, analyzePetition, determinationLabel } from '../../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../../lib/secure.js';
-
-const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 
 export const config = { maxDuration: 60 };
 
@@ -52,8 +50,8 @@ export default async function handler(req, res) {
       }
       // Record any determination too (feeds the Determination column).
       for (const d of docs) {
-        if (DET_CODES[d.documentCode]) {
-          await recordDetermination({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, code: d.documentCode, type: DET_CODES[d.documentCode], officialDate: d.officialDate, groupArtUnit: meta.groupArtUnit, examiner: meta.examiner });
+        if (determinationLabel(d.documentCode)) { // case-normalized (DA-12)
+          await recordDetermination({ applicationNumber: appNum, documentIdentifier: d.documentIdentifier, code: d.documentCode, type: determinationLabel(d.documentCode), officialDate: d.officialDate, groupArtUnit: meta.groupArtUnit, examiner: meta.examiner });
         }
       }
 

@@ -114,7 +114,7 @@ test('classifyRequester — unknown when no request/transaction codes', () => {
 test('detect325d', () => {
   assert.equal(detect325d('discusses 35 U.S.C. 325(d) here'), true);
   assert.equal(detect325d('§ 325 (d) analysis'), true);
-  assert.equal(detect325d('under Section 325 of the statute'), true);
+  assert.equal(detect325d('under Section 325 of the statute'), false); // bare section 325 is NOT a 325(d) signal (DA-8)
   assert.equal(detect325d('nothing relevant here'), false);
   assert.equal(detect325d(''), false);
   assert.equal(detect325d(null), false);

@@ -32,7 +32,7 @@ import {
   getActivePetitionsToRefresh,
   getOrderedReexamsToCheckActions,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, analyzePetition, fetchPreorderCoverage, classifyRequester, fetchTransactions, determinationLabel } from '../../lib/uspto.js';
 import { sendComprehensiveDigestTo } from '../../lib/email.js';
 // Metadata-only helpers — import from the light module so this cron's bundle
 // doesn't pull in pdf-lib / pdf-parse / OCR (which live in lib/ptab.js).
@@ -50,7 +50,6 @@ const CONCURRENCY = 5;
 const WINDOW_MONTHS = 6;      // enumerate reexams filed within this window
 const PRUNE_MONTHS = 24;      // drop reexams older than this (wide enough to keep
                              // the Jan 2025+ determination set in the watch table)
-const DET_CODES = { RXREXO: 'Reexam Ordered', RXREXD: 'Reexam Denied' };
 const PREORDER_CODE = 'RX.PRO.PO'; // patent owner pre-order SNQ submission
 const REQUESTER_LOGIC_V = 4; // bump to force a one-time requester-type reclassification
 
@@ -183,7 +182,7 @@ async function enumerate() {
       rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: from, valueTo: '2100-01-01' }],
       fields: ['applicationNumberText', 'applicationMetaData.filingDate'],
       pagination: { offset, limit: 100 },
-    });
+    }, 12000, { retry404: 1 }); // a transient 404 must not truncate enumeration (DA-3)
     const hits = data.patentFileWrapperDataBag || [];
     if (!hits.length) break;
     const items = hits.map((h) => ({
@@ -216,7 +215,7 @@ async function scanOne(appNum, filingDate) {
     }
   }
 
-  const detDocs = docs.filter((d) => DET_CODES[d.documentCode]);
+  const detDocs = docs.filter((d) => determinationLabel(d.documentCode)); // case-normalized (DA-12)
   if (!detDocs.length) {
     await markReexamScanned(appNum, false);
     return 0;
@@ -231,7 +230,7 @@ async function scanOne(appNum, filingDate) {
       applicationNumber: appNum,
       documentIdentifier: d.documentIdentifier,
       code: d.documentCode,
-      type: DET_CODES[d.documentCode],
+      type: determinationLabel(d.documentCode),
       officialDate: d.officialDate,
       groupArtUnit: meta.groupArtUnit,
       examiner: meta.examiner,
@@ -240,9 +239,14 @@ async function scanOne(appNum, filingDate) {
   }
   // Requester type (patent owner vs third-party): the reliable signal is the
   // RXOSUB.R transaction event, so union the documents with the transactions feed.
-  const txnCodes = await fetchTransactions(appNum).catch(() => []);
-  const requesterType = classifyRequester([...docs.map((d) => d.documentCode), ...txnCodes]);
-  if (requesterType !== 'unknown') await setRequesterType(appNum, requesterType);
+  // If the transactions fetch FAILS, do not classify from documents alone (DA-3/
+  // DA-7): a docs-only guess can be wrong (e.g. patent_owner without the decisive
+  // RXOSUB.R signal). Leaving requester_type NULL lets the backfill re-resolve it.
+  try {
+    const txnCodes = await fetchTransactions(appNum);
+    const requesterType = classifyRequester([...docs.map((d) => d.documentCode), ...txnCodes]);
+    if (requesterType !== 'unknown') await setRequesterType(appNum, requesterType);
+  } catch { /* transactions unavailable — leave NULL for the requester backfill */ }
   await markReexamScanned(appNum, true);
   return found;
 }

@@ -267,7 +267,7 @@ function buildKpi(rows) {
   let ddDeny = 0, ddRefer = 0, instG = 0, instD = 0;
   for (const r of rows) {
     if (r.dd_type === 'deny') ddDeny++; else if (r.dd_type === 'refer') ddRefer++;
-    if (r.inst_type === 'granted') instG++; else if (r.inst_type === 'denied') instD++;
+    if (r._inst === 'granted') instG++; else if (r._inst === 'denied') instD++;
   }
   const ddTot = ddDeny + ddRefer;      // total Director discretionary decisions
   const instTot = instG + instD;       // total Board institution decisions
@@ -287,7 +287,7 @@ function decCell(type, date, pdfUrl, trial, kind) {
   if (!type) return '<span class="ext">—</span>';
   let cls = 'o-other', label = titleCase(type);
   if (kind === 'dd') { if (type === 'refer') { cls = 'o-dd'; label = 'Referred'; } else if (type === 'deny') { cls = 'o-pet'; label = 'Denied'; } }
-  else { if (type === 'granted') { cls = 'o-po'; label = 'Granted'; } else if (type === 'denied') { cls = 'o-pet'; label = 'Denied'; } }
+  else { if (type === 'granted') { cls = 'o-po'; label = 'Granted'; } else if (type === 'granted_in_part') { cls = 'o-po'; label = 'Granted-in-part'; } else if (type === 'denied') { cls = 'o-pet'; label = 'Denied'; } }
   const base = pdfUrl ? `/api/ptab?file=${encodeURIComponent(pdfUrl)}` : '';
   const links = pdfUrl
     ? `<div class="fwd-links"><a class="ext" href="${base}" target="_blank" rel="noopener">View ↗</a><a class="ext" href="${base}&dl=1&name=${encodeURIComponent(trial + '-' + kind + '.pdf')}" download>Download ⤓</a></div>`
@@ -362,7 +362,7 @@ function buildCharts(rows) {
   const gran = periodGran();
   const gl = document.getElementById('gran-label'); if (gl) gl.textContent = gran;
   const dd = rateData(rows, 'dd_date', 'dd_type', 'deny', 'refer', gran);
-  const inst = rateData(rows, 'inst_date', 'inst_type', 'granted', 'denied', gran);
+  const inst = rateData(rows, 'inst_date', '_inst', 'granted', 'denied', gran);
   attachChart('dd-chart', dd, gran, '#9b2c2c', { a: 'Discretionary denials', b: 'Referrals', r: 'Denial rate' });
   attachChart('inst-chart', inst, gran, '#276749', { a: 'Instituted', b: 'Denied', r: 'Grant rate' });
 }
@@ -448,7 +448,7 @@ function exportDecisions() {
   if (typeof exportXlsx !== 'function') { alert('Export helper is still loading — try again in a moment.'); return; }
   const rows = sorted(filtered());
   const ddLabel = { deny: 'Discretionary denial', refer: 'Referred to Board' };
-  const instLabel = { granted: 'Instituted', denied: 'Institution denied' };
+  const instLabel = { granted: 'Instituted', granted_in_part: 'Instituted-in-part', denied: 'Institution denied' };
   const dt = (d) => { const x = fmtDate(d); return x === '—' ? '' : x; };
   const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Patent Owner', 'Petitioner',
     'Discretionary Decision', 'Discretionary Date', 'Institution Decision', 'Institution Date'];
@@ -464,7 +464,8 @@ document.getElementById('export').addEventListener('click', exportDecisions);
     const res = await fetch('/api/ptab?decisions=1');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    ALL = (data.rows || []).map((r) => ({ ...r, _date: rowDate(r) }));
+    // _inst groups granted-in-part with granted for rate math (DA-14); the table/export keep the raw value.
+    ALL = (data.rows || []).map((r) => ({ ...r, _date: rowDate(r), _inst: r.inst_type === 'granted_in_part' ? 'granted' : r.inst_type }));
     if (!ALL.length) {
       document.getElementById('body').innerHTML = '<div class="state">No decisions recorded yet. Populate via <code>/api/ptab?dscan=1&amp;feed=inst</code> and <code>&amp;feed=dd</code>, then reload.</div>';
       buildKpi([]);

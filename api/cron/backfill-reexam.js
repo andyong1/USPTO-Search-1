@@ -343,24 +343,28 @@ export default async function handler(req, res) {
       // re-scanning. Only on the first call (when ?from is provided) to avoid
       // repeating the enumeration on every resume call.
       if (req.query.from) {
-        let offset = 0;
-        for (let page = 0; page < 40 && Date.now() < deadline; page++) {
-          const data = await searchApplications({
-            q: 'applicationNumberText:90*',
-            rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: from, valueTo: '2100-01-01' }],
-            fields: ['applicationNumberText', 'applicationMetaData.filingDate'],
-            pagination: { offset, limit: 100 },
-          });
-          const hits = data.patentFileWrapperDataBag || [];
-          if (!hits.length) break;
-          const items = hits.map((h) => ({
-            applicationNumber: h.applicationNumberText || (h.applicationMetaData && h.applicationMetaData.applicationNumberText),
-            filingDate: h.applicationMetaData && h.applicationMetaData.filingDate,
-          })).filter((x) => x.applicationNumber);
-          await upsertReexams(items);
-          enumerated += items.length;
-          offset += 100;
-          if (hits.length < 100) break;
+        // Per-series (DA-4): include 96/ supplemental-exam-resulting EPRs, matching
+        // the daily enumeration. retry404 so a transient 404 can't truncate (DA-3).
+        for (const prefix of ['90', '96']) {
+          let offset = 0;
+          for (let page = 0; page < 40 && Date.now() < deadline; page++) {
+            const data = await searchApplications({
+              q: `applicationNumberText:${prefix}*`,
+              rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: from, valueTo: '2100-01-01' }],
+              fields: ['applicationNumberText', 'applicationMetaData.filingDate'],
+              pagination: { offset, limit: 100 },
+            }, 12000, { retry404: 1 });
+            const hits = data.patentFileWrapperDataBag || [];
+            if (!hits.length) break;
+            const items = hits.map((h) => ({
+              applicationNumber: h.applicationNumberText || (h.applicationMetaData && h.applicationMetaData.applicationNumberText),
+              filingDate: h.applicationMetaData && h.applicationMetaData.filingDate,
+            })).filter((x) => x.applicationNumber);
+            await upsertReexams(items);
+            enumerated += items.length;
+            offset += 100;
+            if (hits.length < 100) break;
+          }
         }
         await resetReexamDeterminedSince(from);
       }

@@ -13,7 +13,7 @@
 // each invocation stays small enough for Vercel Hobby limits.
 
 import {
-  reexamState, setReexamEnumerated,
+  reexamState, setReexamEnumerated, setEnumerationStats,
   upsertReexams, pruneReexams, getReexamScanBatch, markReexamScanned,
   recordDetermination,
   reexamCounts, getAppsMissingDeterminationMeta, updateDeterminationMeta,
@@ -174,28 +174,46 @@ async function detectConclusionsStep(maxApps, deadline) {
 
 async function enumerate() {
   const from = isoMonthsAgo(WINDOW_MONTHS);
-  let offset = 0;
-  let added = 0;
-  for (let page = 0; page < 40; page++) { // hard cap (40 * 100 = 4000)
-    const data = await searchApplications({
-      q: 'applicationNumberText:90*',
-      rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: from, valueTo: '2100-01-01' }],
-      fields: ['applicationNumberText', 'applicationMetaData.filingDate'],
-      pagination: { offset, limit: 100 },
-    }, 12000, { retry404: 1 }); // a transient 404 must not truncate enumeration (DA-3)
-    const hits = data.patentFileWrapperDataBag || [];
-    if (!hits.length) break;
-    const items = hits.map((h) => ({
-      applicationNumber: h.applicationNumberText || (h.applicationMetaData && h.applicationMetaData.applicationNumberText),
-      filingDate: h.applicationMetaData && h.applicationMetaData.filingDate,
-    })).filter((x) => x.applicationNumber);
-    await upsertReexams(items);
-    added += items.length;
-    offset += 100;
-    if (hits.length < 100) break;
+  let added = 0, fetched = 0, reported = 0, sawError = false;
+  // Per-series enumeration (DA-4): series 90/ (ordinary EPR requests) AND series
+  // 96/ (supplemental-examination-resulting EPRs, previously excluded entirely).
+  // Two simple queries instead of one OR-query — per-series reported counts fall
+  // out for free and feed the reconciliation below.
+  for (const prefix of ['90', '96']) {
+    let offset = 0, seriesReported = null;
+    for (let page = 0; page < 40; page++) { // hard cap (40 * 100 = 4000) per series
+      let data;
+      try {
+        data = await searchApplications({
+          q: `applicationNumberText:${prefix}*`,
+          rangeFilters: [{ field: 'applicationMetaData.filingDate', valueFrom: from, valueTo: '2100-01-01' }],
+          fields: ['applicationNumberText', 'applicationMetaData.filingDate'],
+          pagination: { offset, limit: 100 },
+        }, 12000, { retry404: 1 }); // a transient 404 must not truncate enumeration (DA-3)
+      } catch { sawError = true; break; }
+      if (seriesReported == null) seriesReported = data.count ?? 0;
+      const hits = data.patentFileWrapperDataBag || [];
+      if (!hits.length) break;
+      const items = hits.map((h) => ({
+        applicationNumber: h.applicationNumberText || (h.applicationMetaData && h.applicationMetaData.applicationNumberText),
+        filingDate: h.applicationMetaData && h.applicationMetaData.filingDate,
+      })).filter((x) => x.applicationNumber);
+      await upsertReexams(items);
+      added += items.length;
+      fetched += items.length;
+      offset += 100;
+      if (hits.length < 100) break;
+    }
+    reported += seriesReported || 0;
   }
   await pruneReexams(isoMonthsAgo(PRUNE_MONTHS));
-  await setReexamEnumerated();
+  // Reconciliation (DA-2/DA-3): persist reported vs fetched vs DB-window counts,
+  // and only mark the day handled when the run was complete AND not a suspicious
+  // zero (reported 0 while the DB holds rows in the window = likely false zero).
+  // An incomplete run re-attempts next hour instead of silently waiting a day.
+  const complete = !sawError && fetched >= reported;
+  const dbCount = await setEnumerationStats({ reported, fetched, windowFrom: from, complete });
+  if (complete && !(reported === 0 && dbCount > 0)) await setReexamEnumerated();
   return added;
 }
 

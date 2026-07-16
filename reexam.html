@@ -678,7 +678,7 @@ function renderTable() {
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
-      <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span>${pdf}</td>
+      <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span>${d.doc_count > 1 ? `<span class="ext" style="margin-left:6px" title="This proceeding has ${d.doc_count} determination documents on file; the latest is shown and counted.">${d.doc_count} docs</span>` : ''}${pdf}</td>
       <td>${fmtDate(d.official_date)}</td>
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>

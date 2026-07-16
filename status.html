@@ -292,6 +292,10 @@ function render(s) {
       <h2>Totals</h2>
       <table>
         <tr><td>Reexams tracked (watch list)</td><td>${s.watch_total ?? '—'}</td></tr>
+        <tr><td>Enumeration reconciliation (API reported / fetched / in DB)</td>
+          <td>${s.enum_reported ?? '—'} / ${s.enum_fetched ?? '—'} / ${s.enum_db_count ?? '—'}
+            ${s.enum_complete === false ? ' <span style="color:#c53030;font-weight:600">INCOMPLETE</span>' : ''}
+            <span class="muted">window from ${s.enum_window_from ?? '—'}</span></td></tr>
         <tr><td>— determined</td><td>${(s.watch_total != null && s.undetermined != null) ? (s.watch_total - s.undetermined) : '—'}</td></tr>
         <tr><td>— never scanned yet</td><td>${s.never_scanned ?? '—'}</td></tr>
         <tr><td>Tracked proceedings (alerts)</td><td>${s.watchlist_count ?? '—'}</td></tr>

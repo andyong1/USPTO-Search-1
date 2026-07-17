@@ -13,7 +13,7 @@ import {
   getDeterminationsToCheckConclusion, recordConclusionDocs, markCertRejected, resetConclusionCerts,
   getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText, getConclusionText,
   getCertsNeedingEngine2, countCertsNeedingEngine2, markCertEngine2,
-  getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown,
+  getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown, backfillSeries96Requester,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, determinationLabel } from '../../lib/uspto.js';
@@ -123,22 +123,28 @@ export default async function handler(req, res) {
     // running 5 in parallel (~10 in flight) trips ODP rate limits and silently
     // leaves blanks.
     if (req.query && req.query.techcenter === '1') {
+      // &series=96 restricts the backfill to supplemental-exam-resulting EPRs
+      // (e.g. to fill rows the determinations backfill added without enriching).
+      const series = req.query.series ? String(req.query.series).replace(/[^0-9]/g, '') : null;
       let repooled = 0;
       if (req.query.retry === '1') repooled = await resetFailedTechCenter();
+      // Series 96/ requester is patent_owner by statute — fill it in the same call
+      // (instant SQL, no USPTO fetch) so a 96/ backfill covers TC + requester.
+      const requesterSet = series === '96' ? await backfillSeries96Requester() : 0;
       const deadline = Date.now() + budgetMs;
       const TC_CONCURRENCY = 3;
       let checked = 0, resolved = 0;
       while (Date.now() < deadline) {
-        const rows = await getDeterminationsToCheckTechCenter(TC_CONCURRENCY);
+        const rows = await getDeterminationsToCheckTechCenter(TC_CONCURRENCY, series);
         if (!rows.length) break;
         await Promise.all(rows.map(async (r) => {
           try { const x = await detectTechCenterForApp(r.application_number); checked++; if (x.found) resolved++; }
           catch { /* leave for a later call */ }
         }));
       }
-      const remaining = await countTechCenterToCheck();
+      const remaining = await countTechCenterToCheck(series);
       const breakdown = await reexamPatentResolutionBreakdown();
-      res.status(200).json({ ok: true, mode: 'techcenter', repooled, checked, resolved, remaining, done: remaining === 0, breakdown });
+      res.status(200).json({ ok: true, mode: 'techcenter', series: series || 'all', repooled, requesterSet, checked, resolved, remaining, done: remaining === 0, breakdown });
       return;
     }
 

@@ -356,6 +356,12 @@ export default async function handler(req, res) {
     const reqApps = await getAppsMissingRequesterType(12);
     for (let i = 0; i < reqApps.length; i += CONCURRENCY) {
       const slice = reqApps.slice(i, i + CONCURRENCY).map(async (appNum) => {
+        // Series 96/ is patent-owner-only by statute (35 U.S.C. 257(a)) — classify
+        // directly, matching scanOne, so it isn't mislabeled 'unknown' by the
+        // document/transaction heuristic (no RXOSUB.R on a supplemental exam).
+        if (String(appNum).replace(/[^0-9]/g, '').startsWith('96')) {
+          await setRequesterType(appNum, 'patent_owner'); requesterBackfilled++; return;
+        }
         try {
           const [docCodes, txnCodes] = await Promise.all([
             fetchDocuments(appNum).then((d) => d.map((x) => x.documentCode)).catch(() => []),

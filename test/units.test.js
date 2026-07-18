@@ -403,7 +403,14 @@ test('extractReferenceNames — surnames from obviousness/anticipation grounds',
   const t = 'Claims 1-7 are obvious over Asada in view of Kinoshita. Claim 15 is obvious over '
     + 'Asada in view of Kinoshita and Dejima. Claim 20 is anticipated by Younan.';
   const n = extractReferenceNames(t);
-  assert.ok(n.includes('asada') && n.includes('kinoshita') && n.includes('younan'), JSON.stringify(n));
+  assert.ok(n.includes('asada') && n.includes('kinoshita') && n.includes('younan') && n.includes('dejima'), JSON.stringify(n));
+  // full chain captured (tertiary and beyond): "and", comma, and "further in view of"
+  assert.deepEqual(extractReferenceNames('obvious over Asada in view of Kinoshita and Dejima and Ashdown'),
+    ['asada', 'ashdown', 'dejima', 'kinoshita']);
+  assert.deepEqual(extractReferenceNames('obvious over Asada, Kinoshita, and Dejima'), ['asada', 'dejima', 'kinoshita']);
+  // chain stops at a sentence boundary / stopword, not run into prose
+  assert.deepEqual(extractReferenceNames('obvious over Asada in view of Kinoshita. The Board and Requester agree'),
+    ['asada', 'kinoshita']);
   // stopwords / non-references after an anchor are excluded
   assert.deepEqual(extractReferenceNames('rendered obvious over the claims and Requester'), []);
   // OCR-joined "ofName"

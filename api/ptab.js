@@ -35,11 +35,12 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
   markPatentProceedingsScanned, patentProceedingsCoverage,
   getReexamGroundsMap, getPtabGroundsMap,
-  getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds } from '../lib/db.js';
+  getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
+  getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs } from '../lib/db.js';
 import { compareGrounds, extractReferences } from '../lib/grounds.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
-import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
+import { fetchFwdPage, extractFwdText, extractDocFullText, fetchPetitionDoc, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
   fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, fetchProceedingsByPatent, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
 
 export const config = { maxDuration: 60 };
@@ -456,6 +457,38 @@ export default async function handler(req, res) {
       await Promise.all(Array.from({ length: 4 }, worker));
       const remaining = await countInstitutionsToExtractGrounds();
       res.status(200).json({ ok: true, mode: 'instrefs', processed, withRefs, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── Petition reference extraction (primary "same art" source) ──
+    // For each linked PTAB proceeding, locate its petition, full-text parse it, and
+    // store the prior-art references it asserts — the outcome-independent source
+    // that also covers trials denied at institution / discretionarily denied.
+    // Petitions are large, so this is the heaviest step: low concurrency, longer
+    // budget, resumable. Requires ?pscan=1 to have populated patent_proceedings.
+    if (q.petrefs) {
+      if (!gate(req, res)) return;
+      const deadline = Date.now() + 50000;
+      const BATCH = 40;
+      const trials = await getTrialsToExtractPetitionRefs(BATCH);
+      let processed = 0, withRefs = 0, noPetition = 0, i = 0; const errors = [];
+      async function worker() {
+        while (i < trials.length && Date.now() < deadline) {
+          const trial = trials[i++];
+          try {
+            const pet = await fetchPetitionDoc(trial);
+            if (!pet || !pet.url) { await setPetitionRefs(trial, [], null); noPetition++; processed++; continue; }
+            const text = await extractDocFullText(pet.url);
+            const refs = extractReferences(text);
+            await setPetitionRefs(trial, refs, pet.docId);
+            if (refs.length) withRefs++;
+            processed++;
+          } catch (e) { if (errors.length < 6) errors.push({ trial, error: String(e.message || e) }); }
+        }
+      }
+      await Promise.all(Array.from({ length: 3 }, worker));
+      const remaining = await countTrialsToExtractPetitionRefs();
+      res.status(200).json({ ok: true, mode: 'petrefs', processed, withRefs, noPetition, remaining, done: remaining === 0, errors });
       return;
     }
 

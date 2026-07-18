@@ -6,7 +6,7 @@ import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reex
 import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
-import { extractReferences, extractTrialNumbers, canonTrial, compareGrounds } from '../lib/grounds.js';
+import { extractReferences, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc } from '../lib/grounds.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -389,4 +389,12 @@ test('compareGrounds — mention + shared-reference intersection', () => {
   const r2 = compareGrounds({ orderRefs: ['5575861'], orderTrials: [], ptabRefs: ['1234567'], trialNumber: 'IPR2024-00545' });
   assert.equal(r2.mentioned, false);
   assert.deepEqual(r2.sharedRefs, []);
+});
+
+test('isPetitionDoc — identifies the operative petition, excludes replies/responses', () => {
+  for (const s of ['Petition', 'Petition for Inter Partes Review', 'Corrected Petition']) assert.equal(isPetitionDoc(s), true, s);
+  for (const s of ["Petitioner Reply", "Petitioner's Reply to Patent Owner Response", 'Patent Owner Preliminary Response',
+    'Petitioner Opposition to Motion', 'Notice of Filing Petition', "Petitioner's Updated Exhibit List", 'Power of Attorney', '']) {
+    assert.equal(isPetitionDoc(s), false, s);
+  }
 });

@@ -600,7 +600,7 @@ export default async function handler(req, res) {
         const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
         // Grounds overlap: refs/trial-mentions extracted from this reexam's order
         // text vs. each PTAB proceeding's extracted refs (lib/grounds.js).
-        const rg = reexamGrounds.get(d.application_number) || { refs: [], trials: [] };
+        const rg = reexamGrounds.get(d.application_number) || { refs: [], trials: [], cites325d: false };
         const mapped = iprs.map((t) => {
           const st = t.status || '';
           // Reflect the MOST RECENT decision: FWD > institution > discretionary.
@@ -627,15 +627,35 @@ export default async function handler(req, res) {
           reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
           requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
+          cites325d: !!rg.cites325d,
           grounds: { mentioned: anyMentioned, sharedRefs, hasText: reexamGrounds.has(d.application_number) },
         });
       }
       links.sort((a, b) => (rank[a.category] - rank[b.category]) || String(b.reexam_date || '').localeCompare(String(a.reexam_date || '')));
 
+      // Grounds-conditioned grant rates: among linked reexams that (a) share prior
+      // art with a prior/parallel PTAB proceeding, or (b) cite §325(d), how many
+      // were nonetheless ORDERED vs. DENIED. hasTextTotal = linked reexams whose
+      // determination text we've extracted (the denominator these rates are over).
+      let ovOrdered = 0, ovDenied = 0, d3Ordered = 0, d3Denied = 0, hasTextTotal = 0;
+      for (const l of links) {
+        const ordered = /ordered/i.test(l.reexam_type || '');
+        const denied = /denied/i.test(l.reexam_type || '');
+        if (l.grounds && l.grounds.hasText) hasTextTotal++;
+        if (l.grounds && l.grounds.sharedRefs && l.grounds.sharedRefs.length) { if (ordered) ovOrdered++; else if (denied) ovDenied++; }
+        if (l.cites325d) { if (ordered) d3Ordered++; else if (denied) d3Denied++; }
+      }
+      const groundsStats = {
+        overlap: { ordered: ovOrdered, denied: ovDenied, total: ovOrdered + ovDenied, pct: pct(ovOrdered, ovOrdered + ovDenied) },
+        cite325d: { ordered: d3Ordered, denied: d3Denied, total: d3Ordered + d3Denied, pct: pct(d3Ordered, d3Ordered + d3Denied) },
+        hasTextTotal,
+      };
+
       let updatedAt = null;
       for (const r of filings) if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) updatedAt = r.updated_at;
 
       res.status(200).json({
+        groundsStats,
         headToHead: {
           since: SINCE,
           filings: filingsTotals,

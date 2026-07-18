@@ -52,6 +52,7 @@
     .b-den { background: #fed7d7; color: #9b2c2c; } .b-fwd { background: #e9d8fd; color: #553c9a; }
     .b-inst { background: #feebc8; color: #9c4221; } .b-other { background: #e2e8f0; color: #4a5568; }
     .b-po { background: #c6f6d5; color: #276749; }
+    .b-art { background: #fefcbf; color: #744210; } .b-flag { background: #bee3f8; color: #2c5282; }
     .rx-ord { background: #c6f6d5; color: #276749; } .rx-den { background: #fed7d7; color: #c53030; }
     .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
     .ipr-item .dt { font-size: 0.72rem; color: #94a3b8; }
@@ -310,14 +311,28 @@ function renderPipeline(data) {
   const deniedLine = denied.length
     ? ` <strong>${dgPct}%</strong> of reexaminations (${deniedGranted} of ${denied.length}) were granted where the earlier PTAB challenge was denied (institution or discretionary).`
     : '';
-  const summary = `<div class="pipe-summary"><strong>${links.length}</strong> reexamination${links.length === 1 ? '' : 's'} linked to a PTAB proceeding on the same patent — <strong>${denied.length}</strong> where the PTAB challenge was denied (institution or discretionary) before reexam.${deniedLine} <span style="color:#64748b">${esc(covNote)}</span></div>`;
+  // Grant rate among linked reexams that share prior art with a prior/parallel
+  // PTAB proceeding — the headline the user asked for: were reexams granted even
+  // though the same art was already before the PTAB?
+  const gs = data.groundsStats || {};
+  const ov = gs.overlap || { ordered: 0, denied: 0, total: 0, pct: null };
+  const overlapLine = ov.total
+    ? ` <strong>${ov.pct}%</strong> of reexaminations with <strong>overlapping prior art</strong> (${ov.ordered} of ${ov.total}) were granted despite that art having been before the PTAB — ${ov.denied} denied.`
+    : '';
+  const summary = `<div class="pipe-summary"><strong>${links.length}</strong> reexamination${links.length === 1 ? '' : 's'} linked to a PTAB proceeding on the same patent — <strong>${denied.length}</strong> where the PTAB challenge was denied (institution or discretionary) before reexam.${deniedLine}${overlapLine} <span style="color:#64748b">${esc(covNote)}</span></div>`;
+  const flag = (on, label, title) => on ? `<span class="badge b-flag" title="${esc(title)}">${label}</span>` : '<span class="dt">—</span>';
   const rows = links.map((l) => {
     const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
     const rx = `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a>${rxBadge(l.reexam_type)}<span class="dt">${esc(ymd(l.reexam_date))}</span></div>`;
     const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');
-    return `<tr class="${l.category === 'ipr_denied' ? 'denied' : ''}"><td>${patCell}</td><td>${rx}</td><td>${iprs}</td></tr>`;
+    const shared = (l.grounds && l.grounds.sharedRefs) || [];
+    const overlapCell = shared.length
+      ? `<span class="badge b-art" title="Prior-art reference(s) cited in both the reexam determination and a prior/parallel proceeding: ${esc(shared.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">${shared.length} shared</span>`
+      : '<span class="dt">—</span>';
+    const d325Cell = flag(l.cites325d, '§325(d)', 'The reexamination determination text references 35 U.S.C. §325(d).');
+    return `<tr class="${l.category === 'ipr_denied' ? 'denied' : ''}"><td>${patCell}</td><td>${rx}</td><td>${d325Cell}</td><td>${overlapCell}</td><td>${iprs}</td></tr>`;
   }).join('');
-  el('pipeline-body').innerHTML = summary + `<div class="table-wrap"><table class="link-table"><thead><tr><th>Patent</th><th>Reexamination</th><th>Prior / parallel PTAB proceeding(s)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  el('pipeline-body').innerHTML = summary + `<div class="table-wrap"><table class="link-table"><thead><tr><th>Patent</th><th>Reexamination</th><th>§325(d)</th><th>Overlapping art</th><th>Prior / parallel PTAB proceeding(s)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function sinceForPeriod(p) {

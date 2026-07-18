@@ -646,14 +646,12 @@ function ptabCell(d) {
   const link = linkByApp.get(d.application_number || '');
   const iprs = (link && link.iprs) || [];
   if (!iprs.length) return '<span class="ext">—</span>';
-  // Grounds-overlap markers: "cited" = the reexam order names this proceeding;
-  // "same art ×N" = prior-art reference(s) appear in both the order and the
-  // proceeding's decision (tooltip lists them). Heuristic — verify against docs.
+  // Grounds-overlap marker: "same art ×N" = prior-art reference(s) appear in both
+  // the reexam order and the proceeding's decision (tooltip lists them).
+  // Heuristic (OCR-derived) — verify against the documents.
   const gflags = (x) => {
-    let s = '';
-    if (x.mentioned) s += '<span class="badge g-cite" title="The reexamination order text names this PTAB proceeding.">cited</span>';
-    if (x.sharedRefs && x.sharedRefs.length) s += `<span class="badge g-art" title="Prior-art reference(s) cited in BOTH the reexam order and this proceeding: ${esc(x.sharedRefs.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">same art ×${x.sharedRefs.length}</span>`;
-    return s;
+    if (x.sharedRefs && x.sharedRefs.length) return `<span class="badge g-art" title="Prior-art reference(s) cited in BOTH the reexam order and this proceeding: ${esc(x.sharedRefs.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">same art ×${x.sharedRefs.length}</span>`;
+    return '';
   };
   const item = (x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}${gflags(x)}</div>`;
   const shown = iprs.slice(0, 2).map(item).join('');

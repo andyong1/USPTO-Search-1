@@ -6,6 +6,7 @@ import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reex
 import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
+import { extractReferences, extractTrialNumbers, canonTrial, compareGrounds } from '../lib/grounds.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -347,4 +348,45 @@ test('unsubToken — no CRON_SECRET => no token, nothing verifies (fail closed)'
   } finally {
     if (prev !== undefined) process.env.CRON_SECRET = prev;
   }
+});
+
+// ── Grounds / prior-art overlap extraction (lib/grounds.js) ──────────
+test('extractReferences — utility patents and pre-grant pubs, OCR-tolerant', () => {
+  const t = 'rejected as anticipated by US 5,575,861 to Younan, obvious over US 6,869,981 '
+    + 'in view of US 2008/0216889 to Blong. See also US 10,009,208 B2.';
+  assert.deepEqual(extractReferences(t), ['10009208', '20080216889', '5575861', '6869981']);
+  // stray OCR spaces inside the number groups are tolerated
+  assert.deepEqual(extractReferences('US 5,575,86 1 and US 4,860, 509'), ['4860509', '5575861']);
+});
+
+test('extractReferences — ignores statutes, claim ranges, bare numbers', () => {
+  assert.deepEqual(extractReferences('under 35 U.S.C. 103, claims 1-25 of the 8,438,796 patent'), []);
+  assert.deepEqual(extractReferences(''), []);
+});
+
+test('extractTrialNumbers — canonicalizes IPR/PGR/CBM with OCR separators', () => {
+  assert.deepEqual(extractTrialNumbers('see IPR2020-00019 and IPR 2024 01428, plus PGR2021-00001'),
+    ['IPR2020-00019', 'IPR2024-01428', 'PGR2021-00001']);
+  assert.deepEqual(extractTrialNumbers('no trials here'), []);
+});
+
+test('canonTrial — normalizes an externally-supplied trial number', () => {
+  assert.equal(canonTrial('IPR2020-00019'), 'IPR2020-00019');
+  assert.equal(canonTrial('ipr 2020 00019'), 'IPR2020-00019');
+  assert.equal(canonTrial('not a trial'), null);
+});
+
+test('compareGrounds — mention + shared-reference intersection', () => {
+  const r = compareGrounds({
+    orderRefs: ['5575861', '6869981', '20080216889'],
+    orderTrials: ['IPR2020-00019'],
+    ptabRefs: ['6869981', '9999999'],
+    trialNumber: 'IPR2020-00019',
+  });
+  assert.equal(r.mentioned, true);
+  assert.deepEqual(r.sharedRefs, ['6869981']);
+  // not mentioned, no shared art
+  const r2 = compareGrounds({ orderRefs: ['5575861'], orderTrials: [], ptabRefs: ['1234567'], trialNumber: 'IPR2024-00545' });
+  assert.equal(r2.mentioned, false);
+  assert.deepEqual(r2.sharedRefs, []);
 });

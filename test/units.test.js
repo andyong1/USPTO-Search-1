@@ -6,7 +6,7 @@ import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reex
 import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
-import { extractReferences, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc } from '../lib/grounds.js';
+import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc } from '../lib/grounds.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -397,4 +397,23 @@ test('isPetitionDoc — identifies the operative petition, excludes replies/resp
     'Petitioner Opposition to Motion', 'Notice of Filing Petition', "Petitioner's Updated Exhibit List", 'Power of Attorney', '']) {
     assert.equal(isPetitionDoc(s), false, s);
   }
+});
+
+test('extractReferenceNames — surnames from obviousness/anticipation grounds', () => {
+  const t = 'Claims 1-7 are obvious over Asada in view of Kinoshita. Claim 15 is obvious over '
+    + 'Asada in view of Kinoshita and Dejima. Claim 20 is anticipated by Younan.';
+  const n = extractReferenceNames(t);
+  assert.ok(n.includes('asada') && n.includes('kinoshita') && n.includes('younan'), JSON.stringify(n));
+  // stopwords / non-references after an anchor are excluded
+  assert.deepEqual(extractReferenceNames('rendered obvious over the claims and Requester'), []);
+  // OCR-joined "ofName"
+  assert.ok(extractReferenceNames('obvious over Asada in view ofKinoshita').includes('kinoshita'));
+});
+
+test('extractAllRefs — merges numbers and names, de-duped', () => {
+  // "to Kinoshita" is the assignee of the numbered patent (not an anchor), so the
+  // number represents it; the name after "over" is captured.
+  assert.deepEqual(extractAllRefs('obvious over Asada in view of US 5,575,861 to Kinoshita'), ['5575861', 'asada']);
+  // named-only grounds (no patent numbers) still yield the reference surnames
+  assert.deepEqual(extractAllRefs('obvious over Asada in view of Kinoshita'), ['asada', 'kinoshita']);
 });

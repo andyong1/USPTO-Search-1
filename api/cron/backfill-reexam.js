@@ -24,7 +24,7 @@ import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
-import { extractReferences, extractTrialNumbers } from '../../lib/grounds.js';
+import { extractAllRefs, extractTrialNumbers } from '../../lib/grounds.js';
 import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 export const config = { maxDuration: 60 };
@@ -347,7 +347,7 @@ export default async function handler(req, res) {
         const docs = await getDocsToExtractGrounds(100);
         if (!docs.length) break;
         for (const d of docs) {
-          await setDocGrounds(d.doc_id, extractReferences(d.text), extractTrialNumbers(d.text));
+          await setDocGrounds(d.doc_id, extractAllRefs(d.text), extractTrialNumbers(d.text));
           reexamDocs++;
         }
       }
@@ -355,7 +355,7 @@ export default async function handler(req, res) {
         const fwds = await getFwdsToExtractGrounds(100);
         if (!fwds.length) break;
         for (const f of fwds) {
-          await setFwdGrounds(f.trial_number, extractReferences(f.decision_text));
+          await setFwdGrounds(f.trial_number, extractAllRefs(f.decision_text));
           fwdDocs++;
         }
       }

@@ -37,7 +37,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getReexamGroundsMap, getPtabGroundsMap,
   getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
   getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs } from '../lib/db.js';
-import { compareGrounds, extractReferences } from '../lib/grounds.js';
+import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, extractDocFullText, fetchPetitionDoc, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
@@ -447,7 +447,7 @@ export default async function handler(req, res) {
           const r = rows[i++];
           try {
             const { text } = await extractFwdText(r.inst_pdf_url);
-            const refs = extractReferences(text);
+            const refs = extractAllRefs(text);
             await setInstitutionGrounds(r.trial_number, refs);
             if (refs.length) withRefs++;
             processed++;
@@ -479,7 +479,7 @@ export default async function handler(req, res) {
             const pet = await fetchPetitionDoc(trial);
             if (!pet || !pet.url) { await setPetitionRefs(trial, [], null); noPetition++; processed++; continue; }
             const text = await extractDocFullText(pet.url);
-            const refs = extractReferences(text);
+            const refs = extractAllRefs(text);
             await setPetitionRefs(trial, refs, pet.docId);
             if (refs.length) withRefs++;
             processed++;

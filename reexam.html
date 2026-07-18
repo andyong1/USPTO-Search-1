@@ -239,6 +239,9 @@
       <label id="ptab-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
         <input type="checkbox" id="ptab-only" onchange="tablePage=1;renderTable()" /> Show only rows with prior/parallel PTAB proceedings
       </label>
+      <label id="sameart-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="sameart-only" onchange="tablePage=1;renderTable()" /> Show only rows with prior/parallel PTAB proceedings with same art
+      </label>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
@@ -544,8 +547,10 @@ function sortReexam(key) {
 function filteredSorted() {
   const q = ((document.getElementById('table-filter') || {}).value || '').trim().toLowerCase();
   const ptabOnly = !!((document.getElementById('ptab-only') || {}).checked);
+  const sameArtOnly = !!((document.getElementById('sameart-only') || {}).checked);
   let items = allDeterminations;
   if (ptabOnly) items = items.filter((d) => linkByApp.has(d.application_number));
+  if (sameArtOnly) items = items.filter((d) => { const l = linkByApp.get(d.application_number); return l && l.grounds && l.grounds.sharedRefs && l.grounds.sharedRefs.length; });
   if (q) {
     items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
       .some((v) => String(v || '').toLowerCase().includes(q)));
@@ -885,6 +890,7 @@ function applyFilters() {
       if (!cd || !cd.links) return;
       linkByApp = new Map(cd.links.map((l) => [l.appNum, l]));
       const cb = document.getElementById('ptab-only-wrap'); if (cb) cb.style.display = 'flex';
+      const cb2 = document.getElementById('sameart-only-wrap'); if (cb2) cb2.style.display = 'flex';
       applyFilters();
     }).catch(() => {});
   } catch (e) {

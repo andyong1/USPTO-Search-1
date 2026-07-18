@@ -34,8 +34,9 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates,
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
   markPatentProceedingsScanned, patentProceedingsCoverage,
-  getReexamGroundsMap, getFwdGroundsMap } from '../lib/db.js';
-import { compareGrounds } from '../lib/grounds.js';
+  getReexamGroundsMap, getPtabGroundsMap,
+  getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds } from '../lib/db.js';
+import { compareGrounds, extractReferences } from '../lib/grounds.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
@@ -430,6 +431,34 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Institution-decision reference extraction (widens "same art" coverage) ──
+    // Downloads each institution-decision PDF (born-digital text) and stores the
+    // prior-art references it cites, so the reexam-vs-PTAB overlap can match trials
+    // that never reached a FWD. Resumable + time-bounded (~40s); run until done.
+    if (q.instrefs) {
+      if (!gate(req, res)) return;
+      const deadline = Date.now() + 45000;
+      const BATCH = 60;
+      const rows = await getInstitutionsToExtractGrounds(BATCH);
+      let processed = 0, withRefs = 0, i = 0; const errors = [];
+      async function worker() {
+        while (i < rows.length && Date.now() < deadline) {
+          const r = rows[i++];
+          try {
+            const { text } = await extractFwdText(r.inst_pdf_url);
+            const refs = extractReferences(text);
+            await setInstitutionGrounds(r.trial_number, refs);
+            if (refs.length) withRefs++;
+            processed++;
+          } catch (e) { if (errors.length < 6) errors.push({ trial: r.trial_number, error: String(e.message || e) }); }
+        }
+      }
+      await Promise.all(Array.from({ length: 4 }, worker));
+      const remaining = await countInstitutionsToExtractGrounds();
+      res.status(200).json({ ok: true, mode: 'instrefs', processed, withRefs, remaining, done: remaining === 0, errors });
+      return;
+    }
+
     // ── Filings trends read (daily series per kind) ──
     if (q.filings) {
       res.setHeader('Cache-Control', 'no-store');
@@ -453,7 +482,7 @@ export default async function handler(req, res) {
       const [dets, decisions, fwd, filings, patentProcs, ppCov, reexamGrounds, fwdGrounds] = await Promise.all([
         listRecentDeterminations(), listPtabDecisions(), listPtabFwdBrief(), listFilings(),
         listPatentProceedings(), patentProceedingsCoverage(),
-        getReexamGroundsMap(), getFwdGroundsMap(),
+        getReexamGroundsMap(), getPtabGroundsMap(),
       ]);
       const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const has = (x) => x != null && String(x).trim() !== '';

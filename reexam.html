@@ -46,6 +46,8 @@
     .badge.b-inst { background: #feebc8; color: #9c4221; }
     .badge.b-other { background: #e2e8f0; color: #4a5568; }
     .badge.b-po { background: #c6f6d5; color: #276749; }
+    .badge.g-cite { background: #edf2f7; color: #2d3748; }
+    .badge.g-art { background: #fefcbf; color: #744210; }
     .ipr-item { margin: 2px 0; display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
     .ptab-more { display: inline-block; margin-top: 3px; font-size: 0.75rem; color: #1a3a6b; font-weight: 600; cursor: pointer; }
     .ptab-more:hover { text-decoration: underline; }
@@ -644,7 +646,16 @@ function ptabCell(d) {
   const link = linkByApp.get(d.application_number || '');
   const iprs = (link && link.iprs) || [];
   if (!iprs.length) return '<span class="ext">—</span>';
-  const item = (x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}</div>`;
+  // Grounds-overlap markers: "cited" = the reexam order names this proceeding;
+  // "same art ×N" = prior-art reference(s) appear in both the order and the
+  // proceeding's decision (tooltip lists them). Heuristic — verify against docs.
+  const gflags = (x) => {
+    let s = '';
+    if (x.mentioned) s += '<span class="badge g-cite" title="The reexamination order text names this PTAB proceeding.">cited</span>';
+    if (x.sharedRefs && x.sharedRefs.length) s += `<span class="badge g-art" title="Prior-art reference(s) cited in BOTH the reexam order and this proceeding: ${esc(x.sharedRefs.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">same art ×${x.sharedRefs.length}</span>`;
+    return s;
+  };
+  const item = (x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}${gflags(x)}</div>`;
   const shown = iprs.slice(0, 2).map(item).join('');
   if (iprs.length <= 2) return shown;
   const extra = iprs.slice(2).map(item).join('');

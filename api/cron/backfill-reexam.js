@@ -14,6 +14,7 @@ import {
   getConclusionsToParse, getConclusionsToReparse, countConclusionsUnparsed, setConclusionOutcome, resetConclusionParse, resetAllConclusionParse, clearUnparsedCertText, getConclusionText,
   getCertsNeedingEngine2, countCertsNeedingEngine2, markCertEngine2,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown, backfillSeries96Requester,
+  getDocsToExtractGrounds, setDocGrounds, countDocsToExtractGrounds, getFwdsToExtractGrounds, setFwdGrounds, countFwdsToExtractGrounds,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
 import { searchApplications, fetchDocuments, fetchMetaData, determinationLabel } from '../../lib/uspto.js';
@@ -23,6 +24,7 @@ import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
+import { extractReferences, extractTrialNumbers } from '../../lib/grounds.js';
 import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 export const config = { maxDuration: 60 };
@@ -331,6 +333,34 @@ export default async function handler(req, res) {
       }
       const remaining = await countConclusionsUnparsed();
       res.status(200).json({ ok: true, mode: 'outcomes', ocrConfigured: ocrTextConfigured(), ocrEngine, repooled, reparsedFromCache: reparsed, ocrChecked: checked, parsedOutcomes: parsedOut, rejected, failed, rateLimited, errors, samples, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?grounds=1 — extract prior-art references + PTAB-trial mentions from the
+    // locally-OCR'd reexam determination text (reexam_doc_text) and prior-art
+    // references from PTAB FWD text (ptab_fwd.decision_text), for the reexam-vs-
+    // prior-PTAB overlap analysis. Pure CPU (no USPTO calls) — fast; run until done.
+    if (req.query && req.query.grounds === '1') {
+      const deadline = Date.now() + budgetMs;
+      let reexamDocs = 0, fwdDocs = 0;
+      while (Date.now() < deadline) {
+        const docs = await getDocsToExtractGrounds(100);
+        if (!docs.length) break;
+        for (const d of docs) {
+          await setDocGrounds(d.doc_id, extractReferences(d.text), extractTrialNumbers(d.text));
+          reexamDocs++;
+        }
+      }
+      while (Date.now() < deadline) {
+        const fwds = await getFwdsToExtractGrounds(100);
+        if (!fwds.length) break;
+        for (const f of fwds) {
+          await setFwdGrounds(f.trial_number, extractReferences(f.decision_text));
+          fwdDocs++;
+        }
+      }
+      const remaining = (await countDocsToExtractGrounds()) + (await countFwdsToExtractGrounds());
+      res.status(200).json({ ok: true, mode: 'grounds', reexamDocs, fwdDocs, remaining, done: remaining === 0 });
       return;
     }
 

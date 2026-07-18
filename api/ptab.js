@@ -33,7 +33,9 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings, getPtabKv, setPtabKv,
   listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates,
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
-  markPatentProceedingsScanned, patentProceedingsCoverage } from '../lib/db.js';
+  markPatentProceedingsScanned, patentProceedingsCoverage,
+  getReexamGroundsMap, getFwdGroundsMap } from '../lib/db.js';
+import { compareGrounds } from '../lib/grounds.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
@@ -448,9 +450,10 @@ export default async function handler(req, res) {
     // 2024-01-01, so links to older IPRs aren't visible (surfaced via `coverage`).
     if (q.compare) {
       res.setHeader('Cache-Control', 'no-store');
-      const [dets, decisions, fwd, filings, patentProcs, ppCov] = await Promise.all([
+      const [dets, decisions, fwd, filings, patentProcs, ppCov, reexamGrounds, fwdGrounds] = await Promise.all([
         listRecentDeterminations(), listPtabDecisions(), listPtabFwdBrief(), listFilings(),
         listPatentProceedings(), patentProceedingsCoverage(),
+        getReexamGroundsMap(), getFwdGroundsMap(),
       ]);
       const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const has = (x) => x != null && String(x).trim() !== '';
@@ -533,6 +536,9 @@ export default async function handler(req, res) {
       for (const d of dets) {
         const k = norm(d.underlying_patent); if (!k) continue;
         const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
+        // Grounds overlap: refs/trial-mentions extracted from this reexam's order
+        // text vs. each PTAB proceeding's extracted refs (lib/grounds.js).
+        const rg = reexamGrounds.get(d.application_number) || { refs: [], trials: [] };
         const mapped = iprs.map((t) => {
           const st = t.status || '';
           // Reflect the MOST RECENT decision: FWD > institution > discretionary.
@@ -545,15 +551,21 @@ export default async function handler(req, res) {
           else if (t.dd_type === 'refer') cat = 'ipr_referred';
           else if (st === 'Terminated-Settled' || st === 'Terminated') cat = 'ipr_settled';
           else cat = 'ipr_other';
-          return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date };
+          const g = compareGrounds({ orderRefs: rg.refs, orderTrials: rg.trials, ptabRefs: fwdGrounds.get(t.trial) || [], trialNumber: t.trial });
+          return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date, mentioned: g.mentioned, sharedRefs: g.sharedRefs };
         }).sort((a, b) => rank[a.cat] - rank[b.cat]);
         const reexamDate = d.filing_date || d.official_date;
         const iprEarliest = mapped.map((m) => m.petition_date).filter(Boolean).sort()[0] || null;
+        // Link-level grounds rollup: any trial named in the order, and the union of
+        // prior-art references shared with any linked PTAB proceeding.
+        const anyMentioned = mapped.some((m) => m.mentioned);
+        const sharedRefs = [...new Set(mapped.flatMap((m) => m.sharedRefs))].sort();
         links.push({
           appNum: d.application_number, patent: d.underlying_patent,
           reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
           requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
+          grounds: { mentioned: anyMentioned, sharedRefs, hasText: reexamGrounds.has(d.application_number) },
         });
       }
       links.sort((a, b) => (rank[a.category] - rank[b.category]) || String(b.reexam_date || '').localeCompare(String(a.reexam_date || '')));

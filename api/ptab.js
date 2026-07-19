@@ -36,7 +36,8 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   markPatentProceedingsScanned, patentProceedingsCoverage,
   getReexamGroundsMap, getPtabGroundsMap,
   getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
-  getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs } from '../lib/db.js';
+  getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs,
+  getPatentReexamsMap, patentReexamsCoverage } from '../lib/db.js';
 import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
@@ -517,6 +518,7 @@ export default async function handler(req, res) {
         listPatentProceedings(), patentProceedingsCoverage(),
         getReexamGroundsMap(), getPtabGroundsMap(),
       ]);
+      const [reexamsByPatent, rxCov] = await Promise.all([getPatentReexamsMap(), patentReexamsCoverage()]);
       const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const has = (x) => x != null && String(x).trim() !== '';
       const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); };
@@ -651,11 +653,30 @@ export default async function handler(req, res) {
         hasTextTotal,
       };
 
+      // Prior / parallel REEXAMINATIONS on the same patent (any date, incl.
+      // pre-tracking-window ones discovered via child continuity). Keyed by the
+      // reexam's own control number so /reexam can annotate every row, not just
+      // PTAB-linked ones. Each sibling is flagged prior (earlier determination) or
+      // parallel relative to this determination.
+      const reexamSiblings = {};
+      for (const d of dets) {
+        const pk = norm(d.underlying_patent); if (!pk) continue;
+        const all = reexamsByPatent.get(pk); if (!all || all.length < 2) continue;
+        const selfNum = norm(d.application_number);
+        const sibs = all.filter((r) => norm(r.control) !== selfNum).map((r) => {
+          const sd = r.date || '', dd = d.official_date || '';
+          return { control: r.control, type: r.type, date: r.date, prior: !!(sd && dd && sd < dd) };
+        });
+        if (sibs.length) reexamSiblings[d.application_number] = sibs;
+      }
+
       let updatedAt = null;
       for (const r of filings) if (r.updated_at && (!updatedAt || r.updated_at > updatedAt)) updatedAt = r.updated_at;
 
       res.status(200).json({
         groundsStats,
+        reexamSiblings,
+        reexamCoverage: rxCov,
         headToHead: {
           since: SINCE,
           filings: filingsTotals,

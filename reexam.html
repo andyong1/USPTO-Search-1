@@ -630,6 +630,17 @@ function requesterCell(d) {
 // /api/ptab?compare=1 (keyed by reexam control no.). Badge reflects the most
 // recent decision (FWD > institution > discretionary); a referral is not a denial.
 let linkByApp = new Map();
+// Prior / parallel REEXAMINATIONS on the same patent (any date), keyed by this
+// reexam's control no. — from /api/ptab?compare=1 (reexamSiblings).
+let reexamSiblingsByApp = new Map();
+function rxSibBadge(type) {
+  if (/ordered/i.test(type || '')) return '<span class="badge b-po">Reexam ordered</span>';
+  if (/denied/i.test(type || '')) return '<span class="badge b-den">Reexam denied</span>';
+  return '<span class="badge b-other">Reexam</span>';
+}
+function sibItem(s) {
+  return `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(s.control)}">${esc(s.control)}</a>${rxSibBadge(s.type)}<span class="dt">${s.prior ? 'prior' : 'parallel'}</span></div>`;
+}
 // Short status label; colour carries the FWD outcome nuance. Most recent decision
 // wins (FWD > institution > discretionary); a referral is not a denial.
 function iprBadge(x) {
@@ -650,7 +661,8 @@ function expandPtab(elm) { const ex = elm.previousElementSibling; if (ex) ex.hid
 function ptabCell(d) {
   const link = linkByApp.get(d.application_number || '');
   const iprs = (link && link.iprs) || [];
-  if (!iprs.length) return '<span class="ext">—</span>';
+  const sibs = reexamSiblingsByApp.get(d.application_number || '') || [];
+  if (!iprs.length && !sibs.length) return '<span class="ext">—</span>';
   // Grounds-overlap marker: "same art ×N" = prior-art reference(s) appear in both
   // the reexam order and the proceeding's decision (tooltip lists them).
   // Heuristic (OCR-derived) — verify against the documents.
@@ -658,11 +670,15 @@ function ptabCell(d) {
     if (x.sharedRefs && x.sharedRefs.length) return `<span class="badge g-art" title="Prior-art reference(s) cited in BOTH the reexam order and this proceeding: ${esc(x.sharedRefs.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">same art ×${x.sharedRefs.length}</span>`;
     return '';
   };
-  const item = (x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}${gflags(x)}</div>`;
-  const shown = iprs.slice(0, 2).map(item).join('');
-  if (iprs.length <= 2) return shown;
-  const extra = iprs.slice(2).map(item).join('');
-  return `${shown}<div class="ipr-extra" hidden>${extra}</div><a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${iprs.length - 2} more</a>`;
+  // PTAB proceedings first (most-notable order), then sibling reexaminations.
+  const items = [
+    ...iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}${gflags(x)}</div>`),
+    ...sibs.map(sibItem),
+  ];
+  const shown = items.slice(0, 2).join('');
+  if (items.length <= 2) return shown;
+  const extra = items.slice(2).join('');
+  return `${shown}<div class="ipr-extra" hidden>${extra}</div><a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${items.length - 2} more</a>`;
 }
 
 function renderTable() {
@@ -720,7 +736,7 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('group_art_unit')}" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester_type')}" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
-      <th>Prior / parallel PTAB proceeding(s)</th>
+      <th>Prior / parallel proceedings</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
   if (total > TABLE_PAGE_SIZE) body.innerHTML += pagerHtml(tablePage, pageCount, start, end, total);
@@ -889,6 +905,7 @@ function applyFilters() {
     fetch('/api/ptab?compare=1').then((r) => (r.ok ? r.json() : null)).then((cd) => {
       if (!cd || !cd.links) return;
       linkByApp = new Map(cd.links.map((l) => [l.appNum, l]));
+      reexamSiblingsByApp = new Map(Object.entries(cd.reexamSiblings || {}));
       const cb = document.getElementById('ptab-only-wrap'); if (cb) cb.style.display = 'flex';
       const cb2 = document.getElementById('sameart-only-wrap'); if (cb2) cb2.style.display = 'flex';
       applyFilters();

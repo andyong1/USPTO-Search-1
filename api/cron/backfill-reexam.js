@@ -15,9 +15,10 @@ import {
   getCertsNeedingEngine2, countCertsNeedingEngine2, markCertEngine2,
   getDeterminationsToCheckTechCenter, countTechCenterToCheck, resetFailedTechCenter, reexamPatentResolutionBreakdown, backfillSeries96Requester,
   getDocsToExtractGrounds, setDocGrounds, countDocsToExtractGrounds, getFwdsToExtractGrounds, setFwdGrounds, countFwdsToExtractGrounds,
+  getAppsToScanForReexams, markAppScannedForReexams, upsertPatentReexam, patentReexamsCoverage,
   upsertReexams, getReexamsNeverScanned, countUnscannedReexams, markReexamScanned, recordDetermination, resetReexamDeterminedSince,
 } from '../../lib/db.js';
-import { searchApplications, fetchDocuments, fetchMetaData, determinationLabel } from '../../lib/uspto.js';
+import { searchApplications, fetchDocuments, fetchMetaData, fetchContinuity, determinationLabel } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectCertificateOutcome } from '../../lib/conclusions.js';
 import { parseReexamOutcome, certCitesProceeding, detect325d } from '../../lib/reexamOutcome.js';
@@ -361,6 +362,55 @@ export default async function handler(req, res) {
       }
       const remaining = (await countDocsToExtractGrounds()) + (await countFwdsToExtractGrounds());
       res.status(200).json({ ok: true, mode: 'grounds', reexamDocs, fwdDocs, remaining, done: remaining === 0 });
+      return;
+    }
+
+    // ?reexamsiblings=1 — discover ALL ex parte reexaminations on each reexamined
+    // patent (any date) via the underlying application's child-continuity "REX"
+    // links, and record each one's determination outcome/date. Feeds the /reexam
+    // "prior / parallel proceedings" column so it can show reexams that predate our
+    // tracking window. Resumable; re-checks each application ~every 30 days.
+    if (req.query && req.query.reexamsiblings === '1') {
+      const staleBefore = new Date(Date.now() - 30 * 86400000).toISOString();
+      const deadline = Date.now() + budgetMs;
+      const apps = await getAppsToScanForReexams(300, staleBefore);
+      let scanned = 0, found = 0, i = 0; const errors = [];
+      const worker = async () => {
+        while (i < apps.length && Date.now() < deadline) {
+          const { app, patent } = apps[i++];
+          try {
+            const cont = await fetchContinuity(app);
+            const kids = (cont && cont.childContinuityBag) || [];
+            const rex = kids
+              .filter((k) => /^REX$/i.test(k.claimParentageTypeCode || '') || /re-?exam/i.test(k.claimParentageTypeCodeDescriptionText || ''))
+              .map((k) => String(k.childApplicationNumberText || '').replace(/[^0-9A-Za-z]/g, ''))
+              .filter(Boolean);
+            for (const control of [...new Set(rex)]) {
+              const [meta, docs] = await Promise.all([
+                fetchMetaData(control).catch(() => ({})),
+                fetchDocuments(control).catch(() => []),
+              ]);
+              // Latest determination (RXREXO/RXREXD) on the reexam, if any.
+              let detType = null, detDate = null;
+              for (const d of docs) {
+                const label = determinationLabel(d.documentCode);
+                if (label && (!detDate || String(d.officialDate || '') > detDate)) { detType = label; detDate = d.officialDate || null; }
+              }
+              await upsertPatentReexam({
+                controlNumber: control, underlyingPatent: patent, underlyingApplication: app,
+                filingDate: meta.filingDate || null, determinationType: detType, determinationDate: detDate,
+              });
+              found++;
+            }
+            await markAppScannedForReexams(app);
+            scanned++;
+          } catch (e) { if (errors.length < 6) errors.push({ app, error: String(e.message || e) }); }
+        }
+      };
+      await Promise.all(Array.from({ length: 3 }, worker));
+      const remaining = apps.length - scanned;
+      const coverage = await patentReexamsCoverage();
+      res.status(200).json({ ok: true, mode: 'reexamsiblings', scanned, found, remaining, done: remaining <= 0 && apps.length < 300, coverage, errors });
       return;
     }
 

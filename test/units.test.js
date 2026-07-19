@@ -6,7 +6,7 @@ import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reex
 import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
-import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc } from '../lib/grounds.js';
+import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc, classify325d } from '../lib/grounds.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -423,4 +423,19 @@ test('extractAllRefs — merges numbers and names, de-duped', () => {
   assert.deepEqual(extractAllRefs('obvious over Asada in view of US 5,575,861 to Kinoshita'), ['5575861', 'asada']);
   // named-only grounds (no patent numbers) still yield the reference surnames
   assert.deepEqual(extractAllRefs('obvious over Asada in view of Kinoshita'), ['asada', 'kinoshita']);
+});
+
+test('classify325d — level reflects substance, not mere presence', () => {
+  // none: statute not cited
+  assert.equal(classify325d('The request is denied for lack of a substantial new question.').level, 'none');
+  // recited: statute cited with boilerplate but no related proceeding + no structure
+  assert.equal(classify325d('We considered 35 U.S.C. 325(d) and the same or substantially the same art standard.').level, 'recited');
+  // substantive: statute + related proceeding + side-by-side "proposed grounds" structure
+  const sub = classify325d('Inter Partes Review IPR2025-01526. The petition included the following proposed grounds material for the 35 U.S.C. 325(d) analysis: obvious over Asada in view of Kinoshita.');
+  assert.equal(sub.level, 'substantive');
+  assert.deepEqual(sub.relatedProceedings, ['IPR2025-01526']);
+  // substantive via a prior reexam (no PTAB trial) + framework name
+  assert.equal(classify325d('A co-pending reexamination raised these grounds; under Advanced Bionics and 325(d) ...').level, 'substantive');
+  // cited + trial but NO grounds structure => recited, not substantive
+  assert.equal(classify325d('See IPR2020-00019. We decline to exercise discretion under 35 U.S.C. 325(d).').level, 'recited');
 });

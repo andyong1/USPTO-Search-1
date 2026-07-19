@@ -602,7 +602,7 @@ export default async function handler(req, res) {
         const iprs = byPatent.get(k); if (!iprs || !iprs.length) continue;
         // Grounds overlap: refs/trial-mentions extracted from this reexam's order
         // text vs. each PTAB proceeding's extracted refs (lib/grounds.js).
-        const rg = reexamGrounds.get(d.application_number) || { refs: [], trials: [], cites325d: false };
+        const rg = reexamGrounds.get(d.application_number) || { refs: [], trials: [], cites325d: false, d325: 'none' };
         const mapped = iprs.map((t) => {
           const st = t.status || '';
           // Reflect the MOST RECENT decision: FWD > institution > discretionary.
@@ -629,7 +629,7 @@ export default async function handler(req, res) {
           reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
           requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
-          cites325d: !!rg.cites325d,
+          cites325d: !!rg.cites325d, d325Level: rg.d325 || 'none',
           grounds: { mentioned: anyMentioned, sharedRefs, hasText: reexamGrounds.has(d.application_number) },
         });
       }
@@ -640,16 +640,20 @@ export default async function handler(req, res) {
       // were nonetheless ORDERED vs. DENIED. hasTextTotal = linked reexams whose
       // determination text we've extracted (the denominator these rates are over).
       let ovOrdered = 0, ovDenied = 0, d3Ordered = 0, d3Denied = 0, hasTextTotal = 0;
+      let subOrdered = 0, subDenied = 0; // substantive §325(d) discussion WITH overlapping art
       for (const l of links) {
         const ordered = /ordered/i.test(l.reexam_type || '');
         const denied = /denied/i.test(l.reexam_type || '');
+        const overlap = !!(l.grounds && l.grounds.sharedRefs && l.grounds.sharedRefs.length);
         if (l.grounds && l.grounds.hasText) hasTextTotal++;
-        if (l.grounds && l.grounds.sharedRefs && l.grounds.sharedRefs.length) { if (ordered) ovOrdered++; else if (denied) ovDenied++; }
+        if (overlap) { if (ordered) ovOrdered++; else if (denied) ovDenied++; }
         if (l.cites325d) { if (ordered) d3Ordered++; else if (denied) d3Denied++; }
+        if (l.d325Level === 'substantive' && overlap) { if (ordered) subOrdered++; else if (denied) subDenied++; }
       }
       const groundsStats = {
         overlap: { ordered: ovOrdered, denied: ovDenied, total: ovOrdered + ovDenied, pct: pct(ovOrdered, ovOrdered + ovDenied) },
         cite325d: { ordered: d3Ordered, denied: d3Denied, total: d3Ordered + d3Denied, pct: pct(d3Ordered, d3Ordered + d3Denied) },
+        substantive325dOverlap: { ordered: subOrdered, denied: subDenied, total: subOrdered + subDenied, pct: pct(subOrdered, subOrdered + subDenied) },
         hasTextTotal,
       };
 

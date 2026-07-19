@@ -21,11 +21,11 @@ import {
 import { searchApplications, fetchDocuments, fetchMetaData, fetchContinuity, determinationLabel } from '../../lib/uspto.js';
 import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
 import { detectCertificateOutcome } from '../../lib/conclusions.js';
-import { parseReexamOutcome, certCitesProceeding, detect325d } from '../../lib/reexamOutcome.js';
+import { parseReexamOutcome, certCitesProceeding } from '../../lib/reexamOutcome.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrTextConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
-import { extractAllRefs, extractTrialNumbers } from '../../lib/grounds.js';
+import { extractAllRefs, extractTrialNumbers, classify325d } from '../../lib/grounds.js';
 import { cronOk, clientErrorDetail } from '../../lib/secure.js';
 
 export const config = { maxDuration: 60 };
@@ -348,7 +348,7 @@ export default async function handler(req, res) {
         const docs = await getDocsToExtractGrounds(100);
         if (!docs.length) break;
         for (const d of docs) {
-          await setDocGrounds(d.doc_id, extractAllRefs(d.text), extractTrialNumbers(d.text), detect325d(d.text));
+          await setDocGrounds(d.doc_id, extractAllRefs(d.text), extractTrialNumbers(d.text), classify325d(d.text).level);
           reexamDocs++;
         }
       }

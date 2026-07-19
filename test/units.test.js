@@ -439,3 +439,18 @@ test('classify325d — level reflects substance, not mere presence', () => {
   // cited + trial but NO grounds structure => recited, not substantive
   assert.equal(classify325d('See IPR2020-00019. We decline to exercise discretion under 35 U.S.C. 325(d).').level, 'recited');
 });
+
+test('extractTrialNumbers — OCR-mangled type/separators (90016048 case)', () => {
+  // broken hyphen (replacement char) and a space split inside "IPR"
+  assert.deepEqual(extractTrialNumbers('inter partes review IPR2025�01371'), ['IPR2025-01371']);
+  assert.deepEqual(extractTrialNumbers('I PR 2025-01371 and I P R 2024 00019'), ['IPR2024-00019', 'IPR2025-01371']);
+});
+
+test('classify325d — substantive via "challenges ... material for the 35 U.S.C. 325(d) analysis"', () => {
+  // 90016048: label is "challenges" not "proposed grounds"; periods in U.S.C.
+  const t = 'Inter Partes Review IPR2025�01371. The petition included the following challenges '
+    + 'which are material for the 35 U.S.C. 325 (d) analysis: claims 4, 7-12 as obvious over Kotzin.';
+  const r = classify325d(t);
+  assert.equal(r.level, 'substantive');
+  assert.deepEqual(r.relatedProceedings, ['IPR2025-01371']);
+});

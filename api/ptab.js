@@ -37,8 +37,9 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getReexamGroundsMap, getPtabGroundsMap,
   getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
   getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs,
-  getPatentReexamsMap, patentReexamsCoverage } from '../lib/db.js';
+  getPatentReexamsMap, patentReexamsCoverage, getLitigationMap } from '../lib/db.js';
 import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
+import { extractRelatedLitigation } from '../lib/litigation.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, extractDocFullText, fetchPetitionDoc, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
@@ -472,24 +473,27 @@ export default async function handler(req, res) {
       const deadline = Date.now() + 50000;
       const BATCH = 40;
       const trials = await getTrialsToExtractPetitionRefs(BATCH);
-      let processed = 0, withRefs = 0, noPetition = 0, i = 0; const errors = [];
+      let processed = 0, withRefs = 0, noPetition = 0, withLit = 0, i = 0; const errors = [];
       async function worker() {
         while (i < trials.length && Date.now() < deadline) {
-          const trial = trials[i++];
+          const row = trials[i++];
+          const trial = row.trial_number;
           try {
             const pet = await fetchPetitionDoc(trial);
-            if (!pet || !pet.url) { await setPetitionRefs(trial, [], null); noPetition++; processed++; continue; }
+            if (!pet || !pet.url) { await setPetitionRefs(trial, [], null, [], []); noPetition++; processed++; continue; }
             const text = await extractDocFullText(pet.url);
             const refs = extractAllRefs(text);
-            await setPetitionRefs(trial, refs, pet.docId);
+            const lit = extractRelatedLitigation(text, row.petitioner_name);
+            await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other);
             if (refs.length) withRefs++;
+            if (lit.petitioner.length || lit.other.length) withLit++;
             processed++;
           } catch (e) { if (errors.length < 6) errors.push({ trial, error: String(e.message || e) }); }
         }
       }
       await Promise.all(Array.from({ length: 3 }, worker));
       const remaining = await countTrialsToExtractPetitionRefs();
-      res.status(200).json({ ok: true, mode: 'petrefs', processed, withRefs, noPetition, remaining, done: remaining === 0, errors });
+      res.status(200).json({ ok: true, mode: 'petrefs', processed, withRefs, withLit, noPetition, remaining, done: remaining === 0, errors });
       return;
     }
 
@@ -713,11 +717,14 @@ export default async function handler(req, res) {
     // ── Decisions read (discretion / institution decisions page) ──
     if (q.decisions) {
       res.setHeader('Cache-Control', 'no-store');
-      const drows = await listPtabDecisions();
+      const [drows, litMap] = await Promise.all([listPtabDecisions(), getLitigationMap()]);
       const dsummary = { total: drows.length, dd_deny: 0, dd_refer: 0, inst_granted: 0, inst_denied: 0 };
       for (const r of drows) {
         if (r.dd_type === 'deny') dsummary.dd_deny++; else if (r.dd_type === 'refer') dsummary.dd_refer++;
         if (r.inst_type === 'granted' || r.inst_type === 'granted_in_part') dsummary.inst_granted++; else if (r.inst_type === 'denied') dsummary.inst_denied++;
+        // Related district-court litigation from the petition's Related Matters.
+        const lit = litMap.get(r.trial_number) || { petitioner: [], other: [] };
+        r.lit_petitioner = lit.petitioner; r.lit_other = lit.other;
       }
       res.status(200).json({ rows: drows, summary: dsummary });
       return;

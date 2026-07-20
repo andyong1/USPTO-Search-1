@@ -45,6 +45,7 @@
     .fwd-links { margin-top: 3px; display: flex; gap: 10px; white-space: nowrap; }
     .fwd-links a { color: #1a3a6b; font-weight: 600; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+    .lit-chip { display: inline-block; background: #edf2f7; color: #2d3748; border-radius: 10px; padding: 1px 7px; font-size: 0.72rem; margin: 1px 2px 1px 0; white-space: nowrap; }
     .o-po { background: #c6f6d5; color: #276749; }
     .o-pet { background: #fed7d7; color: #9b2c2c; }
     .o-other { background: #e2e8f0; color: #4a5568; }
@@ -389,6 +390,7 @@ function renderTable() {
   const start = (tablePage - 1) * TABLE_PAGE_SIZE, end = Math.min(start + TABLE_PAGE_SIZE, total);
   const arrow = (k) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
   const th = (k, lbl) => `<th onclick="sortBy('${k}')" aria-sort="${sortKey === k ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}">${lbl}${arrow(k)}</th>`;
+  const litCell = (arr) => (arr && arr.length) ? arr.map((j) => `<span class="lit-chip">${esc(j)}</span>`).join(' ') : '<span class="ext">—</span>';
   const trs = rows.slice(start, end).map((r) => {
     const patNum = String(r.patent_number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     const pat = r.patent_number ? `<a class="ext" href="https://patents.google.com/patent/US${patNum}" target="_blank" rel="noopener">${esc(r.patent_number)}</a>` : '<span class="ext">—</span>';
@@ -401,12 +403,16 @@ function renderTable() {
       <td>${tcCell(r.tech_center)}</td>
       <td>${decCell(r.dd_type, r.dd_date, r.dd_pdf_url, r.trial_number, 'dd')}</td>
       <td>${decCell(r.inst_type, r.inst_date, r.inst_pdf_url, r.trial_number, 'inst')}</td>
+      <td>${litCell(r.lit_petitioner)}</td>
+      <td>${litCell(r.lit_other)}</td>
     </tr>`;
   }).join('');
+  const litTip = 'District-court litigation identified in the petition’s Related Matters (37 C.F.R. §42.8(b)(2)) at filing, by jurisdiction. Heuristic (petition-text extraction) — verify against the petition.';
   body.innerHTML = `<div class="table-wrap"><table><thead><tr>
     ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
     ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
     ${th('dd_type', 'Discretionary Decision')}${th('inst_type', 'Institution Decision')}
+    <th title="${esc(litTip)}">Lit — Petitioner</th><th title="${esc(litTip)}">Lit — Other</th>
   </tr></thead><tbody>${trs}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pages, start, end, total) : '');
 }
 function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } tablePage = 1; render(); }
@@ -452,11 +458,12 @@ function exportDecisions() {
   const instLabel = { granted: 'Instituted', granted_in_part: 'Instituted-in-part', denied: 'Institution denied' };
   const dt = (d) => { const x = fmtDate(d); return x === '—' ? '' : x; };
   const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Patent Owner', 'Petitioner',
-    'Discretionary Decision', 'Discretionary Date', 'Institution Decision', 'Institution Date'];
+    'Discretionary Decision', 'Discretionary Date', 'Institution Decision', 'Institution Date', 'Lit — Petitioner', 'Lit — Other'];
   const aoa = rows.map((r) => [r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.po_name, r.petitioner_name,
     r.dd_type ? (ddLabel[r.dd_type] || titleCase(r.dd_type)) : '', dt(r.dd_date),
-    r.inst_type ? (instLabel[r.inst_type] || titleCase(r.inst_type)) : '', dt(r.inst_date)]);
-  exportXlsx('ptab-discretion-institution-decisions.xlsx', header, aoa, { colWidths: [14, 6, 12, 14, 10, 26, 26, 22, 14, 20, 14], sheetName: 'Decisions' });
+    r.inst_type ? (instLabel[r.inst_type] || titleCase(r.inst_type)) : '', dt(r.inst_date),
+    (r.lit_petitioner || []).join('; '), (r.lit_other || []).join('; ')]);
+  exportXlsx('ptab-discretion-institution-decisions.xlsx', header, aoa, { colWidths: [14, 6, 12, 14, 10, 26, 26, 22, 14, 20, 14, 16, 16], sheetName: 'Decisions' });
 }
 document.getElementById('export').addEventListener('click', exportDecisions);
 

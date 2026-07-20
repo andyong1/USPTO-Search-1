@@ -7,6 +7,7 @@ import { analyzePetition, classifyRequester, determinationLabel, validateSearchS
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
 import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc, classify325d } from '../lib/grounds.js';
+import { normCourt, petitionerToken, extractRelatedLitigation } from '../lib/litigation.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -453,4 +454,46 @@ test('classify325d — substantive via "challenges ... material for the 35 U.S.C
   const r = classify325d(t);
   assert.equal(r.level, 'substantive');
   assert.deepEqual(r.relatedProceedings, ['IPR2025-01371']);
+});
+
+// ── Related district-court litigation from IPR petitions (lib/litigation.js) ──
+test('normCourt — reporter abbreviations and ECF codes map to shorthand', () => {
+  assert.equal(normCourt('E.D. Tex.'), 'E.D. Tex.');
+  assert.equal(normCourt('DDE'), 'D. Del.');
+  assert.equal(normCourt('D. Del.'), 'D. Del.');
+  assert.equal(normCourt('TXED'), 'E.D. Tex.');
+  assert.equal(normCourt('US'), null);          // not a court (e.g. "Nielsen (US)")
+  assert.equal(normCourt("the '402 patent"), null);
+});
+
+test('petitionerToken — first distinctive word past articles/corporate forms', () => {
+  assert.equal(petitionerToken('Uber Technologies, Inc.'), 'uber');
+  assert.equal(petitionerToken('The Nielsen Company (US), LLC'), 'nielsen');
+  assert.equal(petitionerToken('VideoAmp, Inc.'), 'videoamp');
+});
+
+test('extractRelatedLitigation — petitioner vs other, real petition snippets', () => {
+  // IPR2026-00309: petitioner Uber is a defendant in the E.D. Tex. case.
+  const a = extractRelatedLitigation(
+    'Related Matters: The ’071 patent is asserted by PO against Petitioners in '
+    + 'Carma Technology, Corp. v. Uber Technologies, Inc., Case No. 2:25-cv-00029 (E.D. Tex.).',
+    'Uber Technologies, Inc.');
+  assert.deepEqual(a, { petitioner: ['E.D. Tex.'], other: [] });
+
+  // IPR2026-00310: litigation listed in the exhibit list; ECF code (DDE); two
+  // Delaware complaints against petitioner VideoAmp -> de-duped to one D. Del.
+  const b = extractRelatedLitigation(
+    'VA-1004 Complaint, The Nielsen Company (US), LLC v. VideoAmp, Inc., 1-25-cv-00408 (DDE), filed April 2, 2025. '
+    + 'VA-1014 Complaint, The Nielsen Company (US), LLC v. VideoAmp, Inc., 1-24-cv-00123-1 (DDE), filed January 31, 2024.',
+    'VideoAmp, Inc.');
+  assert.deepEqual(b, { petitioner: ['D. Del.'], other: [] });
+
+  // Same patent asserted against a different party -> "other".
+  const c = extractRelatedLitigation(
+    'Acme Corp. v. Someone Else, Inc., Case No. 1:24-cv-00500 (D. Del.).', 'Uber Technologies, Inc.');
+  assert.deepEqual(c, { petitioner: [], other: ['D. Del.'] });
+
+  // A bare "(N.D. Cal.)" with no caption/case number nearby is not counted.
+  assert.deepEqual(extractRelatedLitigation('as discussed by the court (N.D. Cal.) in dicta', 'Apple Inc.'),
+    { petitioner: [], other: [] });
 });

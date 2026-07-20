@@ -34,6 +34,11 @@
     .disclaimer { font-size: 0.76rem; color: #94a3b8; margin-top: 12px; line-height: 1.5; }
     a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: #15305a; }
+    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; }
+    .ext:hover { text-decoration: underline; }
+    .doclinks { white-space: nowrap; margin-top: 4px; }
     .cmp { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
     .cmp th, .cmp td { padding: 9px 12px; border-top: 1px solid #e2e8f0; text-align: left; vertical-align: top; }
     .cmp thead th { border-top: none; background: #edf2f7; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: #4a5568; }
@@ -303,6 +308,13 @@ function rxBadge(type) {
   return t ? `<span class="badge b-other">${esc(t.replace(/_/g, ' '))}</span>` : '';
 }
 
+// Open a PDF inline in a new tab (matches the reexam determinations table).
+function openDocViewer(appNum, documentId, format, label) {
+  window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=${encodeURIComponent(format)}&disposition=inline`, '_blank', 'noopener');
+}
+function openFileViewer(url) {
+  window.open(`/api/ptab?file=${encodeURIComponent(url)}`, '_blank', 'noopener');
+}
 let pipelineData = null;
 function renderPipeline(data) {
   pipelineData = data; // stashed so the §325(d) filter checkbox can re-render
@@ -347,12 +359,12 @@ function renderPipeline(data) {
   const docPdf = (appNum, docId) => {
     if (!docId) return '';
     const b = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
-    return ` <a class="ext" href="${b}&disposition=inline" target="_blank" rel="noopener">View</a> <a class="ext" href="${b}&disposition=attachment" download title="Download PDF">⤓</a>`;
+    return `<div class="doclinks"><button class="btn-view" onclick="openDocViewer('${appNum}','${docId}','PDF','Determination')">View</button><a class="ext" href="${b}&disposition=attachment" download>Download ⤓</a></div>`;
   };
   const decPdf = (url) => {
     if (!url) return '';
     const b = `/api/ptab?file=${encodeURIComponent(url)}`;
-    return ` <a class="ext" href="${b}" target="_blank" rel="noopener">View</a> <a class="ext" href="${b}&dl=1" download title="Download PDF">⤓</a>`;
+    return `<div class="doclinks"><button class="btn-view" onclick="openFileViewer('${url}')">View</button><a class="ext" href="${b}&dl=1" download>Download ⤓</a></div>`;
   };
   const rows = rowLinks.map((l) => {
     const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';

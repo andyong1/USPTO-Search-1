@@ -12,5 +12,7 @@ _*.txt
 _*.mjs
 # local scheduled-task secrets (POSTGRES_URL / CRON_SECRET)
 grounds-secrets.env
+# database export output
+db-export/
 # machine-local Claude Code permissions (not shared)
 .claude/settings.local.json

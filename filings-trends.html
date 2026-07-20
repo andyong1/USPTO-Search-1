@@ -114,6 +114,9 @@
   <div class="card" id="pipeline-card">
     <h2>IPR → Reexamination Pipeline</h2>
     <div class="sub">Reexaminations whose underlying patent also faced a PTAB proceeding (IPR/PGR) on the same patent — surfacing patents where the PTAB challenge was <strong>denied</strong> before reexamination was pursued.</div>
+    <label id="d325-only-wrap" style="display:none;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer;margin:10px 0 4px">
+      <input type="checkbox" id="d325-only" onchange="renderPipeline(pipelineData)" /> Show only reexaminations with a substantive §325(d) discussion
+    </label>
     <div id="pipeline-body"><div class="state">Loading…</div></div>
   </div>
 
@@ -300,7 +303,9 @@ function rxBadge(type) {
   return t ? `<span class="badge b-other">${esc(t.replace(/_/g, ' '))}</span>` : '';
 }
 
+let pipelineData = null;
 function renderPipeline(data) {
+  pipelineData = data; // stashed so the §325(d) filter checkbox can re-render
   const links = (data.links || []).slice().sort((a, b) => ymd(b.reexam_date).localeCompare(ymd(a.reexam_date)));
   const cov = data.coverage || {};
   const covNote = `Prior/parallel PTAB proceedings are matched across all AIA years (2012–present); patents scanned ${cov.patentsScanned || 0} of ${cov.patentsTotal || 0}. Patent resolved for ${cov.reexamsWithPatent || 0} of ${cov.reexamsTotal || 0} tracked reexams.`;
@@ -328,7 +333,16 @@ function renderPipeline(data) {
     if (level === 'recited') return '<span class="badge b-other" title="§325(d) cited, but only the standard language — no side-by-side grounds comparison detected.">§325(d) recited</span>';
     return '<span class="dt">—</span>';
   };
-  const rows = links.map((l) => {
+  // Reveal + apply the §325(d)-substantive row filter (table only — the summary
+  // stats above stay computed over the full linked set).
+  const w = el('d325-only-wrap'); if (w) w.style.display = 'flex';
+  const d325Only = !!((document.getElementById('d325-only') || {}).checked);
+  const rowLinks = d325Only ? links.filter((l) => l.d325Level === 'substantive') : links;
+  if (!rowLinks.length) {
+    el('pipeline-body').innerHTML = summary + '<div class="state">No reexaminations with a substantive §325(d) discussion in the linked set yet.</div>';
+    return;
+  }
+  const rows = rowLinks.map((l) => {
     const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
     const rx = `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a>${rxBadge(l.reexam_type)}<span class="dt">${esc(ymd(l.reexam_date))}</span></div>`;
     const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');

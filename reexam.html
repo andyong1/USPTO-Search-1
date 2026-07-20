@@ -663,16 +663,9 @@ function ptabCell(d) {
   const iprs = (link && link.iprs) || [];
   const sibs = reexamSiblingsByApp.get(d.application_number || '') || [];
   if (!iprs.length && !sibs.length) return '<span class="ext">—</span>';
-  // Grounds-overlap marker: "same art ×N" = prior-art reference(s) appear in both
-  // the reexam order and the proceeding's decision (tooltip lists them).
-  // Heuristic (OCR-derived) — verify against the documents.
-  const gflags = (x) => {
-    if (x.sharedRefs && x.sharedRefs.length) return `<span class="badge g-art" title="Prior-art reference(s) cited in BOTH the reexam order and this proceeding: ${esc(x.sharedRefs.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">same art ×${x.sharedRefs.length}</span>`;
-    return '';
-  };
   // PTAB proceedings first (most-notable order), then sibling reexaminations.
   const items = [
-    ...iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}${gflags(x)}</div>`),
+    ...iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}</div>`),
     ...sibs.map(sibItem),
   ];
   const shown = items.slice(0, 2).join('');

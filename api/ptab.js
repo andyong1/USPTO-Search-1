@@ -37,7 +37,8 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getReexamGroundsMap, getPtabGroundsMap,
   getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
   getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs,
-  getPatentReexamsMap, patentReexamsCoverage, getLitigationMap } from '../lib/db.js';
+  getPatentReexamsMap, patentReexamsCoverage, getLitigationMap,
+  getPetitionsToRelit, setLitigation, countPetitionsToRelit } from '../lib/db.js';
 import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
 import { extractRelatedLitigation } from '../lib/litigation.js';
 import { getApiKey } from '../lib/uspto.js';
@@ -480,11 +481,13 @@ export default async function handler(req, res) {
           const trial = row.trial_number;
           try {
             const pet = await fetchPetitionDoc(trial);
-            if (!pet || !pet.url) { await setPetitionRefs(trial, [], null, [], []); noPetition++; processed++; continue; }
+            if (!pet || !pet.url) { await setPetitionRefs(trial, [], null, [], [], null); noPetition++; processed++; continue; }
             const text = await extractDocFullText(pet.url);
             const refs = extractAllRefs(text);
             const lit = extractRelatedLitigation(text, row.petitioner_name);
-            await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other);
+            // Store the front matter (where Related Matters lives) so litigation can
+            // be re-parsed later without re-downloading the petition.
+            await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other, String(text || '').slice(0, 25000));
             if (refs.length) withRefs++;
             if (lit.petitioner.length || lit.other.length) withLit++;
             processed++;
@@ -494,6 +497,28 @@ export default async function handler(req, res) {
       await Promise.all(Array.from({ length: 3 }, worker));
       const remaining = await countTrialsToExtractPetitionRefs();
       res.status(200).json({ ok: true, mode: 'petrefs', processed, withRefs, withLit, noPetition, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── Litigation re-parse (cheap; no petition re-download) ──
+    // Re-runs the related-litigation extractor over stored petition front-matter
+    // for rows behind the current LIT_V. Pure CPU — run after bumping LIT_V.
+    if (q.litrescan) {
+      if (!gate(req, res)) return;
+      const deadline = Date.now() + 45000;
+      let updated = 0, withLit = 0;
+      while (Date.now() < deadline) {
+        const rows = await getPetitionsToRelit(200);
+        if (!rows.length) break;
+        for (const r of rows) {
+          const lit = extractRelatedLitigation(r.pet_frontmatter, r.petitioner_name);
+          await setLitigation(r.trial_number, lit.petitioner, lit.other);
+          if (lit.petitioner.length || lit.other.length) withLit++;
+          updated++;
+        }
+      }
+      const remaining = await countPetitionsToRelit();
+      res.status(200).json({ ok: true, mode: 'litrescan', updated, withLit, remaining, done: remaining === 0 });
       return;
     }
 

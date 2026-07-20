@@ -493,7 +493,31 @@ test('extractRelatedLitigation — petitioner vs other, real petition snippets',
     'Acme Corp. v. Someone Else, Inc., Case No. 1:24-cv-00500 (D. Del.).', 'Uber Technologies, Inc.');
   assert.deepEqual(c, { petitioner: [], other: ['D. Del.'] });
 
-  // A bare "(N.D. Cal.)" with no caption/case number nearby is not counted.
+  // A bare "(N.D. Cal.)" with no caption/case number nearby (no Related Matters
+  // heading -> fallback guard) is not counted.
   assert.deepEqual(extractRelatedLitigation('as discussed by the court (N.D. Cal.) in dicta', 'Apple Inc.'),
     { petitioner: [], other: [] });
+});
+
+test('extractRelatedLitigation — long-form courts and bare ECF codes in the section', () => {
+  // IPR2018-00043 shape: long-form court stated once for a case list; petitioner
+  // is one of the named defendants.
+  const a = extractRelatedLitigation(
+    'B. Related Matters. As of the filing date, the ’748 Patent is involved in the following matters, all in the '
+    + 'United States District Court for the Eastern District of Texas: Fall Line Patents, LLC v. Choice Hotels Int’l, Inc. '
+    + '6:17-cv-00407; Fall Line Patents, LLC v. Uber Technologies, Inc. 6:17-cv-00408. C. Lead and Back-up Counsel.',
+    'Uber Technologies, Inc.');
+  assert.deepEqual(a, { petitioner: ['E.D. Tex.'], other: [] });
+
+  // IPR2016-00820 shape: bare "DED" court code in a case table.
+  const b = extractRelatedLitigation(
+    'B. Related Matters. Petitioner identifies the following judicial proceedings. "DED" stands for District of Delaware. '
+    + 'Enzo Life Sciences, Inc. v. Hologic, Inc. 1-15-cv-00271 DED. IV. Lead and Back-up Counsel.',
+    'Gen-Probe Incorporated');
+  assert.ok(b.petitioner.concat(b.other).includes('D. Del.'), JSON.stringify(b));
+
+  // Long-form "District of Delaware" with the petitioner as defendant.
+  assert.deepEqual(extractRelatedLitigation(
+    'B. Related Matters. The patent is asserted in Foo LLC v. Bar Inc., No. 1:24-cv-100, in the District of Delaware. Lead counsel: …',
+    'Bar Inc.'), { petitioner: ['D. Del.'], other: [] });
 });

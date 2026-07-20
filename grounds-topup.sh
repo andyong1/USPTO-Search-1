@@ -28,7 +28,10 @@ node grounds-upload.mjs
 # Call a resumable cron endpoint until it reports "done":true (bounded).
 drain() { # $1 = url
   for i in $(seq 1 "${2:-20}"); do
-    r=$(curl -fsS "$1" -H "Authorization: Bearer ${CRON_SECRET}") || { echo "  call failed: $r"; break; }
+    # --ssl-no-revoke: corporate network blocks the CRL/OCSP responder, so schannel
+    # can't complete revocation checks for andy-ong.com's cert (CRYPT_E_NO_REVOCATION_CHECK).
+    # Human-signed-off TLS trade-off, scoped to this script's own-site calls.
+    r=$(curl -fsS --ssl-no-revoke "$1" -H "Authorization: Bearer ${CRON_SECRET}") || { echo "  call failed: $r"; break; }
     echo "  $r"
     echo "$r" | grep -q '"done":true' && break
   done

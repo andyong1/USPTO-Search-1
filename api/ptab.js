@@ -531,10 +531,11 @@ export default async function handler(req, res) {
         trial: d.trial_number, type: d.trial_type, patent: d.patent_number,
         petition_date: d.petition_date, institution_date: d.institution_date,
         inst_type: d.inst_type, dd_type: d.dd_type, fwd_date: null, outcome: null,
+        inst_pdf_url: d.inst_pdf_url || null, dd_pdf_url: d.dd_pdf_url || null, fwd_pdf_url: null,
       });
       for (const f of fwd) {
         const t = trials.get(f.trial_number) || { trial: f.trial_number, type: f.trial_type, patent: f.patent_number, petition_date: f.petition_date, institution_date: f.institution_date, inst_type: null, dd_type: null };
-        t.fwd_date = f.fwd_date; t.outcome = f.outcome;
+        t.fwd_date = f.fwd_date; t.outcome = f.outcome; t.fwd_pdf_url = f.fwd_pdf_url || t.fwd_pdf_url || null;
         t.patent = t.patent || f.patent_number;
         t.petition_date = t.petition_date || f.petition_date;
         t.institution_date = t.institution_date || f.institution_date;
@@ -615,8 +616,15 @@ export default async function handler(req, res) {
           else if (t.dd_type === 'refer') cat = 'ipr_referred';
           else if (st === 'Terminated-Settled' || st === 'Terminated') cat = 'ipr_settled';
           else cat = 'ipr_other';
+          // PDF of the decision that set this badge (proxied via ?file=). Only 2024+
+          // decisions carry a stored URL; all-years-scan-only trials have none.
+          const decisionUrl = cat === 'ipr_fwd' ? t.fwd_pdf_url
+            : cat === 'ipr_instituted' ? t.inst_pdf_url
+            : cat === 'ipr_denied' ? (t.inst_type === 'denied' ? t.inst_pdf_url : t.dd_pdf_url)
+            : cat === 'ipr_referred' ? t.dd_pdf_url
+            : null;
           const g = compareGrounds({ orderRefs: rg.refs, orderTrials: rg.trials, ptabRefs: fwdGrounds.get(t.trial) || [], trialNumber: t.trial });
-          return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date, mentioned: g.mentioned, sharedRefs: g.sharedRefs };
+          return { trial: t.trial, type: t.type, cat, statusText: st, inst_type: t.inst_type, dd_type: t.dd_type, outcome: t.outcome, petition_date: t.petition_date, institution_date: t.institution_date, fwd_date: t.fwd_date, mentioned: g.mentioned, sharedRefs: g.sharedRefs, decisionUrl: decisionUrl || null };
         }).sort((a, b) => rank[a.cat] - rank[b.cat]);
         const reexamDate = d.filing_date || d.official_date;
         const iprEarliest = mapped.map((m) => m.petition_date).filter(Boolean).sort()[0] || null;
@@ -625,7 +633,7 @@ export default async function handler(req, res) {
         const anyMentioned = mapped.some((m) => m.mentioned);
         const sharedRefs = [...new Set(mapped.flatMap((m) => m.sharedRefs))].sort();
         links.push({
-          appNum: d.application_number, patent: d.underlying_patent,
+          appNum: d.application_number, patent: d.underlying_patent, docId: d.document_identifier || null,
           reexam_type: d.determination_type, reexam_date: d.official_date, filing_date: d.filing_date,
           requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,

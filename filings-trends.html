@@ -342,10 +342,22 @@ function renderPipeline(data) {
     el('pipeline-body').innerHTML = summary + '<div class="state">No reexaminations with a substantive §325(d) discussion in the linked set yet.</div>';
     return;
   }
+  // View/download the determination PDF (via /api/document) and, where available,
+  // the PTAB decision that set each proceeding's badge (via the ?file= proxy).
+  const docPdf = (appNum, docId) => {
+    if (!docId) return '';
+    const b = `/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+    return ` <a class="ext" href="${b}&disposition=inline" target="_blank" rel="noopener">View</a> <a class="ext" href="${b}&disposition=attachment" download title="Download PDF">⤓</a>`;
+  };
+  const decPdf = (url) => {
+    if (!url) return '';
+    const b = `/api/ptab?file=${encodeURIComponent(url)}`;
+    return ` <a class="ext" href="${b}" target="_blank" rel="noopener">View</a> <a class="ext" href="${b}&dl=1" download title="Download PDF">⤓</a>`;
+  };
   const rows = rowLinks.map((l) => {
     const patCell = l.patent ? `<a class="link" href="https://patents.google.com/patent/US${esc(patNorm(l.patent))}" target="_blank" rel="noopener">${esc(l.patent)}</a>` : '—';
-    const rx = `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a>${rxBadge(l.reexam_type)}<span class="dt">${esc(ymd(l.reexam_date))}</span></div>`;
-    const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span></div>`).join('');
+    const rx = `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(l.appNum)}">${esc(l.appNum)}</a>${rxBadge(l.reexam_type)}<span class="dt">${esc(ymd(l.reexam_date))}</span>${docPdf(l.appNum, l.docId)}</div>`;
+    const iprs = l.iprs.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${iprBadge(x)}<span class="dt">${esc(ymd(x.fwd_date || x.institution_date || x.petition_date))}</span>${decPdf(x.decisionUrl)}</div>`).join('');
     const shared = (l.grounds && l.grounds.sharedRefs) || [];
     const overlapCell = shared.length
       ? `<span class="badge b-art" title="Prior-art reference(s) cited in both the reexam determination and a prior/parallel proceeding: ${esc(shared.join(', '))}. Heuristic (OCR-derived) — verify against the documents.">${shared.length} shared</span>`

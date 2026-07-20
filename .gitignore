@@ -3,3 +3,12 @@ node_modules/
 .env
 .env.local
 .DS_Store
+# local, derived data + tooling artifacts (never source)
+snq-cumulative/
+downloads/
+graphify-out/
+_*.pdf
+_*.txt
+_*.mjs
+# local scheduled-task secrets (POSTGRES_URL / CRON_SECRET)
+grounds-secrets.env

@@ -639,7 +639,7 @@ function rxSibBadge(type) {
   return '<span class="badge b-other">Reexam</span>';
 }
 function sibItem(s) {
-  return `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(s.control)}">${esc(s.control)}</a>${rxSibBadge(s.type)}<span class="dt">${s.prior ? 'prior' : 'parallel'}</span></div>`;
+  return `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(s.control)}">${esc(s.control)}</a>${rxSibBadge(s.type)}</div>`;
 }
 // Short status label; colour carries the FWD outcome nuance. Most recent decision
 // wins (FWD > institution > discretionary); a referral is not a denial.

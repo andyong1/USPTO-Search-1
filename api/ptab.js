@@ -742,7 +742,33 @@ export default async function handler(req, res) {
     // ── Decisions read (discretion / institution decisions page) ──
     if (q.decisions) {
       res.setHeader('Cache-Control', 'no-store');
-      const [drows, litMap] = await Promise.all([listPtabDecisions(), getLitigationMap()]);
+      const [drows, litMap, patentProcs, fwdBrief, reexMap] = await Promise.all([
+        listPtabDecisions(), getLitigationMap(), listPatentProceedings(), listPtabFwdBrief(), getPatentReexamsMap(),
+      ]);
+      const norm = (p) => String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      // Merge every PTAB proceeding (decisions + FWD + all-AIA-years per-patent
+      // scan) by trial, then group by patent, so each row can show the other
+      // proceedings on its patent — including ones filed before the 2024 cutoff.
+      const byTrial = new Map();
+      const set = (trial, o) => { if (!trial) return; byTrial.set(trial, { ...(byTrial.get(trial) || {}), ...o, trial }); };
+      for (const d of drows) set(d.trial_number, { patent: d.patent_number, type: d.trial_type, inst_type: d.inst_type, dd_type: d.dd_type, date: d.inst_date || d.dd_date || d.petition_date });
+      for (const f of fwdBrief) set(f.trial_number, { patent: (byTrial.get(f.trial_number) || {}).patent || f.patent_number, type: (byTrial.get(f.trial_number) || {}).type || f.trial_type, fwd_date: f.fwd_date, outcome: f.outcome, date: f.fwd_date || (byTrial.get(f.trial_number) || {}).date || f.petition_date });
+      for (const pp of patentProcs) set(pp.trial_number, { patent: (byTrial.get(pp.trial_number) || {}).patent || pp.patent_number, type: (byTrial.get(pp.trial_number) || {}).type || pp.trial_type, status: pp.status, date: (byTrial.get(pp.trial_number) || {}).date || pp.institution_date || pp.petition_date });
+      const catOf = (t) => {
+        const st = t.status || '';
+        if (t.fwd_date || st === 'Final Written Decision') return 'fwd';
+        if (t.inst_type === 'granted' || t.inst_type === 'granted_in_part' || st === 'Trial Instituted') return 'instituted';
+        if (t.inst_type === 'denied' || st === 'Institution Denied') return 'denied';
+        if (t.dd_type === 'deny' || st === 'Discretionary Denial') return 'denied';
+        if (t.dd_type === 'refer') return 'referred';
+        if (st === 'Terminated-Settled') return 'settled';
+        if (st === 'Terminated') return 'terminated';
+        if (st === 'Pending') return 'pending';
+        return 'other';
+      };
+      const byPatent = new Map();
+      for (const t of byTrial.values()) { const k = norm(t.patent); if (!k) continue; if (!byPatent.has(k)) byPatent.set(k, []); byPatent.get(k).push(t); }
+
       const dsummary = { total: drows.length, dd_deny: 0, dd_refer: 0, inst_granted: 0, inst_denied: 0 };
       for (const r of drows) {
         if (r.dd_type === 'deny') dsummary.dd_deny++; else if (r.dd_type === 'refer') dsummary.dd_refer++;
@@ -750,6 +776,13 @@ export default async function handler(req, res) {
         // Related district-court litigation from the petition's Related Matters.
         const lit = litMap.get(r.trial_number) || { petitioner: [], other: [] };
         r.lit_petitioner = lit.petitioner; r.lit_other = lit.other;
+        // Prior / parallel proceedings on the same patent (other PTAB trials + reexams).
+        const k = norm(r.patent_number);
+        const ptab = (byPatent.get(k) || []).filter((t) => t.trial !== r.trial_number)
+          .map((t) => ({ trial: t.trial, type: t.type, cat: catOf(t), outcome: t.outcome || null, date: t.date || null }))
+          .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+        const reexams = (reexMap.get(k) || []).map((x) => ({ control: x.control, type: x.type, date: x.date || x.filingDate || null }));
+        r.related = { ptab, reexams };
       }
       res.status(200).json({ rows: drows, summary: dsummary });
       return;

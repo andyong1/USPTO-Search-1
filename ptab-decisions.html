@@ -46,6 +46,8 @@
     .fwd-links a { color: #1a3a6b; font-weight: 600; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
     .lit-chip { display: inline-block; background: #edf2f7; color: #2d3748; border-radius: 10px; padding: 1px 7px; font-size: 0.72rem; margin: 1px 2px 1px 0; white-space: nowrap; }
+    .ipr-item { margin: 1px 0; white-space: nowrap; }
+    .rel-more { cursor: pointer; }
     .o-po { background: #c6f6d5; color: #276749; }
     .o-pet { background: #fed7d7; color: #9b2c2c; }
     .o-other { background: #e2e8f0; color: #4a5568; }
@@ -297,6 +299,30 @@ function decCell(type, date, pdfUrl, trial, kind) {
   return `<span class="badge ${cls}">${esc(label)}</span><div class="ext" style="margin-top:3px">${fmtDate(date)}</div>${links}`;
 }
 
+// Prior / parallel proceedings on the same patent (other PTAB trials + reexams),
+// including ones filed before the 2024 catalog cutoff (via the all-AIA-years scan).
+const PROC = { fwd: ['o-other', 'FWD'], instituted: ['o-dd', 'Instituted'], denied: ['o-pet', 'Denied'],
+  referred: ['o-dd', 'Referred'], settled: ['o-other', 'Settled'], terminated: ['o-other', 'Terminated'],
+  pending: ['o-other', 'Pending'], other: ['o-other', 'Proceeding'] };
+function procBadge(cat) { const p = PROC[cat] || PROC.other; return `<span class="badge ${p[0]}">${p[1]}</span>`; }
+function rxBadge(type) {
+  if (/ordered/i.test(type || '')) return '<span class="badge o-po">Reexam ordered</span>';
+  if (/denied/i.test(type || '')) return '<span class="badge o-pet">Reexam denied</span>';
+  return '<span class="badge o-other">Reexam</span>';
+}
+function relatedCell(r) {
+  const rel = r.related || { ptab: [], reexams: [] };
+  const d = (x) => { const s = fmtDate(x); return s === '—' ? '' : ` <span class="ext">${esc(s)}</span>`; };
+  const items = [
+    ...rel.ptab.map((x) => `<div class="ipr-item"><a class="link" href="/trial?no=${encodeURIComponent(x.trial)}">${esc(x.trial)}</a>${procBadge(x.cat)}${d(x.date)}</div>`),
+    ...rel.reexams.map((x) => `<div class="ipr-item"><a class="link" href="/uspto-search?app=${encodeURIComponent(x.control)}">${esc(x.control)}</a>${rxBadge(x.type)}${d(x.date)}</div>`),
+  ];
+  if (!items.length) return '<span class="ext">—</span>';
+  if (items.length <= 3) return items.join('');
+  return `${items.slice(0, 3).join('')}<div class="rel-extra" hidden>${items.slice(3).join('')}</div>`
+    + `<a class="ext rel-more" role="button" tabindex="0" onclick="this.previousElementSibling.hidden=false;this.remove()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.previousElementSibling.hidden=false;this.remove()}">+${items.length - 3} more</a>`;
+}
+
 // ── Rate-over-time bar charts (month / week / day, like the reexam page) ──
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function periodGran() { const p = document.getElementById('period').value; return p === 'last30' ? 'day' : p === 'last60' ? 'week' : 'month'; }
@@ -405,14 +431,17 @@ function renderTable() {
       <td>${decCell(r.inst_type, r.inst_date, r.inst_pdf_url, r.trial_number, 'inst')}</td>
       <td>${litCell(r.lit_petitioner)}</td>
       <td>${litCell(r.lit_other)}</td>
+      <td>${relatedCell(r)}</td>
     </tr>`;
   }).join('');
   const litTip = 'District-court litigation identified in the petition’s Related Matters (37 C.F.R. §42.8(b)(2)) at filing, by jurisdiction. Heuristic (petition-text extraction) — verify against the petition.';
+  const relTip = 'Other PTAB proceedings and ex parte reexaminations on the same patent — all AIA years, including before the 2024 catalog cutoff.';
   body.innerHTML = `<div class="table-wrap"><table><thead><tr>
     ${th('trial_number', 'Trial No.')}${th('trial_type', 'Type')}${th('patent_number', 'Patent')}
     ${th('po_name', 'Patent Owner')}${th('petitioner_name', 'Petitioner')}${th('tech_center', 'TC')}
     ${th('dd_type', 'Discretionary Decision')}${th('inst_type', 'Institution Decision')}
     <th title="${esc(litTip)}">Lit — Petitioner</th><th title="${esc(litTip)}">Lit — Other</th>
+    <th title="${esc(relTip)}">Prior / parallel proceedings</th>
   </tr></thead><tbody>${trs}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pages, start, end, total) : '');
 }
 function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } tablePage = 1; render(); }
@@ -458,12 +487,16 @@ function exportDecisions() {
   const instLabel = { granted: 'Instituted', granted_in_part: 'Instituted-in-part', denied: 'Institution denied' };
   const dt = (d) => { const x = fmtDate(d); return x === '—' ? '' : x; };
   const header = ['Trial No.', 'Type', 'Patent No.', 'Application No.', 'Tech Center', 'Patent Owner', 'Petitioner',
-    'Discretionary Decision', 'Discretionary Date', 'Institution Decision', 'Institution Date', 'Lit — Petitioner', 'Lit — Other'];
+    'Discretionary Decision', 'Discretionary Date', 'Institution Decision', 'Institution Date', 'Lit — Petitioner', 'Lit — Other', 'Prior / Parallel Proceedings'];
+  const relStr = (r) => {
+    const rel = r.related || { ptab: [], reexams: [] };
+    return [...rel.ptab.map((x) => `${x.trial} (${x.cat})`), ...rel.reexams.map((x) => `${x.control} (reexam ${x.type || ''})`.trim())].join('; ');
+  };
   const aoa = rows.map((r) => [r.trial_number, r.trial_type, r.patent_number, r.application_number, r.tech_center, r.po_name, r.petitioner_name,
     r.dd_type ? (ddLabel[r.dd_type] || titleCase(r.dd_type)) : '', dt(r.dd_date),
     r.inst_type ? (instLabel[r.inst_type] || titleCase(r.inst_type)) : '', dt(r.inst_date),
-    (r.lit_petitioner || []).join('; '), (r.lit_other || []).join('; ')]);
-  exportXlsx('ptab-discretion-institution-decisions.xlsx', header, aoa, { colWidths: [14, 6, 12, 14, 10, 26, 26, 22, 14, 20, 14, 16, 16], sheetName: 'Decisions' });
+    (r.lit_petitioner || []).join('; '), (r.lit_other || []).join('; '), relStr(r)]);
+  exportXlsx('ptab-discretion-institution-decisions.xlsx', header, aoa, { colWidths: [14, 6, 12, 14, 10, 26, 26, 22, 14, 20, 14, 16, 16, 30], sheetName: 'Decisions' });
 }
 document.getElementById('export').addEventListener('click', exportDecisions);
 

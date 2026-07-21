@@ -444,7 +444,7 @@ function renderTable() {
     ${th('dd_type', 'Discretionary Decision')}${th('inst_type', 'Institution Decision')}
     <th title="${esc(litTip)}">Lit — Petitioner</th><th title="${esc(litTip)}">Lit — Other</th>
     <th title="${esc(relTip)}">Prior / parallel proceedings</th>
-    ${th('patent_issue_date', 'Patent Issue Date')}${th('enforcement_age', 'Enforcement Age')}
+    ${th('patent_issue_date', 'Patent Issue Date')}${th('enforcement_age', 'Enforcement Age (yrs.)')}
   </tr></thead><tbody>${trs}</tbody></table></div>` + (total > TABLE_PAGE_SIZE ? pagerHtml(tablePage, pages, start, end, total) : '');
 }
 function sortBy(k) { if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = k; sortDir = (k === '_date') ? 'desc' : 'asc'; } tablePage = 1; render(); }

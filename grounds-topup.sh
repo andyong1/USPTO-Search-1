@@ -40,7 +40,13 @@ drain() { # $1 = url
 echo "== [3/4] grounds extraction (refs + names + 325(d)) =="
 drain "${SITE}/api/cron/backfill-reexam?grounds=1&maxSeconds=45" 10
 
-echo "== [4/4] petition references =="
+echo "== [4/5] petition references =="
 drain "${SITE}/api/ptab?petrefs=1" 20
+
+# Re-parse related litigation from stored petition front-matter at the current
+# LIT_V (cheap, no re-download) — propagates any extractor improvement. No-op once
+# everything is current.
+echo "== [5/5] litigation re-parse =="
+drain "${SITE}/api/ptab?litrescan=1" 20
 
 echo "== top-up complete =="

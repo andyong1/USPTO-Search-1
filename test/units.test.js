@@ -599,6 +599,67 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     { petitioner: [], other: ['C.D. Cal.'] });
 });
 
+test('extractRelatedLitigation — corpus-derived patterns (petrefs audit, July 2026)', () => {
+  // Bare "D. Del." in a case table, no direction, no parens (IPR2023-01184).
+  const a = extractRelatedLitigation(
+    'Related Matters The ’218 patent is or has been involved in the following district court litigation: '
+    + 'Name No. Court Filed Tigo Energy Inc. v. SMA Solar Technology America LLC et al. 1-22-cv-00915 D. Del. July 11, 2022.',
+    'SMA Solar Technology America LLC', 'Tigo Energy, Inc.');
+  assert.deepEqual(a, { petitioner: ['D. Del.'], other: [] });
+
+  // Districts with no COURT_MAP entry — generic parser (IPR2024-00291).
+  const b = extractRelatedLitigation(
+    'Related Matters, § 42.8(b)(2) The ’535 patent is the subject of several civil actions: '
+    + 'Rugged Cross Hunting Blinds LLC v. DBR Finance, Inc., 1-23-cv-01944 (N.D. Ohio). '
+    + 'Good Sportsman Marketing LLC v. Rugged Cross Hunting Blinds LLC, 4:23-cv-03243 (S.D. Texas).',
+    'DBR Finance, Inc.', 'Rugged Cross Hunting Blinds, LLC');
+  assert.deepEqual(b, { petitioner: ['N.D. Ohio'], other: ['S.D. Tex.'] });
+
+  // Parenthetical with trailing words (IPR2024-00069) + "E.D. of Texas" (IPR2023-00978).
+  const c = extractRelatedLitigation(
+    'RELATED MATTERS The ’897 patent has been asserted in the following litigations: '
+    + 'Attentive Mobile Inc. v. 317 Labs, Inc., Case No. 1-22-cv-01163 (D. Del. Filed Sep. 01, 2022). '
+    + 'Attentive Mobile Inc. v. Stodge Inc., Case No. 2-22-cv-00394 (E.D. of Texas).',
+    '317 Labs, Inc.', 'Attentive Mobile Inc.');
+  assert.deepEqual(c, { petitioner: ['D. Del.'], other: ['E.D. Tex.'] });
+
+  // Direction-less "District of Texas" (header-severed direction) must NOT
+  // produce a court; "District of Delaware Case No." over-capture must.
+  const d = extractRelatedLitigation(
+    'Related Matters The ’454 patent is the subject of actions brought by Patent Owner against others: '
+    + 'Acme Corp. v. Widget LLC in the U.S. District Court for the District of Delaware Case No. 1:17-cv-00065, '
+    + 'and Acme Corp. v. Gadget Inc. in the District of Texas Case No. 6:21-cv-01110.',
+    'Widget LLC', 'Acme Corp.');
+  assert.deepEqual(d, { petitioner: ['D. Del.'], other: [] });
+
+  // Bare-state paren after a civil-action number -> its single district
+  // (IPR2019-00080); "(Texas Litigation)" (multi-district) must NOT.
+  const e = extractRelatedLitigation(
+    'related matters The ’460 Patent was involved in: Feinmetall GmbH et al v. FormFactor, Inc., '
+    + '1:18-cv-01057-RGA, (Del. , July 17, 2018) (the “Texas Litigation”).',
+    'FormFactor, Inc.', 'Feinmetall GmbH');
+  assert.deepEqual(e, { petitioner: ['D. Del.'], other: [] });
+
+  // Prose disclosure with no caption near the court (IPR2023-01416): PO named
+  // in the window keeps it; petitioner absent -> other column.
+  const f = extractRelatedLitigation(
+    'Related Matters Under 37 C.F.R. §42.8(b)(2) The ’477 Patent is presently the subject of a patent '
+    + 'infringement lawsuit brought by the assignee, General Access Solutions, against T-Mobile USA, Inc., '
+    + 'captioned Case No. 2:23-CV-00158-JRG (E.D. Tex.). H. Counsel and Service Information.',
+    'Nokia of America Corporation et al.', 'General Access Solutions, Ltd.');
+  assert.deepEqual(f, { petitioner: [], other: ['E.D. Tex.'] });
+
+  // Fintiv-prose fallback (IPR2024-00187): the real section names only an ITC
+  // investigation; the co-pending district case appears in the §314(a) argument.
+  const g = extractRelatedLitigation(
+    'the Board should not deny institution because the related district court litigation is stayed: '
+    + 'Vicor Corp. v. Delta Electronics, Inc., 2:23-CV-00323-JRG-RSP, Dkt. 35 (Stay Order) (E.D. Tex. Aug. 22, 2023). '
+    + 'lots of argument here. Related Matters The ’481 Patent is the subject of ITC Investigation No. 337-TA-1370. '
+    + 'Lead and Back-up Counsel.',
+    'Delta Electronics, Inc.', 'Vicor Corporation');
+  assert.deepEqual(g, { petitioner: ['E.D. Tex.'], other: [] });
+});
+
 test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {
   // TOC entry early, long technical body, then the real section past 25KB.
   const toc = 'TABLE OF CONTENTS B. Related Matters Under 37 C.F.R. § 42.8(b)(2) ............ 88 ';

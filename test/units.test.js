@@ -7,7 +7,7 @@ import { analyzePetition, classifyRequester, determinationLabel, validateSearchS
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
 import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc, classify325d } from '../lib/grounds.js';
-import { normCourt, petitionerToken, extractRelatedLitigation } from '../lib/litigation.js';
+import { normCourt, petitionerToken, extractRelatedLitigation, petitionFrontmatter } from '../lib/litigation.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -558,4 +558,16 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     + 'et al., No. 2:24-cv-01070 (E.D. Tex.). C. Lead and Back-up Counsel.';
   assert.deepEqual(extractRelatedLitigation(t2, 'WHOOP, Inc.', 'Omni MedSci, Inc.'),
     { petitioner: ['D. Del.'], other: ['E.D. Tex.'] });
+});
+
+test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {
+  // TOC entry early, long technical body, then the real section past 25KB.
+  const toc = 'TABLE OF CONTENTS B. Related Matters Under 37 C.F.R. § 42.8(b)(2) ............ 88 ';
+  const body = 'call controller forwards content. '.repeat(800); // ~28KB of technical prose
+  const section = 'B. Related Matters Under 37 C.F.R. § 42.8(b)(2) 1. Judicial Matters the ’303 Patent is involved in: '
+    + 'Vusura Technology LLC v. Cisco Systems, Inc. 2:25-cv-00871 E.D. Tex. 8/25/2025. 2. Administrative Matters none.';
+  const fm = petitionFrontmatter(toc + body + section);
+  assert.ok(fm.includes('Vusura'), 'stored window must contain the deep section');
+  assert.deepEqual(extractRelatedLitigation(fm, 'Cisco Systems, Inc.', 'Vusura Technology LLC'),
+    { petitioner: ['E.D. Tex.'], other: [] });
 });

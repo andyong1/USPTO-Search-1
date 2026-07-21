@@ -40,7 +40,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getPatentReexamsMap, patentReexamsCoverage, getLitigationMap,
   getPetitionsToRelit, setLitigation, countPetitionsToRelit } from '../lib/db.js';
 import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
-import { extractRelatedLitigation } from '../lib/litigation.js';
+import { extractRelatedLitigation, petitionFrontmatter } from '../lib/litigation.js';
 import { getApiKey } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, extractDocFullText, fetchPetitionDoc, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
@@ -487,7 +487,7 @@ export default async function handler(req, res) {
             const lit = extractRelatedLitigation(text, row.petitioner_name, row.po_name);
             // Store the front matter (where Related Matters lives) so litigation can
             // be re-parsed later without re-downloading the petition.
-            await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other, String(text || '').slice(0, 25000));
+            await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other, petitionFrontmatter(text));
             if (refs.length) withRefs++;
             if (lit.petitioner.length || lit.other.length) withLit++;
             processed++;

@@ -558,6 +558,14 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     + 'et al., No. 2:24-cv-01070 (E.D. Tex.). C. Lead and Back-up Counsel.';
   assert.deepEqual(extractRelatedLitigation(t2, 'WHOOP, Inc.', 'Omni MedSci, Inc.'),
     { petitioner: ['D. Del.'], other: ['E.D. Tex.'] });
+
+  // IPR2026-00233: parenthetical court that trails the caption, and an OCR-dropped
+  // hyphen in the case number ("cv04689"). Must still catch N.D. Ill.
+  const t3 = '2. 37 C.F.R. § 42.8(b)(2): Related Matters. The ’067 patent is at issue in the following case: '
+    + 'Milwaukee Electric Tools Corporation v. Klein Tools, Inc., No. 1:25-cv04689 (N.D. Ill.), filed April 29, 2025 '
+    + '(the “Litigation”). C. Lead and Back-up Counsel.';
+  assert.deepEqual(extractRelatedLitigation(t3, 'Klein Tools, Inc.', 'Milwaukee Electric Tools Corporation'),
+    { petitioner: ['N.D. Ill.'], other: [] });
 });
 
 test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {

@@ -8,6 +8,7 @@ import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
 import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc, classify325d } from '../lib/grounds.js';
 import { normCourt, petitionerToken, extractRelatedLitigation, petitionFrontmatter } from '../lib/litigation.js';
+import { pickPetitionDoc } from '../lib/ptab-fetch.js';
 
 test('detectDdDecision — finds the Director Discretionary Decision subtype', () => {
   const docs = [
@@ -670,4 +671,21 @@ test('petitionFrontmatter — captures the Related Matters neighborhood even whe
   assert.ok(fm.includes('Vusura'), 'stored window must contain the deep section');
   assert.deepEqual(extractRelatedLitigation(fm, 'Cisco Systems, Inc.', 'Vusura Technology LLC'),
     { petitioner: ['E.D. Tex.'], other: [] });
+});
+
+test('pickPetitionDoc — exhibit-typed prior petition is skipped (IPR2025-01250)', () => {
+  // Samsung filed Apple's 2019 petition as an EXHIBIT; its title still reads
+  // "Petition for Inter Partes Review…". The exhibit must never win, whatever
+  // its title says, and order must not matter.
+  const doc = (type, title, id) => ({ documentData: {
+    documentTypeDescriptionText: type, documentTitleText: title,
+    documentIdentifier: id, fileDownloadURI: `u/${id}`, documentFilingDate: '2025-07-01' } });
+  const exhibit = doc('Exhibit', 'Petition for Inter Partes Review of U.S. Patent No. 9,651,533', 'EX1');
+  const petition = doc('Petition', 'Petition for Inter Partes Review of U.S. Patent No. 9,651,533', 'PET1');
+  assert.equal(pickPetitionDoc([exhibit, petition]).docId, 'PET1');
+  assert.equal(pickPetitionDoc([petition, exhibit]).docId, 'PET1');
+  // Untyped doc with a petition title still works (title fallback preserved).
+  assert.equal(pickPetitionDoc([doc('', 'Petition for Inter Partes Review', 'P2')]).docId, 'P2');
+  // Exhibit list / replies / nothing petition-like -> null.
+  assert.equal(pickPetitionDoc([doc('Exhibit List', 'Exhibit List', 'E2'), doc('Reply', 'Petitioner Reply', 'R1')]), null);
 });

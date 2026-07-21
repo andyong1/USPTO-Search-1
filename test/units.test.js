@@ -520,4 +520,14 @@ test('extractRelatedLitigation — long-form courts and bare ECF codes in the se
   assert.deepEqual(extractRelatedLitigation(
     'B. Related Matters. The patent is asserted in Foo LLC v. Bar Inc., No. 1:24-cv-100, in the District of Delaware. Lead counsel: …',
     'Bar Inc.'), { petitioner: ['D. Del.'], other: [] });
+
+  // IPR2026-00276 shape: no "Related Matters" heading — anchored on the §42.8(b)(2)
+  // citation, ends at §42.8(b)(3). Related IPRs in the list are ignored (not DC).
+  const d = extractRelatedLitigation(
+    'V. NOTICES AND STATEMENTS Pursuant to 37 C.F.R. §42.8(b)(1), Amazon.com Services LLC and Amazon.com, Inc. are the '
+    + 'real parties-in-interest. Pursuant to 37 C.F.R. §42.8(b)(2), Petitioner identifies the following related matter. '
+    + 'Smart Speaker LLC v. Amazon.com Services LLC, No. 2-25-cv-00707 (E.D. Tex.) IPR2026-00145, Amazon.com Services LLC v. '
+    + 'Smart Speaker LLC, Patent No. 11,128,710. Pursuant to 37 C.F.R. §42.8(b)(3), Petitioner identifies the following counsel.',
+    'Amazon.com Services LLC');
+  assert.deepEqual(d, { petitioner: ['E.D. Tex.'], other: [] });
 });

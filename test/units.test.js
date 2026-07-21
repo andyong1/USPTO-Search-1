@@ -689,3 +689,23 @@ test('pickPetitionDoc — exhibit-typed prior petition is skipped (IPR2025-01250
   // Exhibit list / replies / nothing petition-like -> null.
   assert.equal(pickPetitionDoc([doc('Exhibit List', 'Exhibit List', 'E2'), doc('Reply', 'Petitioner Reply', 'R1')]), null);
 });
+
+test('extractRelatedLitigation — dominant-plaintiff fallback + long sections (IPR2025-00718)', () => {
+  // PTAB PO-of-record ("MES, Inc.") differs from the asserting entity in every
+  // caption ("Midwest Energy Emissions Corp."). Multiple captions sharing a
+  // plaintiff token establish the de-facto patent owner. Also exercises D. Wyo.
+  // (new state) and a case list deep in a long section.
+  const filler = 'proceedings history discussion. '.repeat(120); // ~3.8KB before the cases
+  const t = 'RELATED MATTERS [37 C.F.R. §42.8(B)(2)] ' + filler
+    + 'Patent Owner has asserted the Challenged Patent in district court in the following matters: '
+    + 'Midwest Energy Emissions Corp. v. Tucson Electric Power Co. et al., No. 3:24-cv-08145-DJH (D. Ariz.) (filed July 17, 2024). '
+    + 'Midwest Energy Emissions Corp. v. Berkshire Hathaway Energy Co. et al., No. 2:25-cv-00015 (D. Wy.) (filed Jan. 14, 2025). '
+    + 'Midwest Energy Emissions Corp. v. Wisconsin Power & Light Co., No. 3:25-cv-00026 (W.D. Wis.) (filed Jan. 14, 2025). '
+    + 'C. Lead and Back-up Counsel.';
+  const r = extractRelatedLitigation(t, 'PacifiCorp et al.', 'MES, Inc.');
+  assert.deepEqual([...r.petitioner, ...r.other].sort(), ['D. Ariz.', 'D. Wyo.', 'W.D. Wis.']);
+  // A single stray citation must NOT trigger the fallback (needs >=2 captions).
+  const stray = 'Related Matters. None. See Acme Corp. v. Beta LLC, No. 6:19-cv-1886 (M.D. Fla.) (claim-construction order). C. Counsel.';
+  assert.deepEqual(extractRelatedLitigation(stray, 'Google LLC', 'Secure Communication Technologies, LLC'),
+    { petitioner: [], other: [] });
+});

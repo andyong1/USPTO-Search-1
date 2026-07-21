@@ -566,6 +566,16 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     + '(the “Litigation”). C. Lead and Back-up Counsel.';
   assert.deepEqual(extractRelatedLitigation(t3, 'Klein Tools, Inc.', 'Milwaukee Electric Tools Corporation'),
     { petitioner: ['N.D. Ill.'], other: [] });
+
+  // IPR2026-00227: a running page header (pdf-parse interleaves it) is spliced
+  // into the middle of the caption, pushing the plaintiff out of the caption
+  // window. Must strip the header and still catch W.D. Tex. against the PO.
+  const t4 = 'B. Related Matters Under 37 C.F.R. § 42.8(b)(2) The ’230 Patent is the subject of civil action '
+    + 'Bulletproof Property Attorney Docket No. 49649-0056IP1 IPR of U.S. Patent No. 11,932,230 72 '
+    + 'Management, LLC v. Tesla, Inc. et al., Case No. 1:25-cv-00665 (W.D. Tex.) filed May 5, 2025. '
+    + 'C. Lead and Back-up Counsel.';
+  assert.deepEqual(extractRelatedLitigation(t4, 'Tesla, Inc.', 'Bulletproof Property Management, LLC'),
+    { petitioner: ['W.D. Tex.'], other: [] });
 });
 
 test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {

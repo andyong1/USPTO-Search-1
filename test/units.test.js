@@ -542,3 +542,20 @@ test('extractRelatedLitigation — patent-owner-party guard filters stray citati
   const r = extractRelatedLitigation(t, 'Google LLC', 'Secure Communication Technologies, LLC');
   assert.deepEqual(r, { petitioner: ['W.D. Tex.'], other: [] });
 });
+
+test('extractRelatedLitigation — same district in both columns; adjacent case not bled', () => {
+  // IPR2026-00211: two E.D. Tex. cases — one vs. petitioner (Cisco), one vs.
+  // another party (Cigna). E.D. Tex. must appear in BOTH columns (bare "EDTX" code).
+  const t1 = 'B. Related Matters. Damaka, Inc. v Cisco Systems, Inc. 2-25-cv-00593 EDTX May 30, 2025. '
+    + 'Damaka, Inc. v. The Cigna Group 2:25-cv-00594 EDTX May 30, 2025. C. Lead and Back-up Counsel.';
+  assert.deepEqual(extractRelatedLitigation(t1, 'Cisco Systems, Inc.', 'Damaka, Inc.'),
+    { petitioner: ['E.D. Tex.'], other: ['E.D. Tex.'] });
+
+  // PGR2026-00003: petitioner WHOOP is a party only in the D. Del. case; the
+  // E.D. Tex. case is vs. Samsung — must be "other", not petitioner (no bleed).
+  const t2 = 'B. Related Matters. The ’790 patent is the subject of suits brought by Patent Owner Omni MedSci, Inc., '
+    + 'including: Omni MedSci, Inc. v. WHOOP, Inc., No. 1:25-cv-00140 (D. Del.); and Omni MedSci, Inc. v. Samsung Elecs., '
+    + 'et al., No. 2:24-cv-01070 (E.D. Tex.). C. Lead and Back-up Counsel.';
+  assert.deepEqual(extractRelatedLitigation(t2, 'WHOOP, Inc.', 'Omni MedSci, Inc.'),
+    { petitioner: ['D. Del.'], other: ['E.D. Tex.'] });
+});

@@ -38,10 +38,11 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getInstitutionsToExtractGrounds, setInstitutionGrounds, countInstitutionsToExtractGrounds,
   getTrialsToExtractPetitionRefs, setPetitionRefs, countTrialsToExtractPetitionRefs,
   getPatentReexamsMap, patentReexamsCoverage, getLitigationMap,
+  getDecisionsMissingIssueDate, setIssueDate, countDecisionsMissingIssueDate,
   getPetitionsToRelit, setLitigation, countPetitionsToRelit } from '../lib/db.js';
 import { compareGrounds, extractAllRefs } from '../lib/grounds.js';
 import { extractRelatedLitigation, petitionFrontmatter } from '../lib/litigation.js';
-import { getApiKey } from '../lib/uspto.js';
+import { getApiKey, fetchMetaData } from '../lib/uspto.js';
 import { cronOk, clientErrorDetail } from '../lib/secure.js';
 import { fetchFwdPage, extractFwdText, extractDocFullText, fetchPetitionDoc, classifyFwd, fetchDdDecision, detectDdDecision, fetchTrialDetail,
   fetchInstitutionPage, fetchDdPage, fetchReexamFilingCount, fetchIprPetitionCount, fetchProceedingsByPatent, CLASSIFIER_V, EXTRACT_V, DD_CHECK_V, DD_CUTOFF } from '../lib/ptab.js';
@@ -522,6 +523,32 @@ export default async function handler(req, res) {
       return;
     }
 
+    // ── Patent issue-date backfill (for the enforcement-age column) ──
+    // One application-metadata fetch per decision to get the challenged patent's
+    // grant date. Resumable, time-bounded. &retry=1 re-pools ones fetched empty.
+    if (q.issuedates) {
+      if (!gate(req, res)) return;
+      const deadline = Date.now() + 45000;
+      const BATCH = 80;
+      const rows = await getDecisionsMissingIssueDate(BATCH, req.query.retry === '1');
+      let processed = 0, withDate = 0, i = 0; const errors = [];
+      async function worker() {
+        while (i < rows.length && Date.now() < deadline) {
+          const r = rows[i++];
+          try {
+            const meta = await fetchMetaData(r.application_number);
+            await setIssueDate(r.trial_number, meta.grantDate || '');
+            if (meta.grantDate) withDate++;
+            processed++;
+          } catch (e) { if (errors.length < 6) errors.push({ trial: r.trial_number, error: String(e.message || e) }); }
+        }
+      }
+      await Promise.all(Array.from({ length: 4 }, worker));
+      const remaining = await countDecisionsMissingIssueDate();
+      res.status(200).json({ ok: true, mode: 'issuedates', processed, withDate, remaining, done: remaining === 0, errors });
+      return;
+    }
+
     // ── Filings trends read (daily series per kind) ──
     if (q.filings) {
       res.setHeader('Cache-Control', 'no-store');
@@ -783,6 +810,10 @@ export default async function handler(req, res) {
           .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
         const reexams = (reexMap.get(k) || []).map((x) => ({ control: x.control, type: x.type, date: x.date || x.filingDate || null }));
         r.related = { ptab, reexams };
+        // Enforcement age: years from the patent's issue date to the IPR petition
+        // filing date (1 decimal). Null when either date is missing.
+        const iss = Date.parse(r.patent_issue_date || ''), pet = Date.parse(r.petition_date || '');
+        r.enforcement_age = (isFinite(iss) && isFinite(pet)) ? +((pet - iss) / (365.25 * 86400000)).toFixed(1) : null;
       }
       res.status(200).json({ rows: drows, summary: dsummary });
       return;

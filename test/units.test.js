@@ -589,13 +589,14 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     'Related Matters. The parties are engaged in district court litigation. Smith v. Jones.',
     'Jones', 'Smith'), { petitioner: [], other: [] });
 
-  // IPR2026-00252: CM/ECF code "(CDCA)" variant for C.D. Cal. Petitioner (Disney)
-  // is a defendant, so it belongs in the petitioner column.
+  // IPR2026-00252: CM/ECF code "(CDCA)" variant for C.D. Cal. The petitioner is
+  // Dolby (per PTAB party metadata); the case is InterDigital (PO) v. Disney, so
+  // the petitioner is NOT a party — it belongs in the "other" column.
   const t6 = 'B. Related Matters Under 37 C.F.R. § 42.8(b)(2) The ‘268 patent is the subject of '
     + 'the following civil action: InterDigital, Inc. et al v. The Walt Disney Company et al., '
     + '2-25-cv-00895 (CDCA). C. Lead and Back-up Counsel.';
-  assert.deepEqual(extractRelatedLitigation(t6, 'The Walt Disney Company', 'InterDigital, Inc.'),
-    { petitioner: ['C.D. Cal.'], other: [] });
+  assert.deepEqual(extractRelatedLitigation(t6, 'Dolby Laboratories, Inc.', 'InterDigital, Inc.'),
+    { petitioner: [], other: ['C.D. Cal.'] });
 });
 
 test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {

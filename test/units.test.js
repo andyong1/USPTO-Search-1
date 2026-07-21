@@ -531,3 +531,14 @@ test('extractRelatedLitigation — long-form courts and bare ECF codes in the se
     'Amazon.com Services LLC');
   assert.deepEqual(d, { petitioner: ['E.D. Tex.'], other: [] });
 });
+
+test('extractRelatedLitigation — patent-owner-party guard filters stray citations (IPR2026-00099)', () => {
+  // PO = Secure Communication Technologies (plaintiff, W.D. Tex.); petitioner =
+  // Google. The M.D. Fla. mention is a claim-construction authority not involving
+  // the PO — the PO-party guard drops it; only W.D. Tex. counts.
+  const t = 'B. Related Matters. a. Western District of Texas. Secure Communication Technologies, LLC v. Google LLC, '
+    + 'No. 1:25-cv-01207 (W.D. Tex.), filed 2025-08-04. The Board construed the term in Acme Inc. v. Beta Corp. (M.D. Fla.). '
+    + 'C. Lead and Back-up Counsel.';
+  const r = extractRelatedLitigation(t, 'Google LLC', 'Secure Communication Technologies, LLC');
+  assert.deepEqual(r, { petitioner: ['W.D. Tex.'], other: [] });
+});

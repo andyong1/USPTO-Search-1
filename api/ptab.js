@@ -484,7 +484,7 @@ export default async function handler(req, res) {
             if (!pet || !pet.url) { await setPetitionRefs(trial, [], null, [], [], null); noPetition++; processed++; continue; }
             const text = await extractDocFullText(pet.url);
             const refs = extractAllRefs(text);
-            const lit = extractRelatedLitigation(text, row.petitioner_name);
+            const lit = extractRelatedLitigation(text, row.petitioner_name, row.po_name);
             // Store the front matter (where Related Matters lives) so litigation can
             // be re-parsed later without re-downloading the petition.
             await setPetitionRefs(trial, refs, pet.docId, lit.petitioner, lit.other, String(text || '').slice(0, 25000));
@@ -511,7 +511,7 @@ export default async function handler(req, res) {
         const rows = await getPetitionsToRelit(200);
         if (!rows.length) break;
         for (const r of rows) {
-          const lit = extractRelatedLitigation(r.pet_frontmatter, r.petitioner_name);
+          const lit = extractRelatedLitigation(r.pet_frontmatter, r.petitioner_name, r.po_name);
           await setLitigation(r.trial_number, lit.petitioner, lit.other);
           if (lit.petitioner.length || lit.other.length) withLit++;
           updated++;

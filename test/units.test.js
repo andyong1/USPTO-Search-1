@@ -576,6 +576,18 @@ test('extractRelatedLitigation — same district in both columns; adjacent case 
     + 'C. Lead and Back-up Counsel.';
   assert.deepEqual(extractRelatedLitigation(t4, 'Tesla, Inc.', 'Bulletproof Property Management, LLC'),
     { petitioner: ['W.D. Tex.'], other: [] });
+
+  // IPR2026-00194: court written "(Dist. Del.)" instead of "(D. Del.)".
+  const t5 = 'B. Related Matters (37 C.F.R. §42.8(b)(2)) The parties are currently engaged in '
+    + 'district court litigation in the case captioned Treace Medical Concepts, Inc. v. Zimmer Biomet '
+    + 'Holdings, Inc. and Paragon 28, Inc., C.A. No. 1:25-cv-00592-GBW (Dist. Del.). Treace Medical '
+    + 'Concepts, Inc. has asserted the ’368 patent against Petitioner. C. Lead and Back-up Counsel.';
+  assert.deepEqual(extractRelatedLitigation(t5, 'Paragon 28, Inc.', 'Treace Medical Concepts, Inc.'),
+    { petitioner: ['D. Del.'], other: [] });
+  // Bare "district court litigation" prose (no state abbrev) must NOT invent a court.
+  assert.deepEqual(extractRelatedLitigation(
+    'Related Matters. The parties are engaged in district court litigation. Smith v. Jones.',
+    'Jones', 'Smith'), { petitioner: [], other: [] });
 });
 
 test('petitionFrontmatter — captures the Related Matters neighborhood even when deep (IPR2026-00255)', () => {

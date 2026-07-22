@@ -383,10 +383,15 @@ export default async function handler(req, res) {
       const todayMs = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
       const stored = new Set((await listFilings()).map((r) => r.kind + ':' + r.d));
       // Build the work list (newest day first), skipping settled stored days.
+      // 90-series reexams are indexed with weeks of USPTO lag, so a date's count
+      // keeps rising for ~3-4 weeks after it passes; re-count a 35-day trailing
+      // window so late-arriving filings settle (a 7-day window silently undercounted
+      // the current month — DA-9). Older days are settled and stay frozen.
+      const REFRESH_DAYS = Number(req.query.refreshDays) || 35;
       const work = [];
       for (let t = todayMs; t >= START; t -= DAY) {
         const d = dayStr(t);
-        const recent = t >= todayMs - 6 * DAY; // rolling 7-day refresh — late-arriving counts settle (DA-9)
+        const recent = t >= todayMs - (REFRESH_DAYS - 1) * DAY;
         for (const kind of ['reexam', 'ipr']) if (recent || !stored.has(kind + ':' + d)) work.push({ kind, d });
       }
       const CONCURRENCY = 4;

@@ -6,6 +6,8 @@
 #   2. upload the new text to Neon
 #   3. run the grounds extraction backfill (refs + names + §325(d)) until done
 #   4. run the petition-reference backfill a few rounds (heavier; resumable)
+#   5. re-parse related litigation from stored front-matter (cheap, no download)
+#   6. refresh filings-trends daily counts (backstop for the cron-job.org fscan)
 #
 # Secrets are read from grounds-secrets.env (gitignored) which must define:
 #   POSTGRES_URL=postgres://...
@@ -19,10 +21,10 @@ set -a; . ./grounds-secrets.env; set +a
 export NODE_OPTIONS=--use-system-ca
 SITE="${SITE:-https://andy-ong.com}"
 
-echo "== [1/4] OCR new pipeline determinations =="
+echo "== [1/6] OCR new pipeline determinations =="
 cat grounds-ocr.py | python -
 
-echo "== [2/4] upload text to Neon =="
+echo "== [2/6] upload text to Neon =="
 node grounds-upload.mjs
 
 # Call a resumable cron endpoint until it reports "done":true (bounded).
@@ -37,16 +39,23 @@ drain() { # $1 = url
   done
 }
 
-echo "== [3/4] grounds extraction (refs + names + 325(d)) =="
+echo "== [3/6] grounds extraction (refs + names + 325(d)) =="
 drain "${SITE}/api/cron/backfill-reexam?grounds=1&maxSeconds=45" 10
 
-echo "== [4/5] petition references =="
+echo "== [4/6] petition references =="
 drain "${SITE}/api/ptab?petrefs=1" 20
 
 # Re-parse related litigation from stored petition front-matter at the current
 # LIT_V (cheap, no re-download) — propagates any extractor improvement. No-op once
 # everything is current.
-echo "== [5/5] litigation re-parse =="
+echo "== [5/6] litigation re-parse =="
 drain "${SITE}/api/ptab?litrescan=1" 20
+
+# Refresh the filings-trends daily counts (ex parte reexam + IPR). fscan isn't in
+# any Vercel/cron-defined pipeline, so this is the nightly backstop; the rolling
+# 7-day re-count settles late-arriving filings. Drains its one-time backfill over
+# a few runs, then steady state is a handful of days per night.
+echo "== [6/6] filings-trends counts =="
+drain "${SITE}/api/ptab?fscan=1" 10
 
 echo "== top-up complete =="

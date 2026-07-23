@@ -699,6 +699,7 @@ export default async function handler(req, res) {
           requester: d.requester_type, category: mapped[0].cat,
           iprFirst: (iprEarliest && reexamDate) ? iprEarliest < reexamDate : null, iprs: mapped,
           cites325d: !!rg.cites325d, d325Level: rg.d325 || 'none',
+          d325Addressed: rg.d325Addressed || null, d325Summary: rg.d325Summary || null,
           grounds: { mentioned: anyMentioned, sharedRefs, hasText: reexamGrounds.has(d.application_number) },
         });
       }

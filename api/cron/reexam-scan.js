@@ -21,7 +21,7 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate,
-  getDocEventsByOfficialDate,
+  getDocEventsByOfficialDate, getD325SummariesByDocIds,
   getDeterminationsToCheckConclusion, recordConclusionDocs,
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
@@ -88,6 +88,19 @@ async function maybeSendSubscriberDigest(req) {
   }
 
   const events = await getDocEventsByOfficialDate(targetDate);
+
+  // Attach AI §325(d) summaries to determination rows when the nightly local
+  // pipeline has produced one (best-effort — never blocks the digest).
+  try {
+    const detIds = events.filter((e) => e.category === 'determination' && e.document_id).map((e) => e.document_id);
+    if (detIds.length) {
+      const sums = await getD325SummariesByDocIds(detIds);
+      for (const e of events) {
+        const s = sums.get(e.document_id);
+        if (s) e.d325_summary = s.summary;
+      }
+    }
+  } catch { /* summaries are optional */ }
 
   // PTAB final written decisions issued that same day (best-effort — a failure
   // here must not block the reexam digest). Dedupe to one row per trial.

@@ -21,8 +21,11 @@ set -a; . ./grounds-secrets.env; set +a
 export NODE_OPTIONS=--use-system-ca
 SITE="${SITE:-https://andy-ong.com}"
 
-echo "== [1/6] OCR new pipeline determinations =="
-cat grounds-ocr.py | python -
+echo "== [1/6] OCR new determinations (all reexams, bounded batch) =="
+# --all: every watch-table determination, not just reexams with a PTAB sibling —
+# the §325(d) AI summaries cover the full tracker universe. --limit bounds the
+# nightly batch so the one-time backfill drains gradually instead of one huge run.
+cat grounds-ocr.py | python - --all --limit 30
 
 echo "== [2/6] upload text to Neon =="
 node grounds-upload.mjs

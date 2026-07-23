@@ -13,6 +13,8 @@
 #     python grounds-ocr.py            # pipeline reexams (prior/parallel PTAB), resumable
 #     python grounds-ocr.py --all      # every reexam determination (large)
 #     python grounds-ocr.py --limit 5  # small test run
+#     python grounds-ocr.py --pdf <appNum>-<docId>.pdf   # OCR a hand-downloaded
+#                                       # PDF when the on-demand download 502s
 #
 # Output per determination: a .txt (pages separated by \f) + a .json sidecar
 # {pages, chars, engine}. Filenames match what grounds-upload.mjs expects:
@@ -105,7 +107,35 @@ def kind_of(t):
     t = str(t or "").lower()
     return "order" if "order" in t else "denial" if "deni" in t else "determination"
 
+def ocr_local(pdf_path):
+    # Escape hatch for when the on-demand document download 502s: OCR a PDF the
+    # user downloaded by hand. Name the file <appNum>-<docId>.pdf (the same
+    # convention as manual Patent Center downloads); kind/date are looked up from
+    # /api/reexam so the output filename matches what grounds-upload.mjs expects.
+    TXT_DIR.mkdir(parents=True, exist_ok=True)
+    p = Path(pdf_path)
+    app, _, doc = p.stem.partition("-")
+    app = "".join(c for c in app if c.isalnum())
+    if not app or not doc:
+        print(f"  filename must be <appNum>-<docId>.pdf, got: {p.name}")
+        return
+    meta = next((d for d in determinations() if d.get("document_identifier") == doc), None)
+    kind = kind_of(meta.get("determination_type")) if meta else "determination"
+    date = str(meta.get("official_date") or "")[:10] if meta else ""
+    date = date or "nodate"
+    buf = p.read_bytes()
+    if buf[:5] != b"%PDF-":
+        print(f"  not a PDF: {p.name}")
+        return
+    text, npages, engine = ocr_pdf_bytes(buf)
+    name = f"{app}_{kind}_{date}_{doc}"
+    (TXT_DIR / f"{name}.txt").write_text(text, encoding="utf-8")
+    (TXT_DIR / f"{name}.json").write_text(json.dumps({"pages": npages, "chars": len(text), "engine": engine}))
+    print(f"OCR'd {p.name} -> {name}.txt  ({npages} pages, {len(text)} chars, {engine})")
+
 def main():
+    if "--pdf" in sys.argv:
+        return ocr_local(sys.argv[sys.argv.index("--pdf") + 1])
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
     TXT_DIR.mkdir(parents=True, exist_ok=True)
     # Existing text files (by doc id in the filename) are skipped — resumable.

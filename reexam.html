@@ -574,7 +574,7 @@ function exportCsv() {
   const rows = filteredSorted().map((d) => {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
-      v || '', v === 'Y' ? (d.d325_summary || '') : '',
+      v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
       d.examiner_name, d.group_art_unit, d.tech_center || '', REQUESTER_LABEL[requesterKey(d)]];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
@@ -644,9 +644,9 @@ function d325Addressed(d) {
 }
 function d325Cell(d) {
   const v = d325Addressed(d);
-  if (v === 'Y') return `<details class="d325-sum"><summary><span class="badge d325y">Y</span></summary>`
+  if (v === 'Y') return `<details class="d325-sum"><summary><span class="badge d325y">Yes</span></summary>`
     + `<div class="d325-sum-body">${esc(d.d325_summary)}<span class="d325-sum-note">AI-generated summary — verify against the order.</span></div></details>`;
-  if (v === 'N') return '<span class="badge d325n">N</span>';
+  if (v === 'N') return '<span class="badge d325n">No</span>';
   return '<span class="ext">—</span>';
 }
 

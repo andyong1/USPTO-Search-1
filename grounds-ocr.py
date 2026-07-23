@@ -146,6 +146,9 @@ def main():
         apps = pipeline_app_numbers()
         print(f"{len(apps)} reexams with prior/parallel PTAB proceedings")
         dets = [d for d in dets if "".join(c for c in str(d.get("application_number") or "") if c.isalnum()) in apps]
+    if "--since" in sys.argv:  # e.g. --since 2026-01-01 (official_date lower bound)
+        since = sys.argv[sys.argv.index("--since") + 1]
+        dets = [d for d in dets if str(d.get("official_date") or "")[:10] >= since]
     todo = [d for d in dets if d.get("document_identifier") and d["document_identifier"] not in done_docs]
     if limit:
         todo = todo[:limit]

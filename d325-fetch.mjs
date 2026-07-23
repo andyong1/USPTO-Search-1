@@ -21,6 +21,8 @@ if (!process.env.POSTGRES_URL) {
 const args = process.argv.slice(2);
 const limitIdx = args.indexOf('--limit');
 const LIMIT = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 20;
+const sinceIdx = args.indexOf('--since');
+const SINCE = sinceIdx >= 0 ? String(args[sinceIdx + 1]) : ''; // official_date lower bound
 
 const DIR = 'snq-cumulative/d325-work';
 await rm(DIR, { recursive: true, force: true }); // stale work must not be re-summarized
@@ -30,6 +32,7 @@ const { rows } = await sql`
   SELECT doc_id, application_number, doc_kind, official_date, char_count, text
   FROM reexam_doc_text
   WHERE coalesce(d325_sum_v, 0) < 1 AND coalesce(text, '') <> ''
+    AND (${SINCE} = '' OR official_date >= ${SINCE})
   ORDER BY official_date DESC NULLS LAST
   LIMIT ${LIMIT}`;
 

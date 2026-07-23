@@ -20,7 +20,7 @@ if (!process.env.POSTGRES_URL) {
 
 const args = process.argv.slice(2);
 const limitIdx = args.indexOf('--limit');
-const LIMIT = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 12;
+const LIMIT = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 20;
 
 const DIR = 'snq-cumulative/d325-work';
 await rm(DIR, { recursive: true, force: true }); // stale work must not be re-summarized
@@ -43,4 +43,6 @@ await writeFile(`${DIR}/manifest.json`, JSON.stringify(manifest, null, 1), 'utf-
 const { rows: cnt } = await sql`SELECT count(*)::int AS n FROM reexam_doc_text WHERE coalesce(d325_sum_v,0) < 1 AND coalesce(text,'') <> ''`;
 console.log(`${rows.length} determination(s) staged in ${DIR} (${cnt[0].n} total awaiting summary).`);
 console.log(rows.length ? 'Next: summarize per d325-summarize.md -> write d325-out.jsonl -> node d325-upload.mjs' : 'Nothing to summarize.');
-process.exit(0);
+// Close the pool, then exit naturally — process.exit() while the pool's libuv
+// async handles are closing trips an assertion on Windows (exit code 127).
+try { await sql.end(); } catch { /* already closed */ }

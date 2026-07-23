@@ -43,4 +43,6 @@ for (const line of raw.split(/\r?\n/)) {
 // Archive the batch so a re-run can't double-process it.
 try { await rename(IN, IN.replace(/\.jsonl$/, `.${Date.now()}.done.jsonl`)); } catch { /* best-effort */ }
 console.log(`Done. ${uploaded} summaries uploaded, ${bad} rejected.`);
-process.exit(0);
+// Close the pool, then exit naturally — process.exit() while the pool's libuv
+// async handles are closing trips an assertion on Windows (exit code 127).
+try { await sql.end(); } catch { /* already closed */ }

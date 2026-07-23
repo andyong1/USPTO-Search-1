@@ -29,7 +29,9 @@ the OCR text is staged by `d325-fetch.mjs` and results are uploaded by
 - `"Text quality too low"` — OCR too garbled to summarize reliably.
 
 **`summary`** — 2–4 sentences, plain prose, required when `addressed` is
-`"Yes"`, otherwise `null`. Cover, when present in the order:
+`"Yes"`; otherwise `null`, except that a short note is encouraged where context
+helps (e.g. a prior challenge exists but the order never cites §325(d) and
+rests on the SNQ analysis instead). Cover, when present in the order:
 - Whether there were prior Office post-grant challenges to the patent (IPR/PGR/
   prior reexam), and which.
 - Whether the request's art or arguments were previously presented (cited in

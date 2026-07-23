@@ -16,6 +16,7 @@
 
 import { Readable } from 'node:stream';
 import { clientErrorDetail } from '../lib/secure.js';
+import { getDeterminationByDoc } from '../lib/db.js';
 
 export const config = { maxDuration: 60 };
 
@@ -34,13 +35,29 @@ async function resolveRealUrl(appNum, documentId, format, apiKey) {
     if (!r.ok) return null;
     const data = await r.json();
     const bag = data.documentBag || data.documents || [];
-    const doc = bag.find((d) => (d.documentIdentifier || d.documentId) === documentId);
-    if (!doc) return null;
     const want = String(format).toUpperCase();
-    const opt = (doc.downloadOptionBag || doc.downloadOptions || []).find((o) => {
+    const pdfOpt = (doc) => (doc.downloadOptionBag || doc.downloadOptions || []).find((o) => {
       const m = String(o.mimeTypeIdentifier || o.mimeType || '').toUpperCase();
       return want === 'PDF' ? m.includes('PDF') : m.includes(want);
     });
+    let doc = bag.find((d) => (d.documentIdentifier || d.documentId) === documentId);
+    if (!doc || !pdfOpt(doc)) {
+      // The stored id can go stale: the USPTO sometimes RE-ISSUES a very recent
+      // document under a new identifier (common for freshly-filed determinations,
+      // which is exactly what /filings-trends surfaces). If we recorded this as a
+      // determination, recover the live doc by matching its code (preferring the
+      // same official date) so the View/Download link keeps working.
+      const det = await getDeterminationByDoc(appNum, documentId).catch(() => null);
+      if (det && det.code) {
+        const code = String(det.code).toUpperCase();
+        const day = String(det.official_date || '').slice(0, 10);
+        const matches = bag.filter((d) => String(d.documentCode || '').toUpperCase() === code && pdfOpt(d));
+        doc = matches.find((d) => String(d.officialDate || '').slice(0, 10) === day)
+          || matches.sort((a, b) => String(b.officialDate || '').localeCompare(String(a.officialDate || '')))[0]
+          || doc;
+      }
+    }
+    const opt = doc && pdfOpt(doc);
     return (opt && (opt.downloadUrl || opt.url)) || null;
   } catch { return null; }
 }

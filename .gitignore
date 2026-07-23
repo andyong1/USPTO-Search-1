@@ -16,3 +16,10 @@ grounds-secrets.env
 db-export/
 # machine-local Claude Code permissions (not shared)
 .claude/settings.local.json
+# scratch: .txt copies of scripts + one-off OCR check
+collect-*.txt
+ocr-check.txt
+# derived petition-decisions data (like snq-cumulative/)
+snq-petition-decisions/
+# audit/report exports
+*.docx

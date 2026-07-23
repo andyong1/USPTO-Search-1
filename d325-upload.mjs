@@ -17,7 +17,17 @@ if (!process.env.POSTGRES_URL) {
 }
 
 const IN = 'snq-cumulative/d325-work/d325-out.jsonl';
-const ADDRESSED = new Set(['Yes', 'No', 'No explicit §325(d) section located', 'Text quality too low']);
+// Normalize the addressed value to one of the four canonical strings, tolerating
+// harmless transcription variants (missing § glyph, casing) so a valid summary
+// isn't rejected over punctuation. Returns null if it can't be normalized.
+function normAddressed(a) {
+  const s = String(a || '').trim();
+  if (/no explicit.*325\s*\(\s*d\s*\)/i.test(s)) return 'No explicit §325(d) section located';
+  if (/text quality/i.test(s)) return 'Text quality too low';
+  if (/^yes$/i.test(s)) return 'Yes';
+  if (/^no$/i.test(s)) return 'No';
+  return null;
+}
 // Postgres text rejects NUL bytes; strip them (constructed via charCode so the
 // source file itself never contains the raw byte).
 const NUL = new RegExp(String.fromCharCode(0), 'g');
@@ -32,10 +42,11 @@ for (const line of raw.split(/\r?\n/)) {
   let o;
   try { o = JSON.parse(line); } catch { bad++; continue; }
   const summary = o.summary ? String(o.summary).replace(NUL, '').trim().slice(0, 1500) : null;
-  if (!o.doc_id || !ADDRESSED.has(o.addressed) || (o.addressed === 'Yes' && !summary)) { bad++; console.error('  invalid row:', line.slice(0, 120)); continue; }
+  const addressed = normAddressed(o.addressed);
+  if (!o.doc_id || !addressed || (addressed === 'Yes' && !summary)) { bad++; console.error('  invalid row:', line.slice(0, 120)); continue; }
   const { rowCount } = await sql`
     UPDATE reexam_doc_text
-    SET d325_addressed = ${o.addressed}, d325_summary = ${summary}, d325_sum_v = 1
+    SET d325_addressed = ${addressed}, d325_summary = ${summary}, d325_sum_v = 1
     WHERE doc_id = ${String(o.doc_id)}`;
   if (rowCount > 0) uploaded++; else { bad++; console.error('  unknown doc_id:', o.doc_id); }
 }

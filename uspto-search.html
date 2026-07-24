@@ -310,15 +310,11 @@
   <!-- LEFT: TRACKED PROCEEDINGS -->
   <aside class="col-left">
   <div class="search-card" id="track-card">
-    <h2>Add a Tracked Proceeding</h2>
+    <h2>Monitor for New Filings</h2>
     <div class="track-row" style="margin-bottom:16px">
       <div class="form-group" style="flex:1 1 100%; min-width:180px">
         <label>Application Number</label>
         <input type="text" id="tr-appnum" placeholder="e.g. 16/123,456 or 16123456" />
-      </div>
-      <div class="form-group" style="flex:1 1 100%; min-width:160px">
-        <label>Label (optional)</label>
-        <input type="text" id="tr-label" placeholder="e.g. Competitor X filing" />
       </div>
       <div class="form-group" style="flex:1 1 100%; min-width:180px">
         <label>Notify (emails)</label>
@@ -1044,7 +1040,7 @@ function errorHTML(msg) {
 
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.target.tagName === 'TEXTAREA') return;
-  // Enter inside the "Add a Tracked Proceeding" inputs adds a tracked proceeding;
+  // Enter inside the "Monitor for New Filings" inputs adds a tracked proceeding;
   // anywhere else (e.g. the Search Parameters frame) runs a search.
   if (e.target.tagName === 'INPUT' && e.target.closest && e.target.closest('#track-card')) {
     e.preventDefault();
@@ -1117,7 +1113,6 @@ function adminAuthFailed() {
 
 async function addWatch() {
   const appNum = document.getElementById('tr-appnum').value.replace(/[^0-9A-Za-z]/g, '');
-  const label  = document.getElementById('tr-label').value.trim();
   const recipients = document.getElementById('tr-recipients').value.trim();
   if (!appNum) { alert('Enter an application number to track.'); return; }
 
@@ -1126,13 +1121,12 @@ async function addWatch() {
     const res = await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationNumber: appNum, label, recipients }),
+      body: JSON.stringify({ applicationNumber: appNum, recipients }),
     });
     if (res.status === 429) { alert('Too many requests. Please wait a minute and try again.'); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
     document.getElementById('tr-appnum').value = '';
-    document.getElementById('tr-label').value = '';
     document.getElementById('tr-recipients').value = '';
     if (data.existed) {
       alert(appNum + ' is already tracked — any new notification email(s) were added to its existing list.');

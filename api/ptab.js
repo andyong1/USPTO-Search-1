@@ -30,7 +30,7 @@ import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtr
   getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
-  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings, getPtabKv, setPtabKv,
+  upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings, getPtabKv, setPtabKv, bumpPtabKv,
   listRecentDeterminations, listPtabFwdBrief, backfillFwdInstitutionDates,
   upsertPatentProceeding, listPatentProceedings, getPatentsToScanForProceedings,
   markPatentProceedingsScanned, patentProceedingsCoverage,
@@ -551,6 +551,20 @@ export default async function handler(req, res) {
       await Promise.all(Array.from({ length: 4 }, worker));
       const remaining = await countDecisionsMissingIssueDate();
       res.status(200).json({ ok: true, mode: 'issuedates', processed, withDate, remaining, done: remaining === 0, errors });
+      return;
+    }
+
+    // ── PDF-export usage counters (vanity metrics shown on /status) ──
+    // A client bumps a named counter when a PDF export completes. Public and
+    // unauthenticated — it's a usage tally, not sensitive; worst case is an
+    // inflated count. Whitelisted names only.
+    if (q.bump) {
+      res.setHeader('Cache-Control', 'no-store');
+      const KEYS = { filehistory: 'pdfcount_filehistory', docmerge: 'pdfcount_docmerge' };
+      const key = KEYS[String(q.bump)];
+      if (!key) { res.status(400).json({ error: 'unknown counter' }); return; }
+      const count = await bumpPtabKv(key);
+      res.status(200).json({ ok: true, counter: String(q.bump), count });
       return;
     }
 

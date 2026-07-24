@@ -279,6 +279,14 @@ function render(s) {
     </div>
     ${ptabCardHtml(s._ptab)}
     <div class="card">
+      <h2>PDF export usage</h2>
+      <div class="sub">Lifetime counts of PDF exports since counting began.</div>
+      <table>
+        <tr><td>File History Print to PDF</td><td>${s.pdf_filehistory_count ?? 0}</td></tr>
+        <tr><td>Documents tab — "Download selected as single PDF"</td><td>${s.pdf_docmerge_count ?? 0}</td></tr>
+      </table>
+    </div>
+    <div class="card">
       <h2>Tracked proceedings &amp; alert recipients (${(s._tracked || []).length})</h2>
       <div class="sub">Applications monitored for new filings and the email(s) alerted for each. Click a column heading to sort; click an application number to open it in Application Lookup. Edits apply immediately.</div>
       <div id="tracked-wrap">${trackedTableHtml()}</div>

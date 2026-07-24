@@ -1316,6 +1316,8 @@ async function downloadAllDocs() {
   a.href = url; a.download = `file-history-${pdfItems[0].appNum || 'documents'}.pdf`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+  // Usage counter (shown on /status); best-effort, never blocks the download.
+  fetch('/api/ptab?bump=docmerge', { method: 'POST', keepalive: true }).catch(() => {});
 
   let msg = `Combined ${bookmarks.length} document${bookmarks.length === 1 ? '' : 's'} into one PDF.`;
   if (failed) msg += ` ${failed} failed to download.`;

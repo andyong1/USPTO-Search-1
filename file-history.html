@@ -315,6 +315,8 @@ async function buildHistory(excludeRefs) {
     a.href = url; a.download = `file-history-${appNum}${excludeRefs ? '-no-refs' : ''}.pdf`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
+    // Usage counter (shown on /status); best-effort, never blocks the download.
+    fetch('/api/ptab?bump=filehistory', { method: 'POST', keepalive: true }).catch(() => {});
 
     let msg = `Combined ${bookmarks.length} document${bookmarks.length === 1 ? '' : 's'} for application ${appNum} into one PDF`
       + (excludeRefs ? ' (foreign references & NPL excluded).' : '.');

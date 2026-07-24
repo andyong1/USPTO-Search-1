@@ -51,8 +51,6 @@
     .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
     .badge { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #c6f6d5; color: #22543d; white-space: nowrap; }
-    .ai-badge { display: inline-block; margin-left: 6px; font-size: 0.66rem; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: #e0e7ff; color: #3730a3; cursor: help; vertical-align: middle; }
-    .ai-badge.low { background: #fef3c7; color: #92400e; }
     .summary { font-size: 0.8rem; color: #4a5568; margin-top: 4px; }
     .stats-title { font-size: 0.9rem; font-weight: 600; color: #4a5568; margin: 22px 0 8px; }
     .dist-row { display: flex; gap: 24px; flex-wrap: wrap; }
@@ -131,8 +129,8 @@
 
   <div class="card">
     <h2>Reexamination Final Outcomes</h2>
-    <div class="sub">Claim disposition at the ex parte reexamination certificate — which claims were confirmed, cancelled, amended, or newly added. A proceeding appears here once its certificate has issued. Rows marked <span class="ai-badge">AI✓</span> have been read from the certificate text by an AI pass (more reliable than the pattern-matching fallback on scanned OCR); an <span class="ai-badge low">AI?</span> flags low-confidence OCR. Either way, treat the claim numbers as a lead and verify against the certificate PDF.</div>
-    <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Claim dispositions are read from certificate text (AI-verified where marked, otherwise pattern-matched from OCR) — informational only, not legal advice; verify against the official certificate.</p>
+    <div class="sub">Claim disposition at the ex parte reexamination certificate — which claims were confirmed, cancelled, amended, or newly added.</div>
+    <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Claim dispositions are read from the certificate text — informational only, not legal advice; verify against the official certificate.</p>
     <div id="freshness" class="sub" style="margin-bottom:14px"></div>
     <div class="filter-bar">
       <div class="fb-group">
@@ -504,12 +502,7 @@ function render() {
   const pageItems = items.slice(start, end);
   const rows = pageItems.map((d) => {
     const num = d.application_number || '';
-    let outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
-    if (d._aiVerified) {
-      const lc = d._aiConfidence === 'low';
-      const tip = 'AI-verified from the certificate text' + (d._aiConfidence ? ` (confidence: ${d._aiConfidence})` : '') + (d._aiNote ? ` — ${d._aiNote}` : '') + '. Verify against the certificate PDF.';
-      outcome += ` <span class="ai-badge${lc ? ' low' : ''}" title="${esc(tip)}">AI${lc ? '?' : '✓'}</span>`;
-    }
+    const outcome = has(d.outcome_summary) ? esc(d.outcome_summary) : '<span class="ext" style="margin-left:0">outcome pending</span>';
     return `<tr>
       <td>
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
@@ -638,7 +631,6 @@ function applyFilters() {
         r.outcome_summary = r.ai_summary;
         r.claims_confirmed = r.ai_confirmed; r.claims_cancelled = r.ai_cancelled;
         r.claims_amended = r.ai_amended; r.claims_new = r.ai_new;
-        r._aiVerified = true; r._aiConfidence = r.ai_confidence || ''; r._aiNote = r.ai_note || '';
       }
       return r;
     });

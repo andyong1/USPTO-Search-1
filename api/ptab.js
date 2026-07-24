@@ -27,7 +27,7 @@
 //   GET /api/ptab?maintain=1      → one-shot orchestrator: scan→extract→classify→dd, bounded to ~22s for a
 //                                   single external scheduler (cron-job.org). CRON_SECRET-gated; resumable (done flag).
 import { listPtabFwd, upsertPtabFwdMeta, getPtabFwdToExtract, countPtabFwdToExtract, setPtabFwdText,
-  getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome,
+  getPtabFwdToClassify, countPtabFwdToClassify, setPtabFwdOutcome, resolveFwdOutcome,
   markOldFwdNoDD, getPtabFwdToCheckDD, countPtabFwdToCheckDD, setPtabFwdDD, getPtabFwdByTrial,
   stampMaintainRun, getMaintainLastRun,
   upsertPtabInstitution, upsertPtabDd, listPtabDecisions, upsertFilingCount, listFilings, getPtabKv, setPtabKv, bumpPtabKv,
@@ -171,7 +171,7 @@ export default async function handler(req, res) {
         const batch = await getPtabFwdToClassify(BATCH, CV);
         if (!batch.length) break;
         for (const row of batch) {
-          const { outcome, detail } = classifyFwd(row.decision_text || '');
+          const { outcome, detail } = resolveFwdOutcome(row, classifyFwd(row.decision_text || ''));
           await setPtabFwdOutcome(row.trial_number, outcome, detail, CV);
           processed++; tally[outcome] = (tally[outcome] || 0) + 1;
         }
@@ -259,7 +259,7 @@ export default async function handler(req, res) {
       while (Date.now() < deadline) {
         const batch = await getPtabFwdToClassify(150, CV);
         if (!batch.length) break;
-        for (const row of batch) { const { outcome, detail } = classifyFwd(row.decision_text || ''); await setPtabFwdOutcome(row.trial_number, outcome, detail, CV); clProc++; clTally[outcome] = (clTally[outcome] || 0) + 1; }
+        for (const row of batch) { const { outcome, detail } = resolveFwdOutcome(row, classifyFwd(row.decision_text || '')); await setPtabFwdOutcome(row.trial_number, outcome, detail, CV); clProc++; clTally[outcome] = (clTally[outcome] || 0) + 1; }
       }
       out.classify = { processed: clProc, tally: clTally };
 

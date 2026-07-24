@@ -709,3 +709,14 @@ test('extractRelatedLitigation — dominant-plaintiff fallback + long sections (
   assert.deepEqual(extractRelatedLitigation(stray, 'Google LLC', 'Secure Communication Technologies, LLC'),
     { petitioner: [], other: [] });
 });
+
+test('classifyFwd — caption disposition: "All Challenged Claims Patentable" is a PO win (IPR2025-00349)', () => {
+  // The bug the AI FWD sweep caught: a total PO win whose caption reads
+  // "…Claims Patentable" (not "Unpatentable") was misread as petitioner_all.
+  assert.equal(classifyFwd('Final Written Decision Determining All Challenged Claims Patentable. Petitioner has not proved that claims 1-21 are unpatentable.').outcome, 'po_none');
+  assert.equal(classifyFwd('Determining No Challenged Claims Patentable').outcome, 'petitioner_all');
+  // Standard "Unpatentable" captions unchanged.
+  assert.equal(classifyFwd('Final Written Decision Determining All Challenged Claims Unpatentable 35 U.S.C. 318(a)').outcome, 'petitioner_all');
+  assert.equal(classifyFwd('Final Written Decision Determining No Challenged Claims Unpatentable').outcome, 'po_none');
+  assert.equal(classifyFwd('Determining Some Challenged Claims Unpatentable and Some Not Unpatentable').outcome, 'partial');
+});

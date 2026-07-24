@@ -302,7 +302,13 @@ export default async function handler(req, res) {
     // against this, so later steps shrink (or skip) when earlier ones run long,
     // keeping the function under its maxDuration instead of summing independent
     // per-step deadlines.
-    const runDeadline = Date.now() + 55000;
+    // Whole-run budget. Defaults to 55s (under the 60s maxDuration). A scheduler
+    // with a short client timeout (e.g. cron-job.org's 30s) can pass
+    // ?maxSeconds=25 so the function RETURNS before that timeout and reports
+    // success — the time-boxed backfill steps just do a little less per run and
+    // resume next time. Clamped to 10–58s.
+    const budgetS = Math.min(58, Math.max(10, Number(req.query.maxSeconds) || 55));
+    const runDeadline = Date.now() + budgetS * 1000;
     const state = await reexamState();
 
     // 0) One-time: when the requester-type logic version changes, clear every

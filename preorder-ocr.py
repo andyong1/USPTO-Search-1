@@ -1,12 +1,15 @@
-# OCR the image-only pre-order candidate documents that preorder-fetch.mjs
-# saved to snq-cumulative/preorder-work/pdf/ (PDFs with no text layer), and
-# overwrite the matching .txt work files so the AI pass can read them.
-# Same cross-platform OCR as grounds-ocr.py: Apple Vision on macOS, the Windows
-# built-in engine (winocr) on Windows. Only the first PAGES pages are OCR'd —
-# captions/openings are what decide petition attribution.
+# OCR the image-only petition-cluster candidate documents that a fetch script
+# (preorder-fetch.mjs or postpet-fetch.mjs) saved to its work folder's pdf/
+# subdirectory (PDFs with no text layer), and overwrite the matching .txt work
+# files so the AI pass can read them. Same cross-platform OCR as grounds-ocr.py:
+# Apple Vision on macOS, the Windows built-in engine (winocr) on Windows. Only
+# the first PAGES pages are OCR'd — captions/openings decide attribution.
 #
 # Run from the uspto-search folder (via `cat preorder-ocr.py | python -` on the
-# locked-down Windows box), after preorder-fetch.mjs and before the AI pass.
+# locked-down Windows box), after the fetch script and before the AI pass.
+# Optional argument = work folder under snq-cumulative (default preorder-work):
+#     cat preorder-ocr.py | python -                # pre-order pass
+#     cat preorder-ocr.py | python - postpet-work   # post-order pass
 #
 # Dependencies:  pip install pymupdf   (+ macOS: pyobjc-framework-Vision  |  Windows: pillow winocr)
 
@@ -16,7 +19,7 @@ from pathlib import Path
 
 import fitz  # PyMuPDF
 
-WORK = Path("snq-cumulative/preorder-work")
+WORK = Path("snq-cumulative") / (sys.argv[1] if len(sys.argv) > 1 else "preorder-work")
 PDF_DIR = WORK / "pdf"
 DPI = 200
 PAGES = 3

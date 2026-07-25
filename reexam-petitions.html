@@ -184,7 +184,7 @@ function exportCsv() {
   const header = ['Control No.', 'Reexam Ordered', 'Patent Owner Petition', 'Requestor Opposition', 'Petition Decision', 'Decision Date', 'Decision §325(d)', 'First Office Action'];
   const rows = sortedRows(filtered()).map((p) => [
     p.application_number, fmtDate(p.order_date),
-    p.petition_doc_id ? fmtDate(p.petition_date) : '',
+    p.petition_date ? fmtDate(p.petition_date) : '',
     p.opposition_doc_id ? fmtDate(p.opposition_date) : '',
     p.decision_outcome || (p.decision_doc_id ? 'Decided' : ''),
     p.decision_doc_id ? fmtDate(p.decision_date) : '',
@@ -257,7 +257,8 @@ function render() {
   const ariaSort = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
   const rows = items.map((p) => {
     const num = p.application_number || '';
-    const petCell = p.petition_doc_id ? `${p.review_flag ? '<span class="badge" style="background:#fefcbf;color:#744210" title="Petition role was assigned from a same-date tie between multiple candidate papers — verify.">⚠ review</span> ' : ''}${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}` : dash;
+    const petCell = p.petition_doc_id ? `${p.review_flag ? '<span class="badge" style="background:#fefcbf;color:#744210" title="Petition role was assigned from a same-date tie between multiple candidate papers — verify.">⚠ review</span> ' : ''}${fmtDate(p.petition_date)}${docLinks(num, p.petition_doc_id, 'Patent Owner Petition')}`
+      : p.petition_date ? `<span title="The petition was filed but its document is not publicly available in the USPTO file wrapper.">${fmtDate(p.petition_date)} (doc not public)</span>` : dash;
     const oppCell = p.opposition_doc_id ? `${fmtDate(p.opposition_date)}${docLinks(num, p.opposition_doc_id, 'Requestor Opposition')}` : dash;
     let decCell = dash;
     if (p.decision_doc_id) {

@@ -293,6 +293,28 @@ test('analyzePetition — RXPET. outside the 20-day window is not the petition',
   assert.equal(r.petition, null);
 });
 
+test('analyzePetition — prefers the RXPET. filed with the RX.PRO.RR requester reply', () => {
+  // 90016339 pattern: an earlier (patent-owner) RXPET. lands in the window, but
+  // the requester's petition is the one accompanying its RX.PRO.RR reply.
+  const docs = [
+    { documentCode: 'RXPET.', officialDate: '2026-07-01', documentIdentifier: 'po-pet' },
+    { documentCode: 'RXPET.', officialDate: '2026-07-10', documentIdentifier: 'req-pet' },
+    { documentCode: 'RX.PRO.RR', officialDate: '2026-07-10', documentIdentifier: 'reply' },
+    { documentCode: 'RXPET.', officialDate: '2026-07-17', documentIdentifier: 'later-pet' },
+  ];
+  const r = analyzePetition(docs, '2026-06-25');
+  assert.equal(r.petition.id, 'req-pet');
+});
+
+test('analyzePetition — no reply on file falls back to the earliest in-window RXPET.', () => {
+  const docs = [
+    { documentCode: 'RXPET.', officialDate: '2026-01-12', documentIdentifier: 'second' },
+    { documentCode: 'RXPET.', officialDate: '2026-01-08', documentIdentifier: 'first' },
+  ];
+  const r = analyzePetition(docs, '2026-01-01');
+  assert.equal(r.petition.id, 'first');
+});
+
 
 // ── Audit-remediation coverage (DA-16) ──────────────────────────────
 

@@ -38,15 +38,13 @@
 
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px; }
 
-    .track-collapse { margin-bottom: 24px; }
     .track-toggle {
       width: 100%;
       text-align: left;
-      background: white;
-      border: 1.5px dashed #cbd5e0;
-      border-radius: 10px;
-      padding: 14px 20px;
-      font-size: 0.95rem;
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 1rem;
       font-weight: 600;
       color: #1a3a6b;
       cursor: pointer;
@@ -54,10 +52,9 @@
       align-items: center;
       gap: 10px;
     }
-    .track-toggle:hover { border-color: #1a3a6b; background: #f7fafc; }
     .track-toggle .tt-icon { font-size: 1.25rem; line-height: 1; width: 16px; display: inline-block; text-align: center; }
+    #track-body { margin-top: 20px; }
     #track-body[hidden] { display: none; }
-    #track-body .search-card { margin-top: 12px; margin-bottom: 0; }
 
     .search-card {
       background: white;
@@ -317,13 +314,13 @@
 
   <!-- COLLAPSED BY DEFAULT: tracking is the secondary task, so it hides behind
        a disclosure row and the search below reads as the primary action. -->
-  <div class="track-collapse">
+  <div class="search-card">
     <button type="button" class="track-toggle" id="track-toggle" aria-expanded="false" aria-controls="track-body" onclick="toggleTrack()">
       <span class="tt-icon" id="tt-icon" aria-hidden="true">+</span>
       <span>Click here to track a specific application or proceeding</span>
     </button>
     <div id="track-body" hidden>
-  <div class="search-card" id="track-card">
+  <div id="track-card">
     <h2>Monitor for New Filings</h2>
     <div class="track-row" style="margin-bottom:16px">
       <div class="form-group" style="flex:1 1 100%; min-width:180px">
@@ -365,10 +362,6 @@
     <!-- BASIC SEARCH -->
     <div class="tab-panel active" id="tab-basic">
       <div class="form-grid">
-        <div class="form-group full">
-          <label>Invention Title Keywords</label>
-          <input type="text" id="b-title" placeholder="e.g. machine learning image classification" />
-        </div>
         <div class="form-group">
           <label>Application Number</label>
           <input type="text" id="b-appnum" placeholder="e.g. 16/123,456 or 16123456" />
@@ -376,6 +369,10 @@
         <div class="form-group">
           <label>Patent Number</label>
           <input type="text" id="b-patnum" placeholder="e.g. 10,123,456 or 10123456" />
+        </div>
+        <div class="form-group full">
+          <label>Invention Title Keywords</label>
+          <input type="text" id="b-title" placeholder="e.g. machine learning image classification" />
         </div>
         <div class="form-group">
           <label>Inventor Name</label>

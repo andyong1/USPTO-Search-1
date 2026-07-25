@@ -38,18 +38,26 @@
 
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px; }
 
-    .layout {
-      display: grid;
-      grid-template-columns: 340px minmax(0, 1fr);
-      gap: 24px;
-      align-items: start;
+    .track-collapse { margin-bottom: 24px; }
+    .track-toggle {
+      width: 100%;
+      text-align: left;
+      background: white;
+      border: 1.5px dashed #cbd5e0;
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #1a3a6b;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .col-left { position: sticky; top: 24px; }
-    .col-right { min-width: 0; }
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
-      .col-left { position: static; }
-    }
+    .track-toggle:hover { border-color: #1a3a6b; background: #f7fafc; }
+    .track-toggle .tt-icon { font-size: 1.25rem; line-height: 1; width: 16px; display: inline-block; text-align: center; }
+    #track-body[hidden] { display: none; }
+    #track-body .search-card { margin-top: 12px; margin-bottom: 0; }
 
     .search-card {
       background: white;
@@ -305,10 +313,16 @@
     </div>
   </nav>
 
- <div class="layout">
+ <main>
 
-  <!-- LEFT: TRACKED PROCEEDINGS -->
-  <aside class="col-left">
+  <!-- COLLAPSED BY DEFAULT: tracking is the secondary task, so it hides behind
+       a disclosure row and the search below reads as the primary action. -->
+  <div class="track-collapse">
+    <button type="button" class="track-toggle" id="track-toggle" aria-expanded="false" aria-controls="track-body" onclick="toggleTrack()">
+      <span class="tt-icon" id="tt-icon" aria-hidden="true">+</span>
+      <span>Click here to track a specific application or proceeding</span>
+    </button>
+    <div id="track-body" hidden>
   <div class="search-card" id="track-card">
     <h2>Monitor for New Filings</h2>
     <div class="track-row" style="margin-bottom:16px">
@@ -337,10 +351,9 @@
     <p class="hint" style="margin:0 0 10px"><strong>Note:</strong> Documents with tomorrow's date will not be accessible until tomorrow.</p>
     <div id="findings-list"></div>
   </div>
-  </aside>
+    </div>
+  </div>
 
-  <!-- RIGHT: SEARCH + RESULTS -->
-  <main class="col-right">
   <div class="search-card" id="search-card">
     <h2>Search for an Application/Proceeding</h2>
 
@@ -467,8 +480,6 @@
     <div class="pagination" id="pagination"></div>
   </div>
   </main>
-
- </div>
 
  <footer style="text-align:center;padding:24px 16px 8px;color:#718096;font-size:0.8rem">
    <a href="/privacy" style="color:#1a3a6b;text-decoration:none">Privacy Policy</a>
@@ -1109,6 +1120,18 @@ function adminPw() {
 function adminAuthFailed() {
   sessionStorage.removeItem(ADMIN_PW_KEY);
   alert('Incorrect or missing admin password.');
+}
+
+// Expand/collapse the "track a specific application" disclosure. Collapsed by
+// default so the search below is the obvious primary action.
+function toggleTrack() {
+  const body = document.getElementById('track-body');
+  const btn = document.getElementById('track-toggle');
+  const icon = document.getElementById('tt-icon');
+  const opening = body.hasAttribute('hidden');
+  if (opening) { body.removeAttribute('hidden'); icon.textContent = '−'; }
+  else { body.setAttribute('hidden', ''); icon.textContent = '+'; }
+  btn.setAttribute('aria-expanded', String(opening));
 }
 
 async function addWatch() {

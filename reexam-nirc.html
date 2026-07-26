@@ -258,7 +258,7 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Control No.</th><th>NIRC / reasons doc</th><th>Outcome</th>
+      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th>
       <th>Request art (order SNQs)</th><th>Operative art (by role)</th><th>Operative overlap</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
 }
@@ -266,7 +266,7 @@ function render() {
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 const refList = (refs) => (refs || []).map((r) => r.label + (r.role ? ` [${r.role}]` : '')).join('; ');
 function exportCsv() {
-  const header = ['Control No.', 'NIRC Date', 'Outcome', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
+  const header = ['Control No.', 'NIRC Date', 'NIRC Outcome', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
   const rows = filtered().map((r) => [
     r.application_number, fmtDate(r.nirc_date), r.outcome_summary || '',
     refList(r.req_refs), refList(r.nirc_refs), refList(r.matches),

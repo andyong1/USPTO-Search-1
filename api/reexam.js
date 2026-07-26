@@ -3,9 +3,10 @@
 //   GET /api/reexam              →  { determinations: [...] }
 //   GET /api/reexam?petitions=1  →  { petitions: [...] }
 //   GET /api/reexam?actions=1    →  { actions: [...] }
+//   GET /api/reexam?nirc=1       →  { nirc: [...] } — request-vs-NIRC art comparison
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
-import { listRecentDeterminations, listPostOrderPetitions, listReexamActions } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt } from '../lib/db.js';
 import { clientErrorDetail } from '../lib/secure.js';
 
 const san = (s) => String(s || '').replace(/[^0-9A-Za-z._-]/g, '_');
@@ -54,6 +55,11 @@ export default async function handler(req, res) {
     if (req.query && req.query.actions) {
       const actions = await listReexamActions();
       res.status(200).json({ actions });
+      return;
+    }
+    if (req.query && req.query.nirc) {
+      const nirc = await listNircArt();
+      res.status(200).json({ nirc });
       return;
     }
     const determinations = await listRecentDeterminations(); // no limit

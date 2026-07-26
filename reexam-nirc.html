@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIRC Prior-Art Comparison — USPTO Reexam</title>
+  <meta name="description" content="For concluded ex parte reexaminations, compares the prior art in the reexam request (as recited in the order) against the art discussed in the Notice of Intent to Issue a Reexam Certificate (NIRC)." />
+  <meta property="og:title" content="NIRC Prior-Art Comparison — USPTO Reexam" />
+  <meta property="og:description" content="How often the art cited in a reexam request is the art operative at the NIRC — used to reject claims or distinguished as the closest art." />
+  <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/reexam-nirc" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
+    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 24px; }
+    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
+    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
+    .explainer p { margin: 0; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 16px; }
+    @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .table-wrap { overflow: auto; max-height: 74vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 12px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: #e2e8f0; }
+    td { padding: 10px 12px; border-top: 1px solid #e2e8f0; vertical-align: top; }
+    tr:hover td { background: #f7fafc; }
+    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; }
+    .state { text-align: center; padding: 40px 20px; color: #718096; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+    .badge.confirmed { background: #c6f6d5; color: #276749; }
+    .badge.cancelled { background: #fed7d7; color: #c53030; }
+    .badge.mixed { background: #feebc8; color: #9c4221; }
+    .badge.other { background: #e2e8f0; color: #4a5568; }
+    .ref { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 0.76rem; margin: 1px 2px 1px 0; background: #edf2f7; color: #4a5568; }
+    .ref.invalidating { background: #fed7d7; color: #9b2c2c; }
+    .ref.distinguished { background: #bee3f8; color: #2c5282; }
+    .ref.mentioned { background: #e2e8f0; color: #4a5568; }
+    .ref.match { outline: 2px solid #1a3a6b33; font-weight: 600; }
+    .rolekey { font-size: 0.75rem; color: #718096; margin: 6px 0 0; display: flex; gap: 14px; flex-wrap: wrap; }
+    .btn-view { cursor: pointer; font-size: 0.76rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 11px; border-radius: 4px; }
+    .btn-view:hover { background: #15305a; }
+    .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: #cbd5e0; }
+    .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
+    .note { color: #94a3b8; font-size: 0.78rem; margin-top: 3px; }
+    .conf-low { color: #b7791f; font-size: 0.72rem; }
+    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
+    footer a { color: #1a3a6b; text-decoration: none; }
+    @media (max-width: 640px) {
+      .container { padding: 16px 10px 48px; }
+      header { padding: 12px 14px; gap: 12px; }
+      header h1 { font-size: 1.05rem; }
+      .site-nav { gap: 6px; margin-bottom: 18px; }
+      .site-nav a { padding: 8px 11px; font-size: 0.82rem; }
+      .card { padding: 16px 14px; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 8px 9px; }
+      .table-filter { max-width: none; }
+    }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+  <script src="/export.js" defer></script>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <nav class="site-nav">
+    <div class="nav-section">
+      <span class="nav-section-label">Application Search</span>
+      <div class="nav-section-links">
+        <a href="/uspto-search">Application Search &amp; Tracking</a>
+        <a href="/file-history">File History Print to PDF</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">Reexam Stats</span>
+      <div class="nav-section-links">
+        <a href="/reexam">Reexam Determinations</a>
+        <a href="/reexam-actions">Reexam Office Action Timing</a>
+        <a href="/reexam-outcomes">Reexam Final Outcomes</a>
+        <a href="/reexam-nirc" class="active" aria-current="page">NIRC Prior-Art Comparison</a>
+        <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+        <a href="/reexam-petitions">Post-Order Petitions</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">PTAB Stats</span>
+      <div class="nav-section-links">
+        <a href="/ptab-decisions">PTAB Discretionary / Institution Decisions</a>
+        <a href="/ptab">PTAB FWD Outcomes</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="card">
+    <h2>Request vs. NIRC prior art</h2>
+    <div class="explainer">
+      <p>When an ex parte reexamination concludes with a <strong>Notice of Intent to Issue a Reexam Certificate (NIRC)</strong>, this page compares the prior art the requester relied on — the references underlying the substantial new questions of patentability, as recited in the reexam <strong>order</strong> — against the art the examiner actually discussed in the NIRC's statement of reasons. Each NIRC reference is labeled by the role it played: <strong>used to invalidate</strong> a challenged claim, or the <strong>closest art distinguished</strong> for a confirmed claim. The headline statistic is how often at least one reference from the request was operative at the NIRC.</p>
+    </div>
+    <p id="freshness" class="sub" style="margin:12px 0 4px"></p>
+    <p style="font-size:0.78rem;color:#64748b;margin:0 0 4px;line-height:1.45">Reference extraction and cross-document matching are performed by an AI reading the order and NIRC text; the percentages are computed from those stored lists. NIRCs that state no art-based reasons (e.g. confirmed for the reasons in the final Office action) are excluded from the percentage and reported separately. Informational only, not legal advice — verify against the source documents.</p>
+    <div id="kpis"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 id="list-heading" style="margin:0">Proceedings</h2>
+      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
+    </div>
+    <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" aria-label="Filter proceedings" style="margin-top:0" />
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
+        <input type="checkbox" id="overlap-filter" onchange="render()" /> Show only rows where request art was operative
+      </label>
+    </div>
+    <div class="rolekey" id="rolekey" style="display:none">
+      <span><span class="ref invalidating">ref</span> used to invalidate</span>
+      <span><span class="ref distinguished">ref</span> closest art distinguished</span>
+      <span><span class="ref mentioned">ref</span> mentioned</span>
+      <span><span class="ref match">ref</span> also in the request</span>
+    </div>
+    <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
+  </div>
+
+  <p style="text-align:center;font-size:0.76rem;color:#94a3b8;margin:18px auto 0;max-width:860px;line-height:1.5">Statistics on this page are compiled from USPTO Open Data Portal records with AI-assisted extraction — informational only, not legal advice. Verify any figure against the underlying source documents before relying on it.</p>
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
+function openDocViewer(appNum, documentId) {
+  window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=PDF&disposition=inline`, '_blank', 'noopener');
+}
+const OUTCOME_CLASS = (s) => {
+  const t = String(s || '').toLowerCase();
+  if (/cancel/.test(t) && /confirm/.test(t)) return 'mixed';
+  if (/all.*cancel|cancel.*all/.test(t)) return 'cancelled';
+  if (/confirm/.test(t)) return 'confirmed';
+  return 'other';
+};
+// Analyzed rows only produce a stat when the NIRC stated art-based reasons.
+const COUNTS = (r) => (r.basis === 'reasons-stated' || r.basis === 'as-amended');
+
+let _rows = [];
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
+});
+
+function refChips(refs, matchKeys) {
+  if (!Array.isArray(refs) || !refs.length) return '<span class="ext">—</span>';
+  return refs.map((r) => {
+    const role = r.role || 'mentioned';
+    const isMatch = matchKeys && matchKeys.has(r.key);
+    return `<span class="ref ${role}${isMatch ? ' match' : ''}" title="${esc(r.key || '')}${role !== 'mentioned' ? ' — ' + role : ''}">${esc(r.label || r.key || '?')}</span>`;
+  }).join('');
+}
+function reqChips(refs, matchKeys) {
+  if (!Array.isArray(refs) || !refs.length) return '<span class="ext">—</span>';
+  return refs.map((r) => {
+    const isMatch = matchKeys && matchKeys.has(r.key);
+    return `<span class="ref${isMatch ? ' match' : ''}" title="${esc(r.key || '')}">${esc(r.label || r.key || '?')}</span>`;
+  }).join('');
+}
+
+function renderKpis() {
+  const covered = _rows.filter(COUNTS);
+  const notStated = _rows.length - covered.length;
+  const operative = covered.filter((r) => (r.match_count || 0) > 0).length;
+  const inval = covered.filter((r) => (r.match_invalidating || 0) > 0).length;
+  const dist = covered.filter((r) => (r.match_distinguished || 0) > 0).length;
+  document.getElementById('kpis').innerHTML =
+    `<div class="kpi-strip">
+      <div class="kpi"><div class="num">${_rows.length}</div><div class="lbl">NIRCs analyzed</div></div>
+      <div class="kpi"><div class="num">${covered.length}</div><div class="lbl">With art-based reasons</div></div>
+      <div class="kpi"><div class="num">${pct(operative, covered.length)}%</div><div class="lbl">Request art operative</div></div>
+      <div class="kpi"><div class="num">${pct(inval, covered.length)}%</div><div class="lbl">Used to invalidate</div></div>
+      <div class="kpi"><div class="num">${pct(dist, covered.length)}%</div><div class="lbl">Distinguished (closest art)</div></div>
+    </div>
+    <p class="note">${operative} of ${covered.length} NIRCs with an art-based reasons statement relied on ≥1 reference from the request. ${notStated} further NIRC${notStated === 1 ? '' : 's'} stated no art-based reasons (excluded from the percentages).</p>`;
+}
+
+function filtered() {
+  const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
+  const onlyOverlap = document.getElementById('overlap-filter').checked;
+  let rows = _rows;
+  if (onlyOverlap) rows = rows.filter((r) => (r.match_count || 0) > 0);
+  if (q) rows = rows.filter((r) => String(r.application_number || '').toLowerCase().includes(q));
+  return rows;
+}
+
+function render() {
+  const rows = filtered();
+  const body = document.getElementById('body');
+  if (!rows.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  const tr = rows.map((r) => {
+    const matchKeys = new Set((r.matches || []).map((m) => m.key));
+    const basisNote = (r.basis === 'not-stated') ? '<div class="note">no art-based reasons stated</div>'
+      : (r.basis === 'as-amended') ? '<div class="note">confirmed as amended</div>'
+      : (r.basis === 'no-nirc-art') ? '<div class="note">reasons stated, no art cited</div>' : '';
+    const low = r.ai_confidence === 'low' ? ' <span class="conf-low" title="' + esc(r.ai_note || '') + '">(low confidence)</span>' : '';
+    return `<tr>
+      <td><a class="link" href="/reexam?q=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
+      <td>${fmtDate(r.nirc_date)}${r.nirc_doc_id ? `<div class="doclinks" style="margin-top:4px"><button class="btn-view" onclick="openDocViewer('${esc(r.application_number)}','${esc(r.nirc_doc_id)}')">View NIRC</button></div>` : ''}${low}</td>
+      <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
+      <td>${reqChips(r.req_refs, matchKeys)}</td>
+      <td>${refChips(r.nirc_refs, matchKeys)}${basisNote}</td>
+      <td>${(r.match_count || 0) > 0 ? refChips(r.matches, null) : '<span class="ext">none</span>'}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th>Control No.</th><th>NIRC</th><th>Outcome</th>
+      <th>Request art (order SNQs)</th><th>NIRC art (by role)</th><th>Operative overlap</th>
+    </tr></thead><tbody>${tr}</tbody></table></div>`;
+}
+
+function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+const refList = (refs) => (refs || []).map((r) => r.label + (r.role ? ` [${r.role}]` : '')).join('; ');
+function exportCsv() {
+  const header = ['Control No.', 'NIRC Date', 'Outcome', 'Request Art', 'NIRC Art (by role)', 'Operative Overlap', 'Basis', 'Confidence'];
+  const rows = filtered().map((r) => [
+    r.application_number, fmtDate(r.nirc_date), r.outcome_summary || '',
+    refList(r.req_refs), refList(r.nirc_refs), refList(r.matches), r.basis || '', r.ai_confidence || '',
+  ]);
+  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 40, 40, 30, 16, 12] });
+}
+
+(async function () {
+  try {
+    const res = await fetch('/api/reexam?nirc=1');
+    const data = await res.json();
+    _rows = Array.isArray(data.nirc) ? data.nirc : [];
+    if (!_rows.length) {
+      document.getElementById('kpis').innerHTML = '';
+      document.getElementById('body').innerHTML = '<div class="state">No analyzed NIRCs yet. The nightly pass populates this page.</div>';
+      return;
+    }
+    document.getElementById('freshness').textContent = `${_rows.length} concluded reexamination${_rows.length === 1 ? '' : 's'} with a NIRC analyzed.`;
+    document.getElementById('csv-btn').style.display = '';
+    document.getElementById('filter-bar').style.display = 'flex';
+    document.getElementById('rolekey').style.display = 'flex';
+    renderKpis();
+    render();
+  } catch (e) {
+    document.getElementById('body').innerHTML = '<div class="state">Failed to load. Please retry.</div>';
+  }
+})();
+</script>
+</body>
+</html>

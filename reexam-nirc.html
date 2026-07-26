@@ -237,7 +237,7 @@ function render() {
       : (r.basis === 'no-nirc-art') ? '<div class="note">reasons stated, no art cited</div>' : '';
     const low = r.ai_confidence === 'low' ? ' <span class="conf-low" title="' + esc(r.ai_note || '') + '">(low confidence)</span>' : '';
     return `<tr>
-      <td><a class="link" href="/reexam?q=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
+      <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
       <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td>${reqChips(r.req_refs, matchKeys)}</td>

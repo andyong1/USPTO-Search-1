@@ -27,7 +27,7 @@
     .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
     .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
     .explainer p { margin: 0; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 16px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
     @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
     .kpi .num { font-size: 1.6rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
@@ -160,6 +160,9 @@
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
 function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
+function daysBetween(a, b) { const m = (s) => { const x = String(s || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return x ? Date.UTC(+x[1], +x[2] - 1, +x[3]) : NaN; }; const p = m(a), q = m(b); return (isNaN(p) || isNaN(q)) ? null : Math.round((q - p) / 86400000); }
+function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
 function openDocViewer(appNum, documentId) {
   window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=PDF&disposition=inline`, '_blank', 'noopener');
 }
@@ -210,6 +213,11 @@ function renderKpis() {
   const inval = covered.filter((r) => (r.match_invalidating || 0) > 0).length;
   const dist = covered.filter((r) => (r.match_distinguished || 0) > 0).length;
   const fromOa = covered.filter((r) => r.art_source === 'final-oa').length;
+  // Office-action count + order→NIRC timing.
+  const withOa = _rows.filter((r) => r.oa_count != null);
+  const zeroOa = withOa.filter((r) => r.oa_count === 0).length;
+  const spans = _rows.map((r) => daysBetween(r.order_date, r.nirc_date)).filter((d) => d != null && d >= 0);
+  const avgD = avg(spans), medD = median(spans);
   document.getElementById('kpis').innerHTML =
     `<div class="kpi-strip">
       <div class="kpi"><div class="num">${_rows.length}</div><div class="lbl">NIRCs analyzed</div></div>
@@ -217,8 +225,11 @@ function renderKpis() {
       <div class="kpi"><div class="num">${pct(operative, covered.length)}%</div><div class="lbl">Request art operative</div></div>
       <div class="kpi"><div class="num">${pct(inval, covered.length)}%</div><div class="lbl">Used to invalidate</div></div>
       <div class="kpi"><div class="num">${pct(dist, covered.length)}%</div><div class="lbl">Distinguished (closest art)</div></div>
+      <div class="kpi"><div class="num">${pct(zeroOa, withOa.length)}%</div><div class="lbl">No Office action before NIRC</div></div>
+      <div class="kpi"><div class="num">${avgD == null ? '—' : avgD}</div><div class="lbl">Avg days, order → NIRC</div></div>
+      <div class="kpi"><div class="num">${medD == null ? '—' : medD}</div><div class="lbl">Median days, order → NIRC</div></div>
     </div>
-    <p class="note">${operative} of ${covered.length} proceedings whose operative art could be identified relied on ≥1 reference from the request${fromOa ? ` (for ${fromOa}, the art was read from the final Office action the NIRC deferred to, not the NIRC itself)` : ''}. ${notStated} further NIRC${notStated === 1 ? '' : 's'} named no art in either the NIRC or its final action (excluded from the percentages).</p>`;
+    <p class="note">${operative} of ${covered.length} proceedings whose operative art could be identified relied on ≥1 reference from the request${fromOa ? ` (for ${fromOa}, the art was read from the final Office action the NIRC deferred to, not the NIRC itself)` : ''}. ${notStated} further NIRC${notStated === 1 ? '' : 's'} named no art in either the NIRC or its final action (excluded from the percentages). ${zeroOa} of ${withOa.length} issued no Office action before the NIRC. Order-to-NIRC timing is measured over ${spans.length} proceedings with a recorded reexam-order date.</p>`;
 }
 
 function filtered() {
@@ -252,6 +263,7 @@ function render() {
       <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
       <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${reasonsDoc}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
+      <td style="text-align:center">${r.oa_count == null ? '<span class="ext">—</span>' : r.oa_count}</td>
       <td>${reqChips(r.req_refs, matchKeys)}</td>
       <td>${refChips(r.nirc_refs, matchKeys)}${artNote}</td>
       <td>${(r.match_count || 0) > 0 ? refChips(r.matches, null) : '<span class="ext">none</span>'}</td>
@@ -259,7 +271,7 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th>
+      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th><th>No. of Office Actions</th>
       <th>Request art (order SNQs)</th><th>Operative art (by role)</th><th>Operative overlap</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
 }
@@ -267,14 +279,16 @@ function render() {
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 const refList = (refs) => (refs || []).map((r) => r.label + (r.role ? ` [${r.role}]` : '')).join('; ');
 function exportCsv() {
-  const header = ['Control No.', 'NIRC Date', 'NIRC Outcome', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
+  const header = ['Control No.', 'NIRC Date', 'NIRC Outcome', 'Office Actions Before NIRC', 'Order → NIRC (days)', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
   const rows = filtered().map((r) => [
     r.application_number, fmtDate(r.nirc_date), r.outcome_summary || '',
+    r.oa_count == null ? '' : r.oa_count,
+    (daysBetween(r.order_date, r.nirc_date) ?? ''),
     refList(r.req_refs), refList(r.nirc_refs), refList(r.matches),
     r.art_source === 'final-oa' ? ('final Office action (' + (r.oa_code || '') + ')') : 'NIRC',
     r.basis || '', r.ai_confidence || '',
   ]);
-  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 40, 40, 30, 18, 16, 12] });
+  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 14, 14, 40, 40, 30, 18, 16, 12] });
 }
 
 (async function () {

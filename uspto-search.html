@@ -174,11 +174,6 @@
       font-family: ui-monospace, monospace; font-size: 0.8rem; overflow: auto;
       max-height: 500px; white-space: pre; display: none; margin-top: 12px;
     }
-    .toggle-raw {
-      font-size: 0.78rem; padding: 4px 10px; background: none; border: 1.5px solid var(--border-2);
-      border-radius: 4px; cursor: pointer; color: var(--text-3);
-    }
-    .toggle-raw:hover { background: var(--surface-2); }
 
     .keynote {
       background: var(--info-bg); border: 1px solid var(--border); border-radius: 6px;
@@ -470,7 +465,6 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="copyShareLink(this)">🔗 Copy link</button>
-        <button class="toggle-raw" onclick="toggleRaw()">{ } Raw JSON</button>
         <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="exportCSV()">Export .xlsx</button>
       </div>
     </div>
@@ -961,11 +955,6 @@ function bagNames(bag) {
     [p.firstName, p.lastName].filter(Boolean).join(' ') ||
     p.nameText || p.partyName || ''
   ).filter(Boolean).join('; ');
-}
-
-function toggleRaw() {
-  const el = document.getElementById('raw-json');
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 // Empty the Basic Search and Application Lookup fields, resetting dropdowns to

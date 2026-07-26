@@ -162,6 +162,13 @@ function pct(n, d) { return d ? Math.round((n / d) * 100) : 0; }
 function openDocViewer(appNum, documentId) {
   window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=PDF&disposition=inline`, '_blank', 'noopener');
 }
+const docLinks = (num, docId) => {
+  if (!docId) return '';
+  const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+  return `<div class="doclinks" style="margin-top:4px">`
+    + `<button class="btn-view" onclick="openDocViewer('${esc(num)}','${esc(docId)}')">View</button>`
+    + `<a class="ext" style="margin-left:8px" href="${base}&disposition=attachment" download>Download &#10515;</a></div>`;
+};
 const OUTCOME_CLASS = (s) => {
   const t = String(s || '').toLowerCase();
   if (/cancel/.test(t) && /confirm/.test(t)) return 'mixed';
@@ -231,7 +238,7 @@ function render() {
     const low = r.ai_confidence === 'low' ? ' <span class="conf-low" title="' + esc(r.ai_note || '') + '">(low confidence)</span>' : '';
     return `<tr>
       <td><a class="link" href="/reexam?q=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
-      <td>${fmtDate(r.nirc_date)}${r.nirc_doc_id ? `<div class="doclinks" style="margin-top:4px"><button class="btn-view" onclick="openDocViewer('${esc(r.application_number)}','${esc(r.nirc_doc_id)}')">View NIRC</button></div>` : ''}${low}</td>
+      <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td>${reqChips(r.req_refs, matchKeys)}</td>
       <td>${refChips(r.nirc_refs, matchKeys)}${basisNote}</td>

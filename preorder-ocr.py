@@ -7,12 +7,12 @@
 #
 # Run from the uspto-search folder (via `cat preorder-ocr.py | python -` on the
 # locked-down Windows box), after the fetch script and before the AI pass.
-# Args: [work-folder] [max-pages] (defaults: preorder-work, 3). Petition
-# captions decide attribution in 3 pages; NIRC reasons statements run longer, so
-# the NIRC pass passes a higher page cap:
-#     cat preorder-ocr.py | python -                  # pre-order pass (3 pages)
-#     cat preorder-ocr.py | python - postpet-work     # post-order pass (3 pages)
-#     cat preorder-ocr.py | python - nirc-work 16     # NIRC pass (16 pages)
+# Args: [work-folder] [max-pages] [max-chars] (defaults: preorder-work, 3,
+# 18000). Petition captions decide attribution in 3 pages; NIRC reasons
+# statements run longer, so the NIRC pass passes a higher page/char cap:
+#     cat preorder-ocr.py | python -                        # pre-order pass (3 pages)
+#     cat preorder-ocr.py | python - postpet-work           # post-order pass (3 pages)
+#     cat preorder-ocr.py | python - nirc-work 60 200000    # NIRC pass (full document)
 #
 # Dependencies:  pip install pymupdf   (+ macOS: pyobjc-framework-Vision  |  Windows: pillow winocr)
 
@@ -26,7 +26,7 @@ WORK = Path("snq-cumulative") / (sys.argv[1] if len(sys.argv) > 1 else "preorder
 PDF_DIR = WORK / "pdf"
 DPI = 200
 PAGES = int(sys.argv[2]) if len(sys.argv) > 2 else 3
-MAX_CHARS = 18000
+MAX_CHARS = int(sys.argv[3]) if len(sys.argv) > 3 else 18000
 IS_MAC = sys.platform == "darwin"
 
 

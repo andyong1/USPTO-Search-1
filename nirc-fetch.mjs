@@ -32,8 +32,11 @@ const SITE = 'https://andy-ong.com';
 const DIR = 'snq-cumulative/nirc-work';
 const NUL = new RegExp(String.fromCharCode(0), 'g');
 const ORDER_CHARS = 20000;  // orders recite SNQs early; generous head slice
-const NIRC_CHARS = 18000;
-const NIRC_PAGES = 20;      // the reasons-for-confirmation statement sits behind the PTOL-469 cover form
+// NIRCs are captured in FULL — the statement of reasons can run past the cover
+// form and, in long confirmations, past page 20. No practical cap (real NIRCs
+// top out ~25 pages); the AI reads the whole reasons section.
+const NIRC_CHARS = 200000;
+const NIRC_PAGES = 60;
 
 await rm(DIR, { recursive: true, force: true }); // stale work must not be re-verified
 await mkdir(DIR, { recursive: true });

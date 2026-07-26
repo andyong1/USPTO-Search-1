@@ -1,39 +1,32 @@
 // Site theme controller. Load SYNCHRONOUSLY in <head> (before the body paints)
-// as <script src="/theme.js"></script> so the stored choice is applied with no
-// flash of the wrong theme.
+// as <script src="/theme.js"></script> so the resolved theme is applied with no
+// flash.
 //
-// Three states, stored in localStorage under "theme":
-//   "dark" | "light"  → explicit user choice (data-theme on <html>)
-//   absent            → follow the OS (prefers-color-scheme), the default
+// localStorage "theme": "dark" | "light" (explicit) | absent (follow the OS).
+// We always resolve to an explicit data-theme="dark"|"light" on <html>, so all
+// dark CSS (including SVG-chart attribute overrides) can key off
+// [data-theme="dark"] and cover the auto-OS case too. base.css also keeps a
+// prefers-color-scheme fallback for the (rare) no-JS case.
 //
-// On DOMContentLoaded it injects a toggle into the page header. Toggling sets an
-// explicit choice; charts and other JS can listen for the "themechange" event
-// (detail.dark = boolean) to recolor canvas content that can't read CSS vars.
+// On DOMContentLoaded a header toggle is injected. Charts and other JS listen
+// for the "themechange" event (detail.dark) to recolor canvas/SVG content.
 (function () {
   var root = document.documentElement;
-  // Mark this page themable so base.css's dark tokens apply only where a page
-  // has been converted (loads theme.js). Unconverted pages stay light.
   root.setAttribute('data-themable', '');
-  var stored = null;
-  try { stored = localStorage.getItem('theme'); } catch (e) { /* private mode */ }
-  if (stored === 'dark' || stored === 'light') root.setAttribute('data-theme', stored);
 
-  function prefersDark() {
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  function isDark() {
-    var t = root.getAttribute('data-theme');
-    if (t === 'dark') return true;
-    if (t === 'light') return false;
-    return prefersDark();
-  }
-  function apply(theme) {
-    if (theme) { root.setAttribute('data-theme', theme); try { localStorage.setItem('theme', theme); } catch (e) {} }
-    else { root.removeAttribute('data-theme'); try { localStorage.removeItem('theme'); } catch (e) {} }
-    updateButton();
+  function getStored() { try { return localStorage.getItem('theme'); } catch (e) { return null; } }
+  function prefersDark() { return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches); }
+  function resolved() { var s = getStored(); return (s === 'dark' || s === 'light') ? s : (prefersDark() ? 'dark' : 'light'); }
+  function isDark() { return resolved() === 'dark'; }
+  function applyResolved() { root.setAttribute('data-theme', resolved()); }
+  applyResolved(); // synchronous, pre-paint
+
+  function setTheme(theme) {
+    try { if (theme) localStorage.setItem('theme', theme); else localStorage.removeItem('theme'); } catch (e) {}
+    applyResolved(); updateButton();
     window.dispatchEvent(new CustomEvent('themechange', { detail: { dark: isDark() } }));
   }
-  window.setTheme = apply;
+  window.setTheme = setTheme;
   window.isDarkTheme = isDark;
 
   var SUN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>';
@@ -51,16 +44,18 @@
     btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'theme-toggle';
-    btn.addEventListener('click', function () { apply(isDark() ? 'light' : 'dark'); });
+    btn.addEventListener('click', function () { setTheme(isDark() ? 'light' : 'dark'); });
     header.appendChild(btn);
     updateButton();
   }
-  // Recolor when the OS preference changes while on auto.
+  // Follow OS changes while on auto (no explicit choice stored).
   if (window.matchMedia) {
     var mq = window.matchMedia('(prefers-color-scheme: dark)');
-    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(function () {
-      if (!root.getAttribute('data-theme')) { updateButton(); window.dispatchEvent(new CustomEvent('themechange', { detail: { dark: isDark() } })); }
-    });
+    var onChange = function () {
+      var s = getStored();
+      if (s !== 'dark' && s !== 'light') { applyResolved(); updateButton(); window.dispatchEvent(new CustomEvent('themechange', { detail: { dark: isDark() } })); }
+    };
+    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change') : mq.addListener.bind(mq))(onChange);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject); else inject();
 })();

@@ -105,3 +105,26 @@
 @media (prefers-color-scheme: dark) {
   :root[data-themable]:not([data-theme="light"]) header { background: var(--header-bg); }
 }
+
+/* SVG charts hardcode their colours as presentation attributes. CSS overrides
+   presentation attributes, so recolour them by their exact light hex when dark
+   (charts are JS-rendered, so the JS-set data-theme guard is enough — no media
+   fallback needed). Grid + axis ticks first, then the categorical series. */
+:root[data-themable][data-theme="dark"] [stroke="#e2e8f0"] { stroke: var(--chart-grid); }
+:root[data-themable][data-theme="dark"] [stroke="#cbd5e0"] { stroke: var(--border-2); }
+:root[data-themable][data-theme="dark"] [fill="#718096"],
+:root[data-themable][data-theme="dark"] [fill="#4a5568"],
+:root[data-themable][data-theme="dark"] [fill="#a0aec0"] { fill: var(--chart-tick); }
+:root[data-themable][data-theme="dark"] [fill="#1a3a6b"] { fill: #4f9dff; }
+:root[data-themable][data-theme="dark"] [stroke="#1a3a6b"] { stroke: #4f9dff; }
+:root[data-themable][data-theme="dark"] [fill="#9b2c2c"] { fill: #f08a8a; }
+:root[data-themable][data-theme="dark"] [stroke="#9b2c2c"] { stroke: #f08a8a; }
+:root[data-themable][data-theme="dark"] [fill="#c53030"] { fill: #f08a8a; }
+:root[data-themable][data-theme="dark"] [stroke="#c53030"] { stroke: #f08a8a; }
+:root[data-themable][data-theme="dark"] [fill="#276749"] { fill: #34d399; }
+:root[data-themable][data-theme="dark"] [stroke="#276749"] { stroke: #34d399; }
+:root[data-themable][data-theme="dark"] [fill="#ed8936"] { fill: #fbbf77; }
+:root[data-themable][data-theme="dark"] [stroke="#ed8936"] { stroke: #fbbf77; }
+:root[data-themable][data-theme="dark"] [fill="#9c4221"] { fill: #e0a878; }
+:root[data-themable][data-theme="dark"] [fill="#553c9a"] { fill: #c8b6f0; }
+:root[data-themable][data-theme="dark"] [stroke="#553c9a"] { stroke: #c8b6f0; }

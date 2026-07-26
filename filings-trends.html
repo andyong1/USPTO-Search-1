@@ -191,18 +191,26 @@ function bucketDaily(series, fromMs, toMs, gran) {
 }
 function roundUp(v) { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / (p / 2)) * (p / 2); }
 
+// Theme-aware chart colors read from the CSS tokens (flip in dark mode).
+const CVAR = (n, fb) => (getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb);
+function seriesColor(prefix) {
+  const dark = window.isDarkTheme && window.isDarkTheme();
+  if (prefix === 'ipr') return dark ? '#f08a8a' : '#9b2c2c';
+  return CVAR('--chart-1', '#1a3a6b');
+}
 function countLineSvg(buckets, color, unit) {
   const W = Math.max(560, buckets.length * 40), H = 260, mL = 44, mR = 16, mT = 16, mB = 44, pw = W - mL - mR, ph = H - mT - mB, yBase = mT + ph;
+  const gridColor = CVAR('--chart-grid', '#e2e8f0'), tick = CVAR('--chart-tick', '#718096'), tick2 = CVAR('--text-2', '#4a5568');
   const top = roundUp(Math.max(1, ...buckets.map((d) => d.count)));
   const yfor = (v) => yBase - (v / top) * ph;
   let grid = '';
-  for (let i = 0; i <= 4; i++) { const v = Math.round(top * i / 4), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="#e2e8f0"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#718096">${v}</text>`; }
+  for (let i = 0; i <= 4; i++) { const v = Math.round(top * i / 4), y = yfor(v); grid += `<line x1="${mL}" y1="${y}" x2="${W - mR}" y2="${y}" stroke="${gridColor}"/><text x="${mL - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="${tick}">${v}</text>`; }
   const n = buckets.length;
   const px = (i) => mL + (n > 1 ? (pw / (n - 1)) * i : pw / 2);
   const line = n > 1 ? `<polyline points="${buckets.map((d, i) => `${px(i).toFixed(1)},${yfor(d.count).toFixed(1)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2"/>` : '';
   const dots = buckets.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="3.5" fill="${color}"/>`).join('');
   const every = Math.max(1, Math.ceil(n / 14));
-  const xl = buckets.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="#4a5568">${esc(d.label)}</text>` : '')).join('');
+  const xl = buckets.map((d, i) => (i % every === 0 ? `<text x="${px(i).toFixed(1)}" y="${H - mB + 16}" text-anchor="middle" font-size="10" fill="${tick2}">${esc(d.label)}</text>` : '')).join('');
   const hits = buckets.map((d, i) => `<circle class="pt" cx="${px(i).toFixed(1)}" cy="${yfor(d.count).toFixed(1)}" r="14" fill="transparent" data-m="${esc(d.label)}" data-c="${d.count}" data-u="${esc(unit)}"></circle>`).join('');
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="Filings over time">${grid}${line}${dots}${xl}${hits}</svg>`;
 }
@@ -225,7 +233,9 @@ function drawChart(id, buckets, color, unit) {
   };
   wrap.onmouseleave = () => { tip.style.display = 'none'; };
 }
+const UNITS = { reexam: 'reexaminations filed', ipr: 'IPR petitions filed' };
 function renderChart(prefix, color, unit) {
+  color = seriesColor(prefix); unit = unit || UNITS[prefix];
   const { fromMs, toMs, gran } = computeRange(el(prefix + '-period').value, el(prefix + '-from').value, el(prefix + '-to').value);
   const buckets = bucketDaily(SERIES[prefix], fromMs, toMs, gran);
   el(prefix + '-total').textContent = buckets.reduce((t, b) => t + b.count, 0).toLocaleString();
@@ -260,6 +270,8 @@ function wireControls(prefix, color, unit) {
   } catch (e) {
     for (const id of ['reexam-chart', 'ipr-chart']) el(id).innerHTML = '<div class="state">Could not load (' + esc(e.message) + ').</div>';
   }
+  // Recolor the charts when the theme changes.
+  window.addEventListener('themechange', () => { if ((SERIES.reexam||[]).length || (SERIES.ipr||[]).length) { renderChart('reexam'); renderChart('ipr'); } });
 })();
 
 // ── EPR-vs-IPR head-to-head + IPR→reexam pipeline ──

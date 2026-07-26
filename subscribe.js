@@ -11,16 +11,18 @@
     card.id = 'subscribe-card';
     // Self-contained styling (not the page's .card class) so the widget looks
     // identical on every page, including ones that don't define .card.
-    card.style.cssText = 'background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.1);padding:24px;margin-bottom:24px';
+    // Uses the shared theme tokens (base.css) so the widget follows dark mode on
+    // pages that opt in; resolves to the light palette everywhere else.
+    card.style.cssText = 'background:var(--surface,#fff);border-radius:10px;box-shadow:0 1px 4px var(--shadow,rgba(0,0,0,0.1));padding:24px;margin-bottom:24px';
     card.innerHTML =
-      '<h2 style="font-size:1.15rem;color:#1a3a6b;margin:0 0 6px">Subscribe to Daily Email Alerts</h2>' +
-      '<div style="color:#718096;font-size:0.85rem;margin-bottom:14px">Get a once-daily email (8:00&nbsp;AM Pacific) listing relevant filings (determinations, office actions, certificates, petitions, final written decisions) issued the previous day. Every email has a one-click unsubscribe link.</div>' +
+      '<h2 style="font-size:1.15rem;color:var(--heading,#1a3a6b);margin:0 0 6px">Subscribe to Daily Email Alerts</h2>' +
+      '<div style="color:var(--text-3,#718096);font-size:0.85rem;margin-bottom:14px">Get a once-daily email (8:00&nbsp;AM Pacific) listing relevant filings (determinations, office actions, certificates, petitions, final written decisions) issued the previous day. Every email has a one-click unsubscribe link.</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-        '<input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address for daily alerts" style="flex:1;min-width:220px;max-width:340px;padding:9px 12px;border:1.5px solid #cbd5e0;border-radius:8px;font-size:0.95rem" />' +
-        '<button id="sub-btn" type="button" style="cursor:pointer;background:#1a3a6b;color:#fff;border:none;font-weight:600;font-size:0.95rem;padding:10px 18px;border-radius:8px">Subscribe</button>' +
+        '<input type="email" id="sub-email" placeholder="you@example.com" autocomplete="email" aria-label="Email address for daily alerts" style="flex:1;min-width:220px;max-width:340px;padding:9px 12px;border:1.5px solid var(--border-2,#cbd5e0);border-radius:8px;font-size:0.95rem;background:var(--input-bg,#fff);color:var(--text,#2d3748)" />' +
+        '<button id="sub-btn" type="button" style="cursor:pointer;background:var(--brand,#1a3a6b);color:var(--on-brand,#fff);border:none;font-weight:600;font-size:0.95rem;padding:10px 18px;border-radius:8px">Subscribe</button>' +
       '</div>' +
       '<div id="sub-status" role="status" aria-live="polite" style="font-size:0.85rem;margin-top:8px;font-weight:600"></div>' +
-      '<div style="color:#718096;font-size:0.85rem;margin-top:8px">We use your email only to send these alerts — see our <a href="/privacy" style="color:#1a3a6b">Privacy Policy</a>. Unsubscribe anytime via the link in every email.</div>';
+      '<div style="color:var(--text-3,#718096);font-size:0.85rem;margin-top:8px">We use your email only to send these alerts — see our <a href="/privacy" style="color:var(--link,#1a3a6b)">Privacy Policy</a>. Unsubscribe anytime via the link in every email.</div>';
     var nav = container.querySelector('.site-nav');
     if (nav) nav.insertAdjacentElement('afterend', card);
     else container.insertBefore(card, container.firstChild);
@@ -28,7 +30,7 @@
     var input = card.querySelector('#sub-email');
     var btn = card.querySelector('#sub-btn');
     var status = card.querySelector('#sub-status');
-    function setStatus(msg, ok) { status.textContent = msg; status.style.color = ok ? '#276749' : '#c53030'; }
+    function setStatus(msg, ok) { status.textContent = msg; status.style.color = ok ? 'var(--ok-fg,#276749)' : 'var(--bad-fg,#c53030)'; }
     async function submit() {
       var email = (input.value || '').trim();
       if (!RE.test(email)) { setStatus('Please enter a valid email address.', false); return; }

@@ -11,70 +11,71 @@
   <link rel="canonical" href="https://andy-ong.com/reexam-preorder" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
-    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     header svg { flex-shrink: 0; }
     header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 24px; }
-    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
-    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
     .kpi-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
     @media (max-width: 600px) { .kpi-strip { grid-template-columns: 1fr; } }
-    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
-    .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
-    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
-    .kpi .sub { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
-    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .kpi .sub { font-size: 0.72rem; color: var(--text-5); margin-top: 2px; }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); }
     th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { background: #e2e8f0; }
-    .table-filter { width: 100%; max-width: 280px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; }
-    td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
-    tr:hover td { background: #f7fafc; }
-    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    th.sortable:hover { background: var(--border); }
+    .table-filter { width: 100%; max-width: 280px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.9rem; }
+    td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: var(--surface-2); }
+    a.link { color: var(--heading); font-weight: 600; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
-    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
+    .ext { color: var(--text-3); font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
-    .state { text-align: center; padding: 40px 20px; color: #718096; }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-3); }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
-    .badge.granted { background: #c6f6d5; color: #276749; }
-    .badge.dismissed { background: #fed7d7; color: #c53030; }
-    .badge.other { background: #e2e8f0; color: #4a5568; }
+    .badge.granted { background: var(--ok-bg); color: var(--ok-fg); }
+    .badge.dismissed { background: var(--bad-bg); color: var(--bad-fg); }
+    .badge.other { background: var(--border); color: var(--text-2); }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
-    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
-    footer a { color: #1a3a6b; text-decoration: none; }
-    .explainer { font-size: 0.9rem; line-height: 1.55; color: #4a5568; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 14px 0 16px; }
+    footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
+    footer a { color: var(--heading); text-decoration: none; }
+    .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 16px; }
     .explainer p { margin: 0; }
-    .explainer a { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    .explainer a { color: var(--heading); font-weight: 600; text-decoration: none; }
     .explainer a:hover { text-decoration: underline; }
     /* Document viewer modal */
-    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
-    .btn-view:hover { background: #15305a; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: var(--brand-hover); }
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 24px; }
-    .modal-box { background: #fff; border-radius: 10px; width: 100%; max-width: 1000px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
-    .modal-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #1a3a6b; color: #fff; }
+    .modal-box { background: var(--surface); border-radius: 10px; width: 100%; max-width: 1000px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.4); }
+    .modal-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--brand); color: #fff; }
     .modal-bar .title { font-weight: 600; font-size: 0.95rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .modal-bar a, .modal-bar button { color: #fff; background: rgba(255,255,255,0.15); border: none; cursor: pointer; font-size: 0.82rem; font-weight: 600; text-decoration: none; padding: 5px 12px; border-radius: 5px; }
     .modal-bar a:hover, .modal-bar button:hover { background: rgba(255,255,255,0.28); }
     .modal-content { position: relative; flex: 1; display: flex; }
     .modal-content iframe { flex: 1; width: 100%; border: none; background: #525659; }
-    .viewer-status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: #f7fafc; color: #4a5568; font-size: 0.9rem; text-align: center; padding: 24px; }
-    .viewer-status .spin { width: 28px; height: 28px; border: 3px solid #cbd5e0; border-top-color: #1a3a6b; border-radius: 50%; animation: viewspin 0.8s linear infinite; }
+    .viewer-status { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: var(--surface-2); color: var(--text-2); font-size: 0.9rem; text-align: center; padding: 24px; }
+    .viewer-status .spin { width: 28px; height: 28px; border: 3px solid var(--border-2); border-top-color: var(--brand); border-radius: 50%; animation: viewspin 0.8s linear infinite; }
     @keyframes viewspin { to { transform: rotate(360deg); } }
     /* Unified top nav */
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
-    .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
-    .btn-csv:hover { background: #cbd5e0; }
-    .effect-callout { margin-top: 16px; background: #ebf4ff; border: 1px solid #c3dafe; border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; line-height: 1.55; color: #2d3748; }
-    .effect-callout .effect-note { color: #718096; font-size: 0.85em; }
-    .freshness { margin-top: 12px; font-size: 0.78rem; color: #64748b; }
+    .btn-csv { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: var(--border-2); }
+    .effect-callout { margin-top: 16px; background: var(--info-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 0.9rem; line-height: 1.55; color: var(--text); }
+    .effect-callout .effect-note { color: var(--text-3); font-size: 0.85em; }
+    .freshness { margin-top: 12px; font-size: 0.78rem; color: var(--text-5); }
     /* Mobile / small-screen polish */
     @media (max-width: 640px) {
       .container { padding: 16px 10px 48px; }
@@ -144,7 +145,7 @@
     <div class="explainer">
       <p><strong>What changed on April 5, 2026.</strong> The USPTO added a <a href="https://www.uspto.gov/sites/default/files/documents/og-preorder-snq-apr2026.pdf" target="_blank" rel="noopener">pre-order procedure</a> for ex parte reexamination. For any request filed on or after April 5, 2026, a patent owner may file a paper — no petition, no fee — arguing that the request's cited teachings do not raise a substantial new question of patentability under 35 U.S.C. § 303(a), before the Office decides whether to order reexamination. The paper is capped at 30 pages, due within 30 days of service (not extendable), and should not address § 325(d) discretion. A requestor generally cannot respond unless it first obtains leave by petition under 37 CFR § 1.182; any permitted response is capped at 10 pages and due within 15 calendar days of service of the pre-order paper. This page tracks those submissions, petitions, and determinations.</p>
     </div>
-    <p style="font-size:0.78rem;color:#64748b;margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records. Cohort assignment keys on the USPTO metadata filing date — a search proxy, not necessarily the legally operative filing-date-accorded milestone.</p>
+    <p style="font-size:0.78rem;color:var(--text-5);margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records. Cohort assignment keys on the USPTO metadata filing date — a search proxy, not necessarily the legally operative filing-date-accorded milestone.</p>
     <div id="stat"></div>
     <div id="trend"></div>
   </div>
@@ -156,7 +157,7 @@
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="renderTable()" aria-label="Filter submissions" />
-      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#4a5568;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2);cursor:pointer">
         <input type="checkbox" id="dec-filter" onchange="renderTable()" /> Show only rows with a petition decision
       </label>
     </div>
@@ -398,7 +399,7 @@ function buildTrend() {
   const dates = _subs.map((s) => s.official_date).filter(Boolean);
   if (!dates.length) { el.innerHTML = ''; return; }
   const series = monthlySeries(dates, Date.UTC(2026, 4, 1));
-  el.innerHTML = `<div style="font-size:0.85rem;font-weight:600;color:#4a5568;margin:18px 0 8px">Pre-Order SNQ Submissions per Month</div>${barChartSvg(series)}`;
+  el.innerHTML = `<div style="font-size:0.85rem;font-weight:600;color:var(--text-2);margin:18px 0 8px">Pre-Order SNQ Submissions per Month</div>${barChartSvg(series)}`;
 }
 
 (async () => {

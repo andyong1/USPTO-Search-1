@@ -97,3 +97,11 @@
 .nav-section { display: flex; flex-direction: column; gap: 6px; }
 .nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-4); padding-left: 3px; }
 .nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Pages tokenize their header background to --brand (so it stays #1a3a6b in
+   light); in dark it should be the darker --header-bg. One rule covers every
+   page's <header> without editing each. */
+:root[data-themable][data-theme="dark"] header { background: var(--header-bg); }
+@media (prefers-color-scheme: dark) {
+  :root[data-themable]:not([data-theme="light"]) header { background: var(--header-bg); }
+}

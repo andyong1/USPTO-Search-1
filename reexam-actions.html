@@ -11,62 +11,63 @@
   <link rel="canonical" href="https://andy-ong.com/reexam-actions" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
-    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 24px; }
-    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
-    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
     .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .filter-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
     .filter-bar .fb-group { display: flex; align-items: center; gap: 8px; }
-    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: #4a5568; }
-    .filter-bar select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
+    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: var(--text-2); }
+    .filter-bar select { padding: 8px 10px; border: 1.5px solid var(--border-2); border-radius: 6px; font-size: 0.9rem; }
     .chart-wrap { position: relative; margin-bottom: 8px; }
     .chart-tip {
-      position: absolute; display: none; background: #1a3a6b; color: #fff;
+      position: absolute; display: none; background: var(--brand); color: #fff;
       padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45;
       pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
     .chart-wrap svg .pt { cursor: pointer; }
     th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { background: #e2e8f0; }
-    .kpi { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
-    .kpi .num { font-size: 1.6rem; font-weight: 700; color: #1a3a6b; line-height: 1.1; }
-    .kpi .lbl { font-size: 0.72rem; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
-    .kpi .sub2 { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
-    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    th.sortable:hover { background: var(--border); }
+    .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .kpi .sub2 { font-size: 0.72rem; color: var(--text-5); margin-top: 2px; }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
-    td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
-    tr:hover td { background: #f7fafc; }
-    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); }
+    td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: var(--surface-2); }
+    a.link { color: var(--heading); font-weight: 600; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
-    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
+    .ext { color: var(--text-3); font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
-    .days { color: #718096; font-size: 0.8rem; }
-    .stats-title { font-size: 0.85rem; font-weight: 600; color: #4a5568; margin: 18px 0 8px; }
+    .days { color: var(--text-3); font-size: 0.8rem; }
+    .stats-title { font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin: 18px 0 8px; }
     .dist-row { display: flex; gap: 24px; flex-wrap: wrap; }
     .dist-col { flex: 1; min-width: 320px; }
-    .dist-wrap { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; max-width: 420px; }
+    .dist-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; max-width: 420px; }
     .dist-wrap th { position: static; box-shadow: none; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
-    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
-    .btn-view:hover { background: #15305a; }
-    .state { text-align: center; padding: 40px 20px; color: #718096; }
-    .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
-    .btn-csv:hover { background: #cbd5e0; }
-    .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
-    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
-    footer a { color: #1a3a6b; text-decoration: none; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: var(--brand-hover); }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-3); }
+    .btn-csv { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: var(--border-2); }
+    .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
+    footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
+    footer a { color: var(--heading); text-decoration: none; }
     /* Mobile / small-screen polish */
     @media (max-width: 640px) {
       .container { padding: 16px 10px 48px; }
@@ -135,7 +136,7 @@
   <div class="card">
     <h2>Reexamination Office Action Timing</h2>
     <div class="sub">Time from the grant of ex parte reexamination (determination ordering reexam) to (1) the first non-final office action on the merits and (2) the final office action. <strong>Measured for reexaminations ordered on or after January 1, 2025.</strong></div>
-    <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <p style="font-size:0.78rem;color:var(--text-5);margin:8px 0 12px;line-height:1.45">Compiled automatically from USPTO codes — informational only, not legal advice; verify against official USPTO records.</p>
     <div id="freshness" class="sub"></div>
     <div class="filter-bar">
       <div class="fb-group">
@@ -166,8 +167,8 @@
     <h2>By Examiner</h2>
     <div class="sub">Select an examiner to see their office action timing. Only examiners with at least one recorded office action are listed.</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:#4a5568">Examiner:</label>
-      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
+      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:var(--text-2)">Examiner:</label>
+      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid var(--border-2);border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
     </div>
     <div id="examiner-stat"></div>
   </div>
@@ -179,12 +180,12 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, or art unit…" oninput="tablePage=1;render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
-      <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:#fed7d7;color:#9b2c2c">✕ Reset to show all rows</button>
+      <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:var(--bad-bg);color:var(--bad-fg)">✕ Reset to show all rows</button>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
 
-  <p style="text-align:center;font-size:0.76rem;color:#94a3b8;margin:18px auto 0;max-width:860px;line-height:1.5">Statistics on this page are compiled automatically from USPTO Open Data Portal records using heuristic classification and parsing — informational only, not legal advice. Verify any figure against the underlying source documents before relying on it.</p>
+  <p style="text-align:center;font-size:0.76rem;color:var(--text-4);margin:18px auto 0;max-width:860px;line-height:1.5">Statistics on this page are compiled automatically from USPTO Open Data Portal records using heuristic classification and parsing — informational only, not legal advice. Verify any figure against the underlying source documents before relying on it.</p>
   <footer><a href="/privacy">Privacy Policy</a></footer>
 </div>
 
@@ -236,7 +237,7 @@ function statCards(rows) {
   const counts = rows.map((p) => p.action_count).filter((c) => c != null && c > 0);
   const avgActions = counts.length ? (counts.reduce((s, x) => s + x, 0) / counts.length).toFixed(1) : null;
   const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
-  const card = (num, lbl, n, months) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${months != null ? `<div class="sub2" style="color:#718096;font-weight:600">≈ ${months} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
+  const card = (num, lbl, n, months) => `<div class="kpi"><div class="num">${num == null ? '—' : num}</div>${months != null ? `<div class="sub2" style="color:var(--text-3);font-weight:600">≈ ${months} months</div>` : ''}<div class="lbl">${lbl}</div><div class="sub2">${n ? 'n = ' + n : 'no data yet'}</div></div>`;
   const aNonf = avg(nonfDays), mNonf = median(nonfDays), aFinl = avg(finlDays), mFinl = median(finlDays);
   return `<div class="kpi-strip">
     ${card(aNonf, 'Avg Days: Grant → First Office Action', nonfDays.length, mo(aNonf))}
@@ -402,7 +403,7 @@ function render() {
         <a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a>
       </td>
       <td>${fmtDate(p.order_date)}</td>
-      <td>${p.review_flag ? '<span class="badge" style="background:#fefcbf;color:#744210" title="Outlier flagged for review (same-day non-final/final dates or implausible action count) — excluded from the timing statistics above.">⚠ review</span> ' : ''}${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
+      <td>${p.review_flag ? '<span class="badge" style="background:var(--warn-bg);color:var(--warn-fg)" title="Outlier flagged for review (same-day non-final/final dates or implausible action count) — excluded from the timing statistics above.">⚠ review</span> ' : ''}${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
       <td>${cell(num, p.finl_date, daysBetween(p.order_date, p.finl_date), p.finl_doc_id, 'Final Office Action')}</td>
       <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
@@ -434,8 +435,8 @@ function pageNums(cur, total) {
 // Pager: "Showing X–Y of Z" + Prev / numbered pages / Next.
 function pagerHtml(page, pages, start, end, total) {
   const nums = pageNums(page, pages).map((n) => n === '…'
-    ? '<span style="padding:0 4px;color:#718096">…</span>'
-    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === page ? ';background:#1a3a6b;color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+    ? '<span style="padding:0 4px;color:var(--text-3)">…</span>'
+    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === page ? ';background:var(--brand);color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
   return `<div class="table-pager" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
     <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">

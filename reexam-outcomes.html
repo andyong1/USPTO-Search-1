@@ -11,61 +11,62 @@
   <link rel="canonical" href="https://andy-ong.com/reexam-outcomes" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f4f8; color: #2d3748; min-height: 100vh; }
-    header { background: #1a3a6b; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
     .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 24px; }
-    .card h2 { font-size: 1.15rem; color: #1a3a6b; margin-bottom: 6px; }
-    .sub { color: #718096; font-size: 0.85rem; margin-bottom: 16px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
     .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } }
-    .stat { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
     .stat-num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
-    .stat-label { font-size: 0.72rem; color: #718096; margin-top: 6px; line-height: 1.3; }
+    .stat-label { font-size: 0.72rem; color: var(--text-3); margin-top: 6px; line-height: 1.3; }
     .filter-bar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
     .filter-bar .fb-group { display: flex; align-items: center; gap: 8px; }
-    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: #4a5568; }
-    .filter-bar select { padding: 8px 10px; border: 1.5px solid #cbd5e0; border-radius: 6px; font-size: 0.9rem; }
+    .filter-bar label { font-size: 0.9rem; font-weight: 600; color: var(--text-2); }
+    .filter-bar select { padding: 8px 10px; border: 1.5px solid var(--border-2); border-radius: 6px; font-size: 0.9rem; }
     .chart-wrap { position: relative; margin-bottom: 8px; }
-    .chart-tip { position: absolute; display: none; background: #1a3a6b; color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45; pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .chart-tip { position: absolute; display: none; background: var(--brand); color: #fff; padding: 7px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.45; pointer-events: none; white-space: nowrap; z-index: 5; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .chart-wrap svg .pt { cursor: pointer; }
-    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.78rem; color: #4a5568; margin: 2px 0 10px; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-2); margin: 2px 0 10px; }
     .legend span { display: inline-flex; align-items: center; gap: 5px; }
     .legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
     th.sortable { cursor: pointer; user-select: none; }
-    th.sortable:hover { background: #e2e8f0; }
-    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid #e2e8f0; }
+    th.sortable:hover { background: var(--border); }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { position: sticky; top: 0; z-index: 2; background: #edf2f7; padding: 10px 14px; text-align: left; font-weight: 600; color: #4a5568; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 #cbd5e0; }
-    td { padding: 10px 14px; border-top: 1px solid #e2e8f0; vertical-align: top; }
-    tr:hover td { background: #f7fafc; }
-    a.link { color: #1a3a6b; font-weight: 600; text-decoration: none; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); }
+    td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: var(--surface-2); }
+    a.link { color: var(--heading); font-weight: 600; text-decoration: none; }
     a.link:hover { text-decoration: underline; }
-    .ext { color: #718096; font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
+    .ext { color: var(--text-3); font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
     .ext:hover { text-decoration: underline; }
-    .badge { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #c6f6d5; color: #22543d; white-space: nowrap; }
-    .summary { font-size: 0.8rem; color: #4a5568; margin-top: 4px; }
-    .stats-title { font-size: 0.9rem; font-weight: 600; color: #4a5568; margin: 22px 0 8px; }
+    .badge { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--ok-bg); color: var(--ok-fg); white-space: nowrap; }
+    .summary { font-size: 0.8rem; color: var(--text-2); margin-top: 4px; }
+    .stats-title { font-size: 0.9rem; font-weight: 600; color: var(--text-2); margin: 22px 0 8px; }
     .dist-row { display: flex; gap: 24px; flex-wrap: wrap; }
     .dist-col { flex: 1; min-width: 340px; }
-    .dist-wrap { border: 1px solid #e2e8f0; border-radius: 8px; overflow: auto; }
+    .dist-wrap { border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
     .dist-wrap th { position: static; box-shadow: none; }
     .doclinks { margin-top: 4px; font-size: 0.8rem; }
-    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: #1a3a6b; border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
-    .btn-view:hover { background: #15305a; }
-    .state { text-align: center; padding: 40px 20px; color: #718096; }
-    .btn-csv { cursor: pointer; background: #e2e8f0; color: #1a3a6b; border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
-    .btn-csv:hover { background: #cbd5e0; }
-    .table-filter { width: 100%; max-width: 340px; padding: 8px 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
-    footer { text-align: center; padding: 24px 16px 8px; color: #718096; font-size: 0.8rem; }
-    footer a { color: #1a3a6b; text-decoration: none; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: var(--brand-hover); }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-3); }
+    .btn-csv { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: var(--border-2); }
+    .table-filter { width: 100%; max-width: 340px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.9rem; margin-top: 14px; }
+    footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
+    footer a { color: var(--heading); text-decoration: none; }
     @media (max-width: 640px) {
       .container { padding: 16px 10px 48px; }
       header { padding: 12px 14px; gap: 12px; }
@@ -131,7 +132,7 @@
   <div class="card">
     <h2>Reexamination Final Outcomes</h2>
     <div class="sub">Claim disposition at the ex parte reexamination certificate — which claims were confirmed, cancelled, amended, or newly added. A proceeding appears here once its certificate has issued.</div>
-    <p style="font-size:0.78rem;color:#64748b;margin:8px 0 12px;line-height:1.45">Claim dispositions are read from the certificate text — informational only, not legal advice; verify against the official certificate.</p>
+    <p style="font-size:0.78rem;color:var(--text-5);margin:8px 0 12px;line-height:1.45">Claim dispositions are read from the certificate text — informational only, not legal advice; verify against the official certificate.</p>
     <div id="freshness" class="sub" style="margin-bottom:14px"></div>
     <div class="filter-bar">
       <div class="fb-group">
@@ -157,10 +158,10 @@
     <div id="chart-section" style="display:none">
       <div class="stats-title">Certificates Issued by Outcome (by certificate date)</div>
       <div class="legend">
-        <span><i style="background:#276749"></i> All claims confirmed</span>
-        <span><i style="background:#1a3a6b"></i> Amended / new only</span>
-        <span><i style="background:#ed8936"></i> Some claims cancelled</span>
-        <span><i style="background:#c53030"></i> All claims cancelled</span>
+        <span><i style="background:var(--ok-fg)"></i> All claims confirmed</span>
+        <span><i style="background:var(--brand)"></i> Amended / new only</span>
+        <span><i style="background:var(--warn-fg)"></i> Some claims cancelled</span>
+        <span><i style="background:var(--bad-fg)"></i> All claims cancelled</span>
       </div>
       <div class="chart-wrap" id="chart"></div>
     </div>
@@ -175,8 +176,8 @@
     <h2>By Examiner</h2>
     <div class="sub">Select an examiner to see their claim-outcome KPIs at certificate. Only examiners with at least one concluded proceeding in the current scope are listed.</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:#4a5568">Examiner:</label>
-      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid #cbd5e0;border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
+      <label for="examiner-select" style="font-size:0.9rem;font-weight:600;color:var(--text-2)">Examiner:</label>
+      <select id="examiner-select" style="padding:8px 10px;border:1.5px solid var(--border-2);border-radius:6px;font-size:0.9rem;min-width:240px;max-width:360px"></select>
     </div>
     <div id="examiner-stat"></div>
   </div>
@@ -188,7 +189,7 @@
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., examiner, art unit, or outcome…" oninput="tablePage=1;render()" style="display:none;margin-top:0" aria-label="Filter proceedings" />
-      <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:#fed7d7;color:#9b2c2c">✕ Reset to show all rows</button>
+      <button class="btn-csv" id="examiner-reset" onclick="clearExaminer()" style="display:none;background:var(--bad-bg);color:var(--bad-fg)">✕ Reset to show all rows</button>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
@@ -262,13 +263,13 @@ function outcomeKpiHtml(rows) {
   const pct = (x) => (n ? (x / n * 100).toFixed(1) + '%' : '—');
   return `<div class="stats-title">Claim Outcomes at Certificate (n=${n})</div>
     <div class="stats">
-      <div class="stat"><div class="stat-num" style="color:#276749">${pct(allConfirmed)}</div><div class="stat-label">All claims confirmed · ${allConfirmed} of ${n}</div></div>
-      <div class="stat"><div class="stat-num" style="color:#c53030">${pct(anyCancelled)}</div><div class="stat-label">≥1 claim cancelled · ${anyCancelled} of ${n}</div></div>
-      <div class="stat"><div class="stat-num" style="color:#9b2c2c">${pct(allCancelled)}</div><div class="stat-label">All claims cancelled · ${allCancelled} of ${n}</div></div>
-      <div class="stat"><div class="stat-num" style="color:#1a3a6b">${pct(anyAmended)}</div><div class="stat-label">≥1 claim amended · ${anyAmended} of ${n}</div></div>
-      <div class="stat"><div class="stat-num" style="color:#6b46c1">${pct(anyNew)}</div><div class="stat-label">≥1 new claim added · ${anyNew} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--ok-fg)">${pct(allConfirmed)}</div><div class="stat-label">All claims confirmed · ${allConfirmed} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--bad-fg)">${pct(anyCancelled)}</div><div class="stat-label">≥1 claim cancelled · ${anyCancelled} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--bad-fg)">${pct(allCancelled)}</div><div class="stat-label">All claims cancelled · ${allCancelled} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--heading)">${pct(anyAmended)}</div><div class="stat-label">≥1 claim amended · ${anyAmended} of ${n}</div></div>
+      <div class="stat"><div class="stat-num" style="color:var(--accent2-fg)">${pct(anyNew)}</div><div class="stat-label">≥1 new claim added · ${anyNew} of ${n}</div></div>
     </div>
-    <p style="font-size:0.78rem;color:#64748b;margin:10px 0 0;line-height:1.45">Percentages are of certificates whose claim disposition has been parsed; a certificate may fall in more than one of the cancelled / amended / new buckets.</p>`;
+    <p style="font-size:0.78rem;color:var(--text-5);margin:10px 0 0;line-height:1.45">Percentages are of certificates whose claim disposition has been parsed; a certificate may fall in more than one of the cancelled / amended / new buckets.</p>`;
 }
 function buildKpi(rows) { document.getElementById('kpi').innerHTML = outcomeKpiHtml(rows); }
 
@@ -287,7 +288,7 @@ function buildLifecycle(rows) {
     ['Order → Certificate (total)', 'order_date', 'cert_date'],
   ];
   const mo = (d) => (d == null ? null : (d / 30.44).toFixed(1)); // days → months (avg month ≈ 30.44 days)
-  const card = (num, lbl, n) => `<div class="stat"><div class="stat-num" style="color:#1a3a6b">${num == null ? '—' : num}</div><div class="stat-label">${lbl}${n ? ' · median, n=' + n : ' · no data'}</div>${num != null ? `<div class="stat-label" style="color:#718096;font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}</div>`;
+  const card = (num, lbl, n) => `<div class="stat"><div class="stat-num" style="color:var(--heading)">${num == null ? '—' : num}</div><div class="stat-label">${lbl}${n ? ' · median, n=' + n : ' · no data'}</div>${num != null ? `<div class="stat-label" style="color:var(--text-3);font-weight:600;margin-top:2px">≈ ${mo(num)} months</div>` : ''}</div>`;
   const cells = stages.map(([label, a, b]) => {
     const ds = rows.map((r) => daysBetween(r[a], r[b])).filter((d) => d != null && d >= 0);
     return card(median(ds), label, ds.length);
@@ -424,7 +425,7 @@ function renderBreakdown(elId, which, rows, keyFn, groupHdr, sortFn, labelFn) {
   el.innerHTML = `<div class="dist-wrap"><table>
     <thead><tr>${th('key', groupHdr)}${th('concluded', 'Concluded')}${th('conf', 'All Confirmed')}${th('canc', '≥1 Cancelled')}${th('amd', '≥1 Amended')}${th('neu', '≥1 New')}</tr></thead>
     <tbody>${body}</tbody></table></div>
-    <p style="font-size:0.74rem;color:#64748b;margin:6px 0 0">Percentages are of parsed certificates in the group.</p>`;
+    <p style="font-size:0.74rem;color:var(--text-5);margin:6px 0 0">Percentages are of parsed certificates in the group.</p>`;
 }
 function buildBreakdowns(rows) {
   renderBreakdown('by-tc', 'tc', rows, (d) => d.tech_center, 'Technology Area', 'sortTc', (k) => tcCell(k));
@@ -463,8 +464,8 @@ function pageNums(cur, total) {
 // Pager: "Showing X–Y of Z" + Prev / numbered pages / Next.
 function pagerHtml(page, pages, start, end, total) {
   const nums = pageNums(page, pages).map((n) => n === '…'
-    ? '<span style="padding:0 4px;color:#718096">…</span>'
-    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === page ? ';background:#1a3a6b;color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+    ? '<span style="padding:0 4px;color:var(--text-3)">…</span>'
+    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === page ? ';background:var(--brand);color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
   return `<div class="table-pager" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
     <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">

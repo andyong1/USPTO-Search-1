@@ -69,6 +69,17 @@
     .chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 2px 0 12px; font-size: 0.8rem; color: var(--text-2); }
     .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
     .chart-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+    /* Legend swatches set background from the segment hex via data-c (they are not
+       SVG fills, so the base.css chart recolours don't reach them). Recolour the
+       same hexes in dark mode to match the chart bars. */
+    .chart-legend i[data-c="#1a3a6b"] { background: #1a3a6b; }
+    .chart-legend i[data-c="#276749"] { background: #276749; }
+    .chart-legend i[data-c="#c53030"] { background: #c53030; }
+    .chart-legend i[data-c="#ed8936"] { background: #ed8936; }
+    :root[data-theme="dark"] .chart-legend i[data-c="#1a3a6b"] { background: #4f9dff; }
+    :root[data-theme="dark"] .chart-legend i[data-c="#276749"] { background: #34d399; }
+    :root[data-theme="dark"] .chart-legend i[data-c="#c53030"] { background: #f08a8a; }
+    :root[data-theme="dark"] .chart-legend i[data-c="#ed8936"] { background: #fbbf77; }
     .table-filter { width: 100%; max-width: 420px; padding: 9px 12px; border: 1.5px solid var(--border-2); border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; }
     .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
     .pg { padding: 5px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--heading); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
@@ -389,7 +400,7 @@ function buildChart(rows) {
   }
 
   // Volume: stacked bars by outcome.
-  leg.innerHTML = CHART_SEGS.map(([k, c, l]) => `<span><i style="background:${c}"></i>${l} (${totals[k]})</span>`).join('');
+  leg.innerHTML = CHART_SEGS.map(([k, c, l]) => `<span><i data-c="${c}"></i>${l} (${totals[k]})</span>`).join('');
   const top = Math.max(1, ...months.map((m) => map.get(m).total));
   const bw = Math.min(30, (pw / months.length) * 0.6);
   let bars = '', xl = '';

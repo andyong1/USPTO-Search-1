@@ -1,10 +1,99 @@
+/* ── Theme tokens (light default; dark via prefers-color-scheme or an explicit
+   data-theme on <html>) ───────────────────────────────────────────────────────
+   Pages reference these semantic vars instead of hardcoded hex so a single
+   override flips the whole site. theme.js sets data-theme early to avoid a flash.
+   Roles are separated where one legacy hex (#1a3a6b) served both a background
+   (header/button/active nav) and a foreground (headings/links). */
+:root {
+  --page-bg: #f0f4f8;
+  --surface: #ffffff;        /* cards */
+  --surface-2: #f7fafc;      /* subtle fills, KPI tiles, hover rows */
+  --surface-3: #edf2f7;      /* table headers, chips */
+  --border: #e2e8f0;
+  --border-2: #cbd5e0;       /* inputs, stronger dividers */
+  --text: #2d3748;
+  --text-2: #4a5568;
+  --text-3: #718096;
+  --text-4: #94a3b8;
+  --text-5: #64748b;
+  --heading: #1a3a6b;        /* card headings, links (foreground brand) */
+  --link: #1a3a6b;
+  --brand: #1a3a6b;          /* primary buttons, active nav, header bg (background brand) */
+  --brand-hover: #15305a;
+  --header-bg: #1a3a6b;
+  --on-brand: #ffffff;
+  --nav-bg: #e2e8f0;
+  --nav-hover: #cbd5e0;
+  --input-bg: #ffffff;
+  --shadow: rgba(0,0,0,0.1);
+  /* status/badge families */
+  --ok-bg: #c6f6d5; --ok-fg: #276749;
+  --bad-bg: #fed7d7; --bad-fg: #c53030;
+  --warn-bg: #feebc8; --warn-fg: #9c4221;
+  --info-bg: #bee3f8; --info-fg: #2c5282;
+  --accent2-bg: #e9d8fd; --accent2-fg: #553c9a;
+  /* chart palette (read by JS via getComputedStyle) */
+  --chart-1: #1a3a6b; --chart-2: #4f9dff; --chart-3: #34d399; --chart-4: #ed8936;
+  --chart-grid: #e2e8f0; --chart-tick: #718096;
+}
+:root[data-themable][data-theme="dark"] {
+  --page-bg: #0f172a;
+  --surface: #172236;
+  --surface-2: #1c2942;
+  --surface-3: #22314c;
+  --border: #2a3a58;
+  --border-2: #33425f;
+  --text: #e6edf5;
+  --text-2: #c2d0e4;
+  --text-3: #93a4bd;
+  --text-4: #7186a3;
+  --text-5: #8aa0c0;
+  --heading: #79b1f0;
+  --link: #79b1f0;
+  --brand: #2f6fed;
+  --brand-hover: #4f8bf5;
+  --header-bg: #132542;
+  --on-brand: #ffffff;
+  --nav-bg: #22314c;
+  --nav-hover: #2c3f60;
+  --input-bg: #0e1930;
+  --shadow: rgba(0,0,0,0.5);
+  --ok-bg: #14432a; --ok-fg: #86efac;
+  --bad-bg: #4a1d1d; --bad-fg: #fca5a5;
+  --warn-bg: #4a3410; --warn-fg: #fcd383;
+  --info-bg: #12395e; --info-fg: #91c8f5;
+  --accent2-bg: #33265c; --accent2-fg: #c8b6f0;
+  --chart-1: #4f9dff; --chart-2: #7dd3fc; --chart-3: #34d399; --chart-4: #fbbf77;
+  --chart-grid: #2a3a58; --chart-tick: #93a4bd;
+}
+/* Auto dark when the OS prefers it and the user hasn't forced light. */
+@media (prefers-color-scheme: dark) {
+  :root[data-themable]:not([data-theme="light"]) {
+    --page-bg: #0f172a; --surface: #172236; --surface-2: #1c2942; --surface-3: #22314c;
+    --border: #2a3a58; --border-2: #33425f;
+    --text: #e6edf5; --text-2: #c2d0e4; --text-3: #93a4bd; --text-4: #7186a3; --text-5: #8aa0c0;
+    --heading: #79b1f0; --link: #79b1f0; --brand: #2f6fed; --brand-hover: #4f8bf5;
+    --header-bg: #132542; --on-brand: #ffffff; --nav-bg: #22314c; --nav-hover: #2c3f60;
+    --input-bg: #0e1930; --shadow: rgba(0,0,0,0.5);
+    --ok-bg: #14432a; --ok-fg: #86efac; --bad-bg: #4a1d1d; --bad-fg: #fca5a5;
+    --warn-bg: #4a3410; --warn-fg: #fcd383; --info-bg: #12395e; --info-fg: #91c8f5;
+    --accent2-bg: #33265c; --accent2-fg: #c8b6f0;
+    --chart-1: #4f9dff; --chart-2: #7dd3fc; --chart-3: #34d399; --chart-4: #fbbf77;
+    --chart-grid: #2a3a58; --chart-tick: #93a4bd;
+  }
+}
+
+/* Theme toggle control (injected into the header by theme.js). */
+.theme-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.theme-toggle:hover { background: rgba(255,255,255,0.24); }
+
 /* Shared site-nav component styles. Identical across every page that renders the
    top navigation, so they live here (cached once) instead of being copied into each
    page's inline <style>. Page-specific bits — the .site-nav container margin and any
    small-screen overrides — stay inline on each page and override these as needed. */
-.site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: #e2e8f0; color: #1a3a6b; }
-.site-nav a:hover { background: #cbd5e0; }
-.site-nav a.active { background: #1a3a6b; color: #fff; cursor: default; }
+.site-nav a { display: inline-block; text-decoration: none; font-weight: 600; font-size: 0.84rem; padding: 7px 12px; border-radius: 8px; background: var(--nav-bg); color: var(--heading); }
+.site-nav a:hover { background: var(--nav-hover); }
+.site-nav a.active { background: var(--brand); color: var(--on-brand); cursor: default; }
 .nav-section { display: flex; flex-direction: column; gap: 6px; }
-.nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; padding-left: 3px; }
+.nav-section-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-4); padding-left: 3px; }
 .nav-section-links { display: flex; gap: 8px; flex-wrap: wrap; }

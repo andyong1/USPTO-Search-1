@@ -106,6 +106,30 @@
   :root[data-themable]:not([data-theme="light"]) header { background: var(--header-bg); }
 }
 
+/* Native form controls: many pages leave inputs/selects at browser defaults
+   (white box, black text) — those stay white in dark, and dark-bg selects show
+   unreadable black option text. color-scheme flips native chrome (option lists,
+   date pickers, scrollbars) to dark; the explicit rules force the token palette
+   on styled controls. Same colourway as the front page's inputs. */
+:root[data-themable][data-theme="dark"] { color-scheme: dark; }
+:root[data-themable][data-theme="dark"] input,
+:root[data-themable][data-theme="dark"] select,
+:root[data-themable][data-theme="dark"] textarea {
+  background: var(--input-bg); color: var(--text); border-color: var(--border-2);
+}
+:root[data-themable][data-theme="dark"] select option { background: var(--input-bg); color: var(--text); }
+:root[data-themable][data-theme="dark"] input::placeholder,
+:root[data-themable][data-theme="dark"] textarea::placeholder { color: var(--text-4); }
+@media (prefers-color-scheme: dark) {
+  :root[data-themable]:not([data-theme="light"]) { color-scheme: dark; }
+  :root[data-themable]:not([data-theme="light"]) input,
+  :root[data-themable]:not([data-theme="light"]) select,
+  :root[data-themable]:not([data-theme="light"]) textarea {
+    background: var(--input-bg); color: var(--text); border-color: var(--border-2);
+  }
+  :root[data-themable]:not([data-theme="light"]) select option { background: var(--input-bg); color: var(--text); }
+}
+
 /* SVG charts hardcode their colours as presentation attributes. CSS overrides
    presentation attributes, so recolour them by their exact light hex when dark
    (charts are JS-rendered, so the JS-set data-theme guard is enough — no media

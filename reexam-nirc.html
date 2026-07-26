@@ -176,8 +176,10 @@ const OUTCOME_CLASS = (s) => {
   if (/confirm/.test(t)) return 'confirmed';
   return 'other';
 };
-// Analyzed rows only produce a stat when the NIRC stated art-based reasons.
-const COUNTS = (r) => (r.basis === 'reasons-stated' || r.basis === 'as-amended');
+// A row counts toward the operative statistic when the operative art was
+// identified — from the NIRC's own reasons, or (for NIRCs that named no art)
+// from the Office action they deferred to.
+const COUNTS = (r) => (r.basis === 'reasons-stated' || r.basis === 'as-amended' || r.basis === 'final-oa');
 
 let _rows = [];
 document.addEventListener('keydown', (e) => {
@@ -206,15 +208,16 @@ function renderKpis() {
   const operative = covered.filter((r) => (r.match_count || 0) > 0).length;
   const inval = covered.filter((r) => (r.match_invalidating || 0) > 0).length;
   const dist = covered.filter((r) => (r.match_distinguished || 0) > 0).length;
+  const fromOa = covered.filter((r) => r.art_source === 'final-oa').length;
   document.getElementById('kpis').innerHTML =
     `<div class="kpi-strip">
       <div class="kpi"><div class="num">${_rows.length}</div><div class="lbl">NIRCs analyzed</div></div>
-      <div class="kpi"><div class="num">${covered.length}</div><div class="lbl">With art-based reasons</div></div>
+      <div class="kpi"><div class="num">${covered.length}</div><div class="lbl">Operative art identified</div></div>
       <div class="kpi"><div class="num">${pct(operative, covered.length)}%</div><div class="lbl">Request art operative</div></div>
       <div class="kpi"><div class="num">${pct(inval, covered.length)}%</div><div class="lbl">Used to invalidate</div></div>
       <div class="kpi"><div class="num">${pct(dist, covered.length)}%</div><div class="lbl">Distinguished (closest art)</div></div>
     </div>
-    <p class="note">${operative} of ${covered.length} NIRCs with an art-based reasons statement relied on ≥1 reference from the request. ${notStated} further NIRC${notStated === 1 ? '' : 's'} stated no art-based reasons (excluded from the percentages).</p>`;
+    <p class="note">${operative} of ${covered.length} proceedings whose operative art could be identified relied on ≥1 reference from the request${fromOa ? ` (for ${fromOa}, the art was read from the final Office action the NIRC deferred to, not the NIRC itself)` : ''}. ${notStated} further NIRC${notStated === 1 ? '' : 's'} named no art in either the NIRC or its final action (excluded from the percentages).</p>`;
 }
 
 function filtered() {
@@ -230,37 +233,47 @@ function render() {
   const rows = filtered();
   const body = document.getElementById('body');
   if (!rows.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  const OA_LABEL = { 'RXFR..': 'final rejection', 'RXR.NF': 'non-final action' };
   const tr = rows.map((r) => {
     const matchKeys = new Set((r.matches || []).map((m) => m.key));
-    const basisNote = (r.basis === 'not-stated') ? '<div class="note">no art-based reasons stated</div>'
+    const fromOa = r.art_source === 'final-oa';
+    const artNote = fromOa
+      ? `<div class="note">from ${esc(OA_LABEL[r.oa_code] || 'Office action')}${r.oa_date ? ' ' + fmtDate(r.oa_date) : ''}</div>`
       : (r.basis === 'as-amended') ? '<div class="note">confirmed as amended</div>'
-      : (r.basis === 'no-nirc-art') ? '<div class="note">reasons stated, no art cited</div>' : '';
+      : (r.basis === 'no-nirc-art') ? '<div class="note">reasons stated, no art cited</div>'
+      : (r.basis === 'not-stated') ? '<div class="note">no art-based reasons</div>' : '';
     const low = r.ai_confidence === 'low' ? ' <span class="conf-low" title="' + esc(r.ai_note || '') + '">(low confidence)</span>' : '';
+    // The reasons document: the NIRC itself, or the Office action it deferred to.
+    const reasonsDoc = fromOa
+      ? `<div class="note">Reasons in the ${esc(OA_LABEL[r.oa_code] || 'Office action')}</div>${docLinks(r.application_number, r.oa_doc_id)}`
+      : '';
     return `<tr>
       <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
-      <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${low}</td>
+      <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${reasonsDoc}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td>${reqChips(r.req_refs, matchKeys)}</td>
-      <td>${refChips(r.nirc_refs, matchKeys)}${basisNote}</td>
+      <td>${refChips(r.nirc_refs, matchKeys)}${artNote}</td>
       <td>${(r.match_count || 0) > 0 ? refChips(r.matches, null) : '<span class="ext">none</span>'}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Control No.</th><th>NIRC</th><th>Outcome</th>
-      <th>Request art (order SNQs)</th><th>NIRC art (by role)</th><th>Operative overlap</th>
+      <th>Control No.</th><th>NIRC / reasons doc</th><th>Outcome</th>
+      <th>Request art (order SNQs)</th><th>Operative art (by role)</th><th>Operative overlap</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
 }
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 const refList = (refs) => (refs || []).map((r) => r.label + (r.role ? ` [${r.role}]` : '')).join('; ');
 function exportCsv() {
-  const header = ['Control No.', 'NIRC Date', 'Outcome', 'Request Art', 'NIRC Art (by role)', 'Operative Overlap', 'Basis', 'Confidence'];
+  const header = ['Control No.', 'NIRC Date', 'Outcome', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
   const rows = filtered().map((r) => [
     r.application_number, fmtDate(r.nirc_date), r.outcome_summary || '',
-    refList(r.req_refs), refList(r.nirc_refs), refList(r.matches), r.basis || '', r.ai_confidence || '',
+    refList(r.req_refs), refList(r.nirc_refs), refList(r.matches),
+    r.art_source === 'final-oa' ? ('final Office action (' + (r.oa_code || '') + ')') : 'NIRC',
+    r.basis || '', r.ai_confidence || '',
   ]);
-  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 40, 40, 30, 16, 12] });
+  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 40, 40, 30, 18, 16, 12] });
 }
 
 (async function () {

@@ -335,12 +335,12 @@ function buildKpi(rows) {
     ? `<p class="disclaimer" style="color:var(--warn-fg)">${c.unclassified} of ${c.total} not yet classified — run ${needExtract ? '<code>/api/ptab?extract=1</code> then ' : ''}<code>/api/ptab?classify=1</code> (repeat each until done), then reload. Percentages below are of the ${classified} classified so far.</p>`
     : '';
   document.getElementById('kpi').innerHTML = `<div class="kpi-strip">
-    ${card(c.total, outcomeFilter ? 'All Final Written Decisions (clear)' : 'Final Written Decisions', '#1a3a6b', c.unclassified ? c.unclassified + ' pending' : '', '')}
-    ${card(c.po_none, 'Patent Owner Total Wins', '#276749', pct(c.po_none), 'po_none')}
-    ${card(c.petitioner_all, 'Petitioner Total Wins', '#9b2c2c', pct(c.petitioner_all), 'petitioner_all')}
-    ${card(c.partial, 'Partial Invalidation', '#9c4221', pct(c.partial), 'partial')}
-    ${card(c.adverse_judgment, 'Adverse Judgments', '#9b2c2c', pct(c.adverse_judgment), 'adverse_judgment')}
-    ${card(c.settled + c.needs_review + c.other, 'Settled / Review', '#4a5568', 'not in win rates')}
+    ${card(c.total, outcomeFilter ? 'All Final Written Decisions (clear)' : 'Final Written Decisions', 'var(--heading)', c.unclassified ? c.unclassified + ' pending' : '', '')}
+    ${card(c.po_none, 'Patent Owner Total Wins', 'var(--ok-fg)', pct(c.po_none), 'po_none')}
+    ${card(c.petitioner_all, 'Petitioner Total Wins', 'var(--bad-fg)', pct(c.petitioner_all), 'petitioner_all')}
+    ${card(c.partial, 'Partial Invalidation', 'var(--warn-fg)', pct(c.partial), 'partial')}
+    ${card(c.adverse_judgment, 'Adverse Judgments', 'var(--bad-fg)', pct(c.adverse_judgment), 'adverse_judgment')}
+    ${card(c.settled + c.needs_review + c.other, 'Settled / Review', 'var(--text-2)', 'not in win rates')}
   </div>${pending}`;
 }
 

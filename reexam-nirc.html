@@ -194,15 +194,11 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
 });
 
-// Request art: plain text, comma-separated. References also cited in the
-// NIRC/Office action (the overlap) get a black-outline ring.
-function reqArt(refs, matchKeys) {
+// Request art: all references as plain comma-separated text (no rings — the
+// overlap marker lives only in the NIRC/Office-action column).
+function reqArt(refs) {
   if (!Array.isArray(refs) || !refs.length) return '<span class="ext">—</span>';
-  return refs.map((r) => {
-    const isMatch = matchKeys && matchKeys.has(r.key);
-    const title = esc(r.key || '') + (isMatch ? ' — also cited in the NIRC / Office action' : '');
-    return `<span class="art${isMatch ? ' overlap' : ''}" title="${title}">${esc(r.label || r.key || '?')}</span>`;
-  }).join(', ');
+  return refs.map((r) => `<span class="art" title="${esc(r.key || '')}">${esc(r.label || r.key || '?')}</span>`).join(', ');
 }
 // NIRC/Office-action art, grouped by the role it played: invalidating (red),
 // closest art distinguished (blue), everything else plain. Overlap gets a ring.
@@ -286,7 +282,7 @@ function render() {
       <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${reasonsDoc}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td style="text-align:center">${r.oa_count == null ? '<span class="ext">—</span>' : r.oa_count}</td>
-      <td>${reqArt(r.req_refs, matchKeys)}</td>
+      <td>${reqArt(r.req_refs)}</td>
       <td>${nircArt(r.nirc_refs, matchKeys)}${artNote}</td>
     </tr>`;
   }).join('');

@@ -328,16 +328,19 @@ function pagerHtml(page, pages, start, end, total) {
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 const refList = (refs) => (refs || []).map((r) => r.label + (r.role ? ` [${r.role}]` : '')).join('; ');
 function exportCsv() {
-  const header = ['Control No.', 'NIRC Date', 'NIRC Outcome', 'Office Actions Before NIRC', 'Order → NIRC (days)', 'Request Art', 'Operative Art (by role)', 'Operative Overlap', 'Art Source', 'Basis', 'Confidence'];
+  const docUrl = (num, docId) => docId ? `https://andy-ong.com/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF` : '';
+  const header = ['Control No.', 'NIRC Date', 'NIRC Outcome', 'Office Actions Before NIRC', 'Order → NIRC (days)', 'Art Cited in Request', 'Art Cited in NIRC or Final Office Action', 'Overlapping Art', 'Art Source', 'Office Action Date', 'Office Action Link', 'Basis', 'Confidence'];
   const rows = filtered().map((r) => [
     r.application_number, fmtDate(r.nirc_date), r.outcome_summary || '',
     r.oa_count == null ? '' : r.oa_count,
     (daysBetween(r.order_date, r.nirc_date) ?? ''),
     refList(r.req_refs), refList(r.nirc_refs), refList(r.matches),
     r.art_source === 'final-oa' ? ('final Office action (' + (r.oa_code || '') + ')') : 'NIRC',
+    r.art_source === 'final-oa' ? fmtDate(r.oa_date) : '',
+    r.art_source === 'final-oa' ? docUrl(r.application_number, r.oa_doc_id) : '',
     r.basis || '', r.ai_confidence || '',
   ]);
-  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 14, 14, 40, 40, 30, 18, 16, 12] });
+  window.exportXlsx('reexam-nirc-art.xlsx', header, rows, { colWidths: [14, 12, 20, 14, 14, 40, 40, 30, 18, 14, 52, 16, 12] });
 }
 
 (async function () {

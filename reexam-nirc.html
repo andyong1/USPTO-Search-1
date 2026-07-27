@@ -143,9 +143,9 @@
       <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
-      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="render()" aria-label="Filter proceedings" style="margin-top:0" />
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no.…" oninput="nircPage=1;render()" aria-label="Filter proceedings" style="margin-top:0" />
       <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2);cursor:pointer">
-        <input type="checkbox" id="overlap-filter" onchange="render()" /> Show only rows where request art was operative
+        <input type="checkbox" id="overlap-filter" onchange="nircPage=1;render()" /> Show only rows where request art was operative
       </label>
     </div>
     <div class="rolekey" id="rolekey" style="display:none">
@@ -257,12 +257,20 @@ function filtered() {
   return rows;
 }
 
+const NIRC_PAGE_SIZE = 100;
+let nircPage = 1;
 function render() {
   const rows = filtered();
   const body = document.getElementById('body');
   if (!rows.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
+  const total = rows.length;
+  const pageCount = Math.ceil(total / NIRC_PAGE_SIZE);
+  nircPage = Math.min(Math.max(nircPage, 1), pageCount);
+  const start = (nircPage - 1) * NIRC_PAGE_SIZE;
+  const end = Math.min(start + NIRC_PAGE_SIZE, total);
+  const pageItems = rows.slice(start, end);
   const OA_LABEL = { 'RXFR..': 'final rejection', 'RXR.NF': 'non-final action' };
-  const tr = rows.map((r) => {
+  const tr = pageItems.map((r) => {
     const matchKeys = new Set((r.matches || []).map((m) => m.key));
     const fromOa = r.art_source === 'final-oa';
     // Last column shows only the non-OA basis notes; the "reasons live in the
@@ -291,6 +299,30 @@ function render() {
       <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th><th>Office Actions Before NIRC</th>
       <th>Art Cited in Request</th><th>Art Cited in NIRC or Final Office Action</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
+  if (total > NIRC_PAGE_SIZE) body.innerHTML += pagerHtml(nircPage, pageCount, start, end, total);
+}
+function gotoNircPage(delta) { nircPage += delta; render(); }
+function gotoNircPageAbs(n) { nircPage = n; render(); }
+// Windowed page numbers: 1 … (cur-2 … cur+2) … last, with ellipses for gaps.
+function pageNums(cur, total) {
+  const delta = 2, keep = [], out = [];
+  for (let i = 1; i <= total; i++) if (i === 1 || i === total || (i >= cur - delta && i <= cur + delta)) keep.push(i);
+  let prev;
+  for (const i of keep) { if (prev) { if (i - prev === 2) out.push(prev + 1); else if (i - prev > 2) out.push('…'); } out.push(i); prev = i; }
+  return out;
+}
+function pagerHtml(page, pages, start, end, total) {
+  const nums = pageNums(page, pages).map((n) => n === '…'
+    ? '<span style="padding:0 4px;color:var(--text-3)">…</span>'
+    : `<button class="btn-csv" onclick="gotoNircPageAbs(${n})" style="padding:5px 10px${n === page ? ';background:var(--brand);color:#fff' : ''}"${n === page ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+  return `<div class="table-pager" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
+    <span style="font-size:0.82rem;color:var(--text-3)">Showing ${start + 1}–${end} of ${total}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="btn-csv" onclick="gotoNircPage(-1)"${page <= 1 ? ' disabled' : ''}>‹ Prev</button>
+      ${nums}
+      <button class="btn-csv" onclick="gotoNircPage(1)"${page >= pages ? ' disabled' : ''}>Next ›</button>
+    </div>
+  </div>`;
 }
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }

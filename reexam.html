@@ -47,6 +47,7 @@
     .badge.b-inst { background: var(--warn-bg); color: var(--warn-fg); }
     .badge.b-other { background: var(--border); color: var(--text-2); }
     .badge.b-po { background: var(--ok-bg); color: var(--ok-fg); }
+    .badge.b-court { background: var(--surface-3); color: var(--heading); }
     .badge.g-cite { background: var(--surface-3); color: var(--text); }
     .badge.g-art { background: var(--warn-bg); color: var(--warn-fg); }
     .badge.d325y { background: var(--ok-bg); color: var(--ok-fg); }
@@ -570,14 +571,23 @@ function filteredSorted() {
     return sign * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true, sensitivity: 'base' });
   });
 }
+function litText(d) {
+  const cases = Array.isArray(d.lit_cases) ? d.lit_cases : [];
+  if (!cases.length) return d.lit_none_found ? 'None found' : '';
+  return cases.map((c) => {
+    const paren = [c.case_no, c.court].filter(Boolean).join(', ');
+    const st = c.status && c.status !== 'unknown' ? ` [${c.status}]` : '';
+    return (c.caption || '') + (paren ? ` (${paren})` : '') + st;
+  }).join('; ');
+}
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Technology Area', 'Requester'];
+  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Technology Area', 'Requester', 'Related Litigation'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
       v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
-      d.examiner_name, d.group_art_unit, d.tech_center || '', REQUESTER_LABEL[requesterKey(d)]];
+      d.examiner_name, d.group_art_unit, d.tech_center || '', REQUESTER_LABEL[requesterKey(d)], litText(d)];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
@@ -682,6 +692,32 @@ function iprBadge(x) {
   return '<span class="badge b-other">Petition</span>';
 }
 function expandPtab(elm) { const ex = elm.previousElementSibling; if (ex) ex.hidden = false; elm.remove(); }
+// Related litigation from the examiner's RXLITSR search report (reexam_litigation).
+// Compact court badge + open/closed status; full caption on hover. "None found"
+// is an affirmative negative from the report; "—" means no report / not processed.
+function litItem(c) {
+  const label = c.court || c.case_no || '?';
+  const st = c.status === 'open' ? '<span class="badge b-po">open</span>'
+    : c.status === 'closed' ? '<span class="badge b-other">closed</span>' : '';
+  const title = esc([c.caption, c.case_no, c.court].filter(Boolean).join(' · '));
+  return `<div class="ipr-item" title="${title}"><span class="badge b-court">${esc(label)}</span>${st}</div>`;
+}
+function litCell(d) {
+  const cases = Array.isArray(d.lit_cases) ? d.lit_cases : [];
+  const docId = d.lit_doc_id || '';
+  const viewer = docId
+    ? `<div class="doclinks" style="white-space:nowrap;margin-top:4px"><button class="btn-view" onclick="openDocViewer('${esc(d.application_number)}','${esc(docId)}','PDF','Litigation Search Report')">Search report</button></div>`
+    : '';
+  if (!cases.length) {
+    if (d.lit_none_found) return `<span class="badge b-other" title="The examiner's litigation search reported no litigation for this patent">None found</span>${viewer}`;
+    return '<span class="ext">—</span>';
+  }
+  const shown = cases.slice(0, 2).map(litItem).join('');
+  if (cases.length <= 2) return `${shown}${viewer}`;
+  const extra = cases.slice(2).map(litItem).join('');
+  return `${shown}<div class="ipr-extra" hidden>${extra}</div>`
+    + `<a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${cases.length - 2} more</a>${viewer}`;
+}
 // One line per proceeding (trial + short status); no date. Show the 2 most-notable
 // (iprs arrive sorted most-notable first) and tuck the rest behind "+N more".
 function ptabCell(d) {
@@ -744,6 +780,7 @@ function renderTable() {
       <td>${tcCell(d.tech_center)}</td>
       <td>${requesterCell(d)}</td>
       <td>${ptabCell(d)}</td>
+      <td>${litCell(d)}</td>
     </tr>`;
   }).join('');
 
@@ -758,6 +795,7 @@ function renderTable() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester_type')}" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
       <th>Prior / parallel proceedings</th>
+      <th title="District-court litigation from the examiner's RXLITSR search report. Open/closed status is the examiner's snapshot as of the search date, not a live docket. Blank when no search report is on file; court may be blank when the report gave only a docket number.">Related Litigation</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 
   if (total > TABLE_PAGE_SIZE) body.innerHTML += pagerHtml(tablePage, pageCount, start, end, total);

@@ -21,5 +21,7 @@ collect-*.txt
 ocr-check.txt
 # derived petition-decisions data (like snq-cumulative/)
 snq-petition-decisions/
+# local EDIS crawl artifacts for the ITC 337 tracker (regenerated each run)
+itc-work/
 # audit/report exports
 *.docx

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>USITC Section 337 Tracker (internal)</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 22px; }
+    .card h2 { font-size: 1.1rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-5); font-size: 0.85rem; margin-bottom: 14px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 6px 0 4px; }
+    @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.7rem; font-weight: 700; line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: var(--text-5); margin-top: 6px; line-height: 1.3; }
+    .table-filter { width: 100%; max-width: 460px; padding: 9px 12px; border: 1.5px solid var(--border-2); border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; background: var(--surface); color: var(--text); }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .chip { padding: 5px 12px; border: 1px solid var(--border-2); border-radius: 14px; background: var(--surface); color: var(--heading); font-weight: 600; font-size: 0.78rem; cursor: pointer; }
+    .chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .table-wrap { overflow: auto; max-height: 74vh; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 9px 12px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); cursor: pointer; user-select: none; }
+    th:hover { background: var(--border); }
+    td { padding: 9px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: var(--surface-2); }
+    a.link { color: var(--heading); font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .muted { color: var(--text-5); }
+    .parties { font-size: 0.8rem; color: var(--text-4); max-width: 320px; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+    .o-violation_remedy { background: var(--bad-bg); color: var(--bad-fg); }
+    .o-no_violation { background: var(--ok-bg); color: var(--ok-fg); }
+    .o-terminated_settlement { background: var(--accent2-bg); color: var(--accent2-fg); }
+    .o-terminated_other { background: var(--warn-bg); color: var(--warn-fg); }
+    .o-pending { background: var(--surface-3); color: var(--text-2); }
+    .o-unknown { background: var(--border); color: var(--text-2); }
+    .rem { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: var(--brand); color: #fff; }
+    .flag { color: var(--warn-fg); font-weight: 700; cursor: help; }
+    .status-active { color: var(--ok-fg); font-weight: 700; }
+    .table-pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+    .pg { padding: 5px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--heading); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+    .pg:disabled { opacity: 0.45; cursor: default; }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-5); }
+    .disclaimer { font-size: 0.76rem; color: var(--text-4); margin-top: 12px; line-height: 1.5; }
+    .cols-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; align-items: start; }
+    @media (max-width: 1000px) { .cols-2 { grid-template-columns: 1fr; } }
+    .site-nav { margin: 0 0 20px; }
+    .site-nav a { color: var(--heading); font-weight: 600; text-decoration: none; font-size: 0.85rem; }
+    .site-nav a:hover { text-decoration: underline; }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/itc">USITC Section 337 Tracker — Created by A. Ong</a></h1>
+    <p>Electronic Document Information System (EDIS) · edis.usitc.gov · public metadata</p>
+  </div>
+</header>
+
+<div class="container">
+  <nav class="site-nav"><a href="/uspto-search">← USPTO / PTAB / Reexam tools</a></nav>
+
+  <div class="card">
+    <h2>Section 337 investigations</h2>
+    <p class="sub">Import-based unfair-practice (usually patent) investigations at the U.S. International Trade Commission, from the public EDIS catalog. <span id="genat" class="muted"></span></p>
+    <div class="kpi-strip" id="kpis"></div>
+  </div>
+
+  <div class="card">
+    <div class="cols-2">
+      <div>
+        <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, firm…" />
+        <div class="chips" id="outcomeChips"></div>
+        <div class="table-wrap">
+          <table id="tbl">
+            <thead>
+              <tr>
+                <th data-k="public_number">Inv. No.</th>
+                <th data-k="title">Title</th>
+                <th data-k="investigation_phase">Phase</th>
+                <th data-k="status">Status</th>
+                <th data-k="institution_date">Instituted</th>
+                <th data-k="last_doc_date">Last activity</th>
+                <th data-k="outcome">Outcome (heuristic)</th>
+                <th data-k="doc_count">Docs</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="table-pager" id="pager"></div>
+      </div>
+      <div>
+        <h2 style="font-size:1rem">Firm league table</h2>
+        <p class="sub">Investigations in which a firm appears as a filer (public documents; the Commission is excluded). Heuristic — a firm may appear for any party/role.</p>
+        <div class="table-wrap" style="max-height:74vh">
+          <table>
+            <thead><tr><th>Firm</th><th>Invs.</th></tr></thead>
+            <tbody id="firms"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="disclaimer" id="disclaimer"></p>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// The page reads a PRECOMPUTED projection published to a public Vercel Blob by
+// edis-upload.mjs. No serverless function is involved (the site is at Vercel's
+// Hobby 12-function limit) and no active CPU is spent serving this — the Blob is
+// a CDN-served static file. After the FIRST `node edis-upload.mjs`, paste the
+// printed URL here; it is stable across runs.
+const ITC_DATA_URL = "https://zektsojdx4i0uvfy.public.blob.vercel-storage.com/itc/itc-data.json";
+// Dev/testing override: /itc?data=./itc-work/sample-itc-data.json
+const DATA_URL = new URLSearchParams(location.search).get("data") || ITC_DATA_URL;
+
+const OUTCOMES = [
+  ["all", "All"],
+  ["violation_remedy", "Violation + remedy"],
+  ["no_violation", "No violation"],
+  ["terminated_settlement", "Settled"],
+  ["terminated_other", "Terminated (other)"],
+  ["pending", "Pending"],
+  ["unknown", "Unknown"],
+];
+const OUT_LABEL = Object.fromEntries(OUTCOMES.map(([k, v]) => [k, v]));
+
+const state = { all: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function edisUrl(inv) {
+  // Deep link to the investigation's documents in EDIS.
+  return `https://edis.usitc.gov/external/search?investigationNumber=${encodeURIComponent(inv.investigation_number)}`;
+}
+
+function renderKpis(summary) {
+  const cells = [
+    ["Investigations", summary.total],
+    ["Active", summary.active],
+    ["Violation + remedy", summary.violation_remedy],
+    ["Settled", summary.terminated_settlement],
+    ["No violation", summary.no_violation],
+    ["Excl. orders (GEO/LEO)", (summary.geo || 0) + (summary.leo || 0)],
+  ];
+  $("kpis").innerHTML = cells.map(([lbl, n]) => `<div class="kpi"><div class="num">${n ?? 0}</div><div class="lbl">${lbl}</div></div>`).join("");
+}
+
+function renderChips() {
+  $("outcomeChips").innerHTML = OUTCOMES.map(([k, v]) => `<span class="chip ${state.outcome === k ? "on" : ""}" data-o="${k}">${v}</span>`).join("");
+  $("outcomeChips").querySelectorAll(".chip").forEach((c) => c.onclick = () => { state.outcome = c.dataset.o; state.page = 0; apply(); });
+}
+
+function applyFilter() {
+  const q = state.q.toLowerCase().trim();
+  state.filtered = state.all.filter((r) => {
+    if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
+    if (!q) return true;
+    const hay = [r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" ")].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  const dir = state.sortDir, k = state.sortK;
+  const invNum = (r) => { const m = String(r.investigation_number || "").match(/(\d+)\s*$/); return m ? parseInt(m[1], 10) : 0; };
+  state.filtered.sort((a, b) => {
+    if (k === "doc_count") return ((a[k] || 0) - (b[k] || 0)) * dir;
+    // "337-TA-1400" must sort AFTER "337-TA-980" — compare the numeric docket, not the string.
+    if (k === "public_number") return (invNum(a) - invNum(b)) * dir;
+    const x = String(a[k] == null ? "" : a[k]), y = String(b[k] == null ? "" : b[k]);
+    return x.localeCompare(y) * dir;
+  });
+}
+
+function renderRows() {
+  const start = state.page * state.pageSize;
+  const slice = state.filtered.slice(start, start + state.pageSize);
+  if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="8" class="state">No matching investigations.</td></tr>`; }
+  else $("rows").innerHTML = slice.map((r) => {
+    const remedy = r.remedy ? `<span class="rem">${esc(r.remedy)}</span>` : "";
+    const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
+    const parties = (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
+    return `<tr>
+      <td><a class="link" href="${edisUrl(r)}" target="_blank" rel="noopener">${esc(r.public_number || r.investigation_number)}</a></td>
+      <td>${esc(r.title || "")}<div class="parties">${esc(parties)}</div></td>
+      <td>${esc(r.investigation_phase || "")}</td>
+      <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>
+      <td>${esc(r.institution_date || "—")}</td>
+      <td>${esc(r.last_doc_date || "—")}</td>
+      <td><span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}</td>
+      <td>${r.doc_count == null ? "—" : r.doc_count}</td>
+    </tr>`;
+  }).join("");
+  const pages = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
+  $("pager").innerHTML = `<button class="pg" id="prev" ${state.page === 0 ? "disabled" : ""}>‹ Prev</button>
+    <span class="muted">${state.filtered.length} record(s) · page ${state.page + 1} / ${pages}</span>
+    <button class="pg" id="next" ${state.page >= pages - 1 ? "disabled" : ""}>Next ›</button>`;
+  const prev = $("prev"), next = $("next");
+  if (prev) prev.onclick = () => { if (state.page > 0) { state.page--; renderRows(); } };
+  if (next) next.onclick = () => { if (state.page < pages - 1) { state.page++; renderRows(); } };
+}
+
+function renderFirms() {
+  // Aggregate distinct-investigation appearances per firm across the corpus.
+  const byFirm = new Map();
+  for (const r of state.all) for (const f of (r.top_firms || [])) {
+    if (!byFirm.has(f.firm)) byFirm.set(f.firm, new Set());
+    byFirm.get(f.firm).add(r.investigation_number);
+  }
+  const ranked = [...byFirm.entries()].map(([firm, set]) => [firm, set.size]).sort((a, b) => b[1] - a[1]).slice(0, 40);
+  $("firms").innerHTML = ranked.map(([firm, n]) => `<tr><td>${esc(firm)}</td><td>${n}</td></tr>`).join("") || `<tr><td colspan="2" class="state">No firm data yet — run the document crawl.</td></tr>`;
+}
+
+function apply() { applyFilter(); renderChips(); renderRows(); }
+
+function wire() {
+  $("q").oninput = (e) => { state.q = e.target.value; state.page = 0; applyFilter(); renderRows(); };
+  document.querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => {
+    const k = th.dataset.k;
+    if (state.sortK === k) state.sortDir *= -1; else { state.sortK = k; state.sortDir = 1; }
+    state.page = 0; applyFilter(); renderRows();
+  });
+}
+
+async function load() {
+  if (!DATA_URL || DATA_URL === "PASTE_BLOB_URL_HERE") {
+    $("rows").innerHTML = `<tr><td colspan="8" class="state">Not configured yet. Run <code>node edis-fetch.mjs investigations</code> then <code>node edis-upload.mjs</code>, and paste the printed Blob URL into <code>ITC_DATA_URL</code> in itc.html.</td></tr>`;
+    return;
+  }
+  try {
+    const res = await fetch(DATA_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    state.all = data.investigations || [];
+    renderKpis(data.summary || {});
+    if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
+    $("disclaimer").innerHTML = `Source: USITC EDIS public metadata. <b>Outcome, remedy, institution date, and firm/party data are Phase-1 heuristics derived from document types and titles</b> — not from the text of decisions — and precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
+    wire(); renderFirms(); apply();
+  } catch (e) {
+    $("rows").innerHTML = `<tr><td colspan="8" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

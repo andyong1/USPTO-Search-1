@@ -704,19 +704,15 @@ function litItem(c) {
 }
 function litCell(d) {
   const cases = Array.isArray(d.lit_cases) ? d.lit_cases : [];
-  const docId = d.lit_doc_id || '';
-  const viewer = docId
-    ? `<div class="doclinks" style="white-space:nowrap;margin-top:4px"><button class="btn-view" onclick="openDocViewer('${esc(d.application_number)}','${esc(docId)}','PDF','Litigation Search Report')">Search report</button></div>`
-    : '';
   if (!cases.length) {
-    if (d.lit_none_found) return `<span class="badge b-other" title="The examiner's litigation search reported no litigation for this patent">None found</span>${viewer}`;
+    if (d.lit_none_found) return '<span class="badge b-other" title="The examiner\'s litigation search reported no litigation for this patent">None found</span>';
     return '<span class="ext">—</span>';
   }
   const shown = cases.slice(0, 2).map(litItem).join('');
-  if (cases.length <= 2) return `${shown}${viewer}`;
+  if (cases.length <= 2) return shown;
   const extra = cases.slice(2).map(litItem).join('');
   return `${shown}<div class="ipr-extra" hidden>${extra}</div>`
-    + `<a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${cases.length - 2} more</a>${viewer}`;
+    + `<a class="ptab-more" role="button" tabindex="0" onclick="expandPtab(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();expandPtab(this)}">+${cases.length - 2} more</a>`;
 }
 // One line per proceeding (trial + short status); no date. Show the 2 most-notable
 // (iprs arrive sorted most-notable first) and tuck the rest behind "+N more".

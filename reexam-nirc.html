@@ -269,15 +269,17 @@ function render() {
   const tr = rows.map((r) => {
     const matchKeys = new Set((r.matches || []).map((m) => m.key));
     const fromOa = r.art_source === 'final-oa';
-    const artNote = fromOa
-      ? `<div class="note">from ${esc(OA_LABEL[r.oa_code] || 'Office action')}${r.oa_date ? ' ' + fmtDate(r.oa_date) : ''}</div>`
-      : (r.basis === 'as-amended') ? '<div class="note">confirmed as amended</div>'
+    // Last column shows only the non-OA basis notes; the "reasons live in the
+    // Office action" note (with its date + link) sits in the NIRC/reasons-doc column.
+    const artNote =
+        (r.basis === 'as-amended') ? '<div class="note">confirmed as amended</div>'
       : (r.basis === 'no-nirc-art') ? '<div class="note">reasons stated, no art cited</div>'
       : (r.basis === 'not-stated') ? '<div class="note">no art-based reasons</div>' : '';
     const low = r.ai_confidence === 'low' ? ' <span class="conf-low" title="' + esc(r.ai_note || '') + '">(low confidence)</span>' : '';
-    // The reasons document: the NIRC itself, or the Office action it deferred to.
+    // The reasons document: the NIRC itself, or the Office action it deferred to
+    // (with the action's date and its own View/Download links).
     const reasonsDoc = fromOa
-      ? `<div class="note">Reasons in the ${esc(OA_LABEL[r.oa_code] || 'Office action')}</div>${docLinks(r.application_number, r.oa_doc_id)}`
+      ? `<div class="note" style="margin-top:6px">Reasons in the ${esc(OA_LABEL[r.oa_code] || 'Office action')}${r.oa_date ? ' — ' + fmtDate(r.oa_date) : ''}</div>${docLinks(r.application_number, r.oa_doc_id)}`
       : '';
     return `<tr>
       <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>

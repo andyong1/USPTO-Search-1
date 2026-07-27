@@ -5,7 +5,7 @@
 
 import { readFile, rename } from 'node:fs/promises';
 import { sql } from '@vercel/postgres';
-import { setNircFinalOa } from './lib/db.js';
+import { setNircFinalOa, setNircOaMeta } from './lib/db.js';
 
 if (!process.env.POSTGRES_URL) {
   console.error('POSTGRES_URL is not set. Load it from grounds-secrets.env first.');
@@ -35,6 +35,7 @@ let manifest;
 try { manifest = JSON.parse(await readFile(`${DIR}/manifest.json`, 'utf-8')); }
 catch { console.error('No manifest.json — run oa-fetch.mjs first.'); process.exit(1); }
 const reqByApp = new Map(manifest.map((m) => [m.application_number, new Set((m.req_refs || []).map((r) => String(r.key).toLowerCase()))]));
+const metaByApp = new Map(manifest.map((m) => [m.application_number, m]));
 
 let raw;
 try { raw = await readFile(IN, 'utf-8'); }
@@ -54,6 +55,8 @@ for (const line of raw.split(/\r?\n/)) {
   const matches = [];
   for (const k of reqKeys) if (oaByKey.has(k)) { const r = oaByKey.get(k); matches.push({ label: r.label, key: k, role: r.role }); }
   await setNircFinalOa(app, { oa_refs: oaRefs, matches, confidence: clean(o.confidence).toLowerCase() || null, note: clean(o.note).slice(0, 300) || null });
+  const meta = metaByApp.get(app);
+  if (meta && meta.oa_doc_id) await setNircOaMeta(app, meta.oa_doc_id, meta.oa_date, meta.oa_code);
   uploaded++;
   if (matches.length) withMatch++;
   if (matches.some((m) => m.role === 'invalidating')) inval++;

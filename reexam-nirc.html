@@ -51,8 +51,13 @@
     .ref { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 0.76rem; margin: 1px 2px 1px 0; background: var(--surface-3); color: var(--text-2); }
     .ref.invalidating { background: var(--bad-bg); color: var(--bad-fg); }
     .ref.distinguished { background: var(--info-bg); color: var(--info-fg); }
-    .ref.mentioned { background: var(--border); color: var(--text-2); }
-    .ref.match { outline: 2px solid #1a3a6b33; font-weight: 600; }
+    .art { font-size: 0.8rem; color: var(--text-2); }
+    .artgrp { margin-bottom: 7px; } .artgrp:last-child { margin-bottom: 0; }
+    .artgrp-h { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-3); margin-bottom: 3px; }
+    /* Overlap = reference cited in both the request and the NIRC/Office action.
+       A ring in --text (near-black in light, light in dark so it stays visible). */
+    .overlap { box-shadow: 0 0 0 1.5px var(--text); font-weight: 600; }
+    .art.overlap { display: inline-block; border-radius: 999px; padding: 1px 8px; }
     .rolekey { font-size: 0.75rem; color: var(--text-3); margin: 6px 0 0; display: flex; gap: 14px; flex-wrap: wrap; }
     .btn-view { cursor: pointer; font-size: 0.76rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 11px; border-radius: 4px; }
     .btn-view:hover { background: var(--brand-hover); }
@@ -144,10 +149,9 @@
       </label>
     </div>
     <div class="rolekey" id="rolekey" style="display:none">
-      <span><span class="ref invalidating">ref</span> used to invalidate</span>
+      <span><span class="ref invalidating">ref</span> invalidating art</span>
       <span><span class="ref distinguished">ref</span> closest art distinguished</span>
-      <span><span class="ref mentioned">ref</span> mentioned</span>
-      <span><span class="ref match">ref</span> also in the request</span>
+      <span><span class="art overlap">ref</span> cited in both the request and the NIRC / Office action</span>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
   </div>
@@ -190,20 +194,36 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
 });
 
-function refChips(refs, matchKeys) {
+// Request art: plain text, comma-separated. References also cited in the
+// NIRC/Office action (the overlap) get a black-outline ring.
+function reqArt(refs, matchKeys) {
   if (!Array.isArray(refs) || !refs.length) return '<span class="ext">—</span>';
   return refs.map((r) => {
-    const role = r.role || 'mentioned';
     const isMatch = matchKeys && matchKeys.has(r.key);
-    return `<span class="ref ${role}${isMatch ? ' match' : ''}" title="${esc(r.key || '')}${role !== 'mentioned' ? ' — ' + role : ''}">${esc(r.label || r.key || '?')}</span>`;
-  }).join('');
+    const title = esc(r.key || '') + (isMatch ? ' — also cited in the NIRC / Office action' : '');
+    return `<span class="art${isMatch ? ' overlap' : ''}" title="${title}">${esc(r.label || r.key || '?')}</span>`;
+  }).join(', ');
 }
-function reqChips(refs, matchKeys) {
+// NIRC/Office-action art, grouped by the role it played: invalidating (red),
+// closest art distinguished (blue), everything else plain. Overlap gets a ring.
+function nircArt(refs, matchKeys) {
   if (!Array.isArray(refs) || !refs.length) return '<span class="ext">—</span>';
-  return refs.map((r) => {
+  const inval = refs.filter((r) => r.role === 'invalidating');
+  const dist = refs.filter((r) => r.role === 'distinguished');
+  const other = refs.filter((r) => r.role !== 'invalidating' && r.role !== 'distinguished');
+  const chip = (r, cls) => {
     const isMatch = matchKeys && matchKeys.has(r.key);
-    return `<span class="ref${isMatch ? ' match' : ''}" title="${esc(r.key || '')}">${esc(r.label || r.key || '?')}</span>`;
-  }).join('');
+    return `<span class="ref ${cls}${isMatch ? ' overlap' : ''}" title="${esc(r.key || '')}">${esc(r.label || r.key || '?')}</span>`;
+  };
+  const plain = (r) => {
+    const isMatch = matchKeys && matchKeys.has(r.key);
+    return `<span class="art${isMatch ? ' overlap' : ''}" title="${esc(r.key || '')}">${esc(r.label || r.key || '?')}</span>`;
+  };
+  let out = '';
+  if (inval.length) out += `<div class="artgrp"><div class="artgrp-h">Invalidating Art</div>${inval.map((r) => chip(r, 'invalidating')).join('')}</div>`;
+  if (dist.length) out += `<div class="artgrp"><div class="artgrp-h">Closest Art Distinguished</div>${dist.map((r) => chip(r, 'distinguished')).join('')}</div>`;
+  if (other.length) out += `<div class="artgrp"><div class="artgrp-h">Other Cited Art</div>${other.map(plain).join(', ')}</div>`;
+  return out || '<span class="ext">—</span>';
 }
 
 function renderKpis() {
@@ -264,15 +284,14 @@ function render() {
       <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${reasonsDoc}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td style="text-align:center">${r.oa_count == null ? '<span class="ext">—</span>' : r.oa_count}</td>
-      <td>${reqChips(r.req_refs, matchKeys)}</td>
-      <td>${refChips(r.nirc_refs, matchKeys)}${artNote}</td>
-      <td>${(r.match_count || 0) > 0 ? refChips(r.matches, null) : '<span class="ext">none</span>'}</td>
+      <td>${reqArt(r.req_refs, matchKeys)}</td>
+      <td>${nircArt(r.nirc_refs, matchKeys)}${artNote}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th><th>No. of Office Actions</th>
-      <th>Request art (order SNQs)</th><th>Operative art (by role)</th><th>Operative overlap</th>
+      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th><th>Office Actions Before NIRC</th>
+      <th>Art Cited in Request</th><th>Art Cited in NIRC or Final Office Action</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
 }
 

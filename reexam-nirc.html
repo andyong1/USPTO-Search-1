@@ -299,12 +299,13 @@ function render() {
       ? `<div class="note" style="margin-top:6px">Reasons in the ${esc(OA_LABEL[r.oa_code] || 'Office action')}${r.oa_date ? ' — ' + fmtDate(r.oa_date) : ''}</div>${docLinks(r.application_number, r.oa_doc_id)}`
       : '';
     return `<tr>
-      <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a>${r.group_art_unit ? `<div class="note">AU ${esc(r.group_art_unit)}</div>` : ''}</td>
+      <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}">${esc(r.application_number)}</a></td>
       <td>${fmtDate(r.nirc_date)}${docLinks(r.application_number, r.nirc_doc_id)}${reasonsDoc}${low}</td>
       <td><span class="badge ${OUTCOME_CLASS(r.outcome_summary)}">${esc(r.outcome_summary || '—')}</span></td>
       <td style="text-align:center">${r.oa_count == null ? '<span class="ext">—</span>' : r.oa_count}</td>
       <td>${reqArt(r.req_refs)}</td>
       <td>${nircArt(r.nirc_refs, matchKeys)}${artNote}</td>
+      <td style="text-align:center">${r.group_art_unit ? esc(r.group_art_unit) : '<span class="ext">—</span>'}</td>
     </tr>`;
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
@@ -312,7 +313,7 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${nircAriaSort('application_number')}" onclick="sortNirc('application_number')">Control No.${nircArrow('application_number')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${nircAriaSort('nirc_date')}" onclick="sortNirc('nirc_date')">NIRC / reasons doc${nircArrow('nirc_date')}</th>
       <th>NIRC Outcome</th><th>Office Actions Before NIRC</th>
-      <th>Art Cited in Request</th><th>Art Cited in NIRC or Final Office Action</th>
+      <th>Art Cited in Request</th><th>Art Cited in NIRC or Final Office Action</th><th>Art Unit</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
   if (total > NIRC_PAGE_SIZE) body.innerHTML += pagerHtml(nircPage, pageCount, start, end, total);
 }

@@ -122,8 +122,11 @@ function docCell(d) {
     return `<span class="dl-links"><a href="${esc(d.mirrorUrl)}" target="_blank" rel="noopener">View</a><a href="${esc(d.mirrorUrl)}" download>Download</a></span>`;
   }
   if (!isPublic(d)) return `<span class="na">Confidential — not available</span>`;
-  const id = encodeURIComponent(d.id);
-  return `<span class="dl-links"><a href="/api/document?itcdl=${id}&inline=1" target="_blank" rel="noopener">View</a><a href="/api/document?itcdl=${id}">Download</a></span>`;
+  // EDIS blocks server-side downloads (datacenter IP) and anonymous API access
+  // cannot download attachments, so non-mirrored public docs open in EDIS, where
+  // the user downloads via their own Login.gov session. Mirrored docs (above)
+  // download straight from this site.
+  return `<span class="dl-links"><a href="${edisInvUrl()}" target="_blank" rel="noopener" title="Opens this investigation in EDIS — downloading requires signing in to EDIS">On EDIS ↗</a></span>`;
 }
 
 function applyFilter() {
@@ -207,7 +210,7 @@ async function load() {
     const pubCount = state.docs.filter(isPublic).length;
     $("invMeta").innerHTML = `${label} · ${state.docs.length} documents (${pubCount} public / downloadable) · <a href="${edisInvUrl()}" target="_blank" rel="noopener" style="color:var(--heading);font-weight:600">EDIS ↗</a>`;
     $("phases").innerHTML = (data.phases || []).map((p) => `<span class="ph ${p.status === "Active" ? "active" : ""}">${esc(p.phase)}${p.status ? " · " + esc(p.status) : ""}</span>`).join("");
-    $("disclaimer").innerHTML = `Documents and metadata from USITC EDIS. Confidential filings are listed but their contents are not available for download. Downloads stream through this site via an authenticated EDIS session; if a download fails, the server token may need refreshing. Verify anything material against EDIS. Not legal advice.`;
+    $("disclaimer").innerHTML = `Documents and metadata from USITC EDIS. Confidential filings are listed but not downloadable. Documents mirrored to this site download here; the rest open in EDIS, where downloading requires signing in. Verify anything material against EDIS. Not legal advice.`;
     wire(); applyFilter(); renderRows();
   } catch (e) {
     $("invTitle").textContent = INV;

@@ -248,12 +248,25 @@ function renderKpis() {
     <p class="note">${operative} of ${covered.length} proceedings whose operative art could be identified relied on ≥1 reference from the request${fromOa ? ` (for ${fromOa}, the art was read from the final Office action the NIRC deferred to, not the NIRC itself)` : ''}. ${notStated} further NIRC${notStated === 1 ? '' : 's'} named no art in either the NIRC or its final action (excluded from the percentages). ${zeroOa} of ${withOa.length} issued no Office action before the NIRC. Order-to-NIRC timing is measured over ${spans.length} proceedings with a recorded reexam-order date.</p>`;
 }
 
+// Default sort: NIRC date, most recent first. Control No. is also sortable.
+let nircSort = { key: 'nirc_date', dir: 'desc' };
+function sortNirc(key) {
+  if (nircSort.key === key) nircSort.dir = nircSort.dir === 'asc' ? 'desc' : 'asc';
+  else nircSort = { key, dir: key === 'nirc_date' ? 'desc' : 'asc' };
+  nircPage = 1;
+  render();
+}
+const nircArrow = (k) => (nircSort.key === k ? (nircSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+const nircAriaSort = (k) => (nircSort.key === k ? (nircSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
 function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   const onlyOverlap = document.getElementById('overlap-filter').checked;
   let rows = _rows;
   if (onlyOverlap) rows = rows.filter((r) => (r.match_count || 0) > 0);
   if (q) rows = rows.filter((r) => String(r.application_number || '').toLowerCase().includes(q));
+  const dir = nircSort.dir === 'asc' ? 1 : -1;
+  const key = nircSort.key;
+  rows = rows.slice().sort((a, b) => dir * String(a[key] || '').localeCompare(String(b[key] || ''), undefined, { numeric: true }));
   return rows;
 }
 
@@ -296,7 +309,9 @@ function render() {
   }).join('');
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
-      <th>Control No.</th><th>NIRC / reasons doc</th><th>NIRC Outcome</th><th>Office Actions Before NIRC</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${nircAriaSort('application_number')}" onclick="sortNirc('application_number')">Control No.${nircArrow('application_number')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${nircAriaSort('nirc_date')}" onclick="sortNirc('nirc_date')">NIRC / reasons doc${nircArrow('nirc_date')}</th>
+      <th>NIRC Outcome</th><th>Office Actions Before NIRC</th>
       <th>Art Cited in Request</th><th>Art Cited in NIRC or Final Office Action</th>
     </tr></thead><tbody>${tr}</tbody></table></div>`;
   if (total > NIRC_PAGE_SIZE) body.innerHTML += pagerHtml(nircPage, pageCount, start, end, total);

@@ -25,7 +25,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
-  setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments,
+  setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, documentsForDetail,
 } from './lib/itc-db.js';
 
 if (!process.env.POSTGRES_URL) {
@@ -37,6 +37,8 @@ const DIR = 'itc-work';
 const DOC_DIR = `${DIR}/documents`;
 const DERIVED_V = 1;          // bump to force re-derivation of every investigation
 const BLOB_PATH = 'itc/itc-data.json';
+const args = process.argv.slice(2);
+const PUBLISH = !args.includes('--no-blob') && !!process.env.BLOB_READ_WRITE_TOKEN;
 
 // Retry transient network failures (common through an SSL-inspection proxy that
 // intermittently drops rapid TLS connections) instead of aborting the whole run.
@@ -129,20 +131,50 @@ async function loadCatalogMaps() {
   const catalog = JSON.parse(await readFile(`${DIR}/investigations.json`, 'utf-8'));
   const phasesByNumber = new Map();
   const statusByKey = new Map();
+  const metaByNumber = new Map();     // number → { publicNumber, title, phases[] } for the detail blob header
   for (const inv of catalog) {
     if (!phasesByNumber.has(inv.number)) phasesByNumber.set(inv.number, new Set());
     phasesByNumber.get(inv.number).add(inv.phase);
     statusByKey.set(`${inv.number} ${inv.phase}`, inv.status);
+    if (!metaByNumber.has(inv.number)) metaByNumber.set(inv.number, { publicNumber: null, title: null, phases: [] });
+    const meta = metaByNumber.get(inv.number);
+    meta.publicNumber = meta.publicNumber || inv.publicNumber || null;
+    // Prefer the shortest title (the base Violation-phase title is the cleanest).
+    if (inv.title && (!meta.title || inv.title.length < meta.title.length)) meta.title = inv.title;
+    meta.phases.push({ phase: inv.phase, status: inv.status, docket: inv.docket });
   }
-  return { phasesByNumber, statusByKey };
+  return { phasesByNumber, statusByKey, metaByNumber };
+}
+
+// Publish one investigation's document list to itc/inv/<number>.json for the
+// detail page. mirrorUrl is null now (mirror-ready): if key PDFs are later
+// mirrored to Blob, the detail page prefers mirrorUrl over the download proxy.
+async function publishInvestigationDocs(number, meta) {
+  const docs = await documentsForDetail(number);
+  const payload = {
+    investigationNumber: number,
+    publicNumber: meta ? meta.publicNumber : null,
+    title: meta ? meta.title : null,
+    phases: meta ? meta.phases : [],
+    generatedAt: new Date().toISOString(),
+    documents: docs.map((d) => ({
+      id: d.id, phase: d.investigation_phase, type: d.document_type, title: d.document_title,
+      security: d.security_level, firm: d.firm_organization, filedBy: d.filed_by,
+      onBehalfOf: d.on_behalf_of, date: d.received_date || d.document_date, mirrorUrl: null,
+    })),
+  };
+  await put(`itc/inv/${number}.json`, JSON.stringify(payload), {
+    access: 'public', contentType: 'application/json',
+    addRandomSuffix: false, allowOverwrite: true, cacheControlMaxAge: 300,
+  });
 }
 
 // Re-derive heuristics for the given investigation numbers from documents ALREADY
 // in Neon. Each number is retried on transient errors and isolated in try/catch,
 // so a blip on one investigation never aborts the run.
 async function deriveNumbers(numbers) {
-  const { phasesByNumber, statusByKey } = await loadCatalogMaps();
-  let derived = 0, failed = 0; const errs = [];
+  const { phasesByNumber, statusByKey, metaByNumber } = await loadCatalogMaps();
+  let derived = 0, failed = 0, published = 0; const errs = [];
   let i = 0;
   for (const number of numbers) {
     i++;
@@ -161,11 +193,13 @@ async function deriveNumbers(numbers) {
         return c;
       });
       derived += n;
+      // Publish this investigation's document list for the detail page.
+      if (PUBLISH) { await retry(() => publishInvestigationDocs(number, metaByNumber.get(number))); published++; }
     } catch (e) {
       failed++;
       if (errs.length < 8) errs.push({ number, error: String((e && e.message) || e) });
     }
-    if (i % 25 === 0 || i === numbers.length) process.stdout.write(`\r  derived ${i}/${numbers.length} investigation(s)…`);
+    if (i % 25 === 0 || i === numbers.length) process.stdout.write(`\r  derived ${i}/${numbers.length}, published ${published} detail blob(s)…`);
   }
   process.stdout.write('\n');
   if (failed) console.log(`  ${failed} investigation(s) failed after retries:`, errs);
@@ -231,7 +265,6 @@ async function publish() {
 }
 
 // ── Entry ────────────────────────────────────────────────────────────
-const args = process.argv.slice(2);
 try {
   if (args.includes('--derive-only')) {
     const numbers = await numbersWithDocuments();

@@ -153,9 +153,9 @@ const state = { all: [], filtered: [], q: "", outcome: "all", sortK: "public_num
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-function edisUrl(inv) {
-  // Deep link to the investigation's documents in EDIS.
-  return `https://edis.usitc.gov/external/search?investigationNumber=${encodeURIComponent(inv.investigation_number)}`;
+function detailUrl(inv) {
+  // On-site investigation detail page (document list + downloads).
+  return `/itc-investigation?inv=${encodeURIComponent(inv.investigation_number)}`;
 }
 
 function renderKpis(summary) {
@@ -203,7 +203,7 @@ function renderRows() {
     const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
     const parties = (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
     return `<tr>
-      <td><a class="link" href="${edisUrl(r)}" target="_blank" rel="noopener">${esc(r.public_number || r.investigation_number)}</a></td>
+      <td><a class="link" href="${detailUrl(r)}">${esc(r.public_number || r.investigation_number)}</a></td>
       <td>${esc(r.title || "")}<div class="parties">${esc(parties)}</div></td>
       <td>${esc(r.investigation_phase || "")}</td>
       <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>

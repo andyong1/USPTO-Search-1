@@ -92,7 +92,90 @@ function errorPageHtml(status) {
 </body></html>`;
 }
 
+// ── EDIS (USITC Section 337) download proxy ────────────────────────────
+// Streams a public EDIS document attachment through this function using a
+// Login.gov Bearer token (EDIS_TOKEN) so /itc-investigation download links stay
+// on-site. The attachment LIST is anonymous; only the file stream needs the
+// token. Mirror-ready: the detail page prefers a Blob mirror_url and only falls
+// back to this proxy. EDIS tokens expire (Login.gov, no programmatic refresh),
+// so a 401/403 here means the server token must be refreshed.
+//   GET /api/document?itcdl=<docId>[&att=<attachmentId>][&inline=1]
+const EDIS = 'https://edis.usitc.gov/data';
+const XENT = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
+const xdecode = (s) => s == null ? null : s
+  .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+  .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+  .replace(/&(amp|lt|gt|quot|apos);/g, (m) => XENT[m]);
+
+function parseAttachments(xml) {
+  const out = [];
+  const re = /<attachment>([\s\S]*?)<\/attachment>/g;
+  let m;
+  while ((m = re.exec(xml)) !== null) {
+    const b = m[1];
+    const g = (t) => { const mm = b.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`)); return mm ? xdecode(mm[1].trim()) : null; };
+    out.push({ id: (g('id') || '').replace(/[^0-9]/g, ''), title: g('title'), fileSize: g('fileSize'), pageCount: g('pageCount') });
+  }
+  return out.filter((a) => a.id);
+}
+
+async function itcDownload(req, res) {
+  const token = process.env.EDIS_TOKEN;
+  const docId = String(req.query.itcdl || '').replace(/[^0-9]/g, '');
+  const attId = String(req.query.att || '').replace(/[^0-9]/g, '');
+  const inline = String(req.query.inline || '') === '1';
+  if (!docId) { res.status(400).json({ error: 'itcdl (document id) is required.' }); return; }
+
+  // 1) Resolve the document's attachment(s) — anonymous, no token needed.
+  let attachments;
+  try {
+    const r = await fetchHeaders(`${EDIS}/attachment/${docId}`, { headers: { Accept: 'application/xml' } }, 15000);
+    const xml = await r.text();
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    attachments = parseAttachments(xml);
+  } catch (e) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(502).json({ error: 'Could not resolve EDIS attachments.', detail: clientErrorDetail(e) });
+    return;
+  }
+  if (!attachments.length) { res.status(404).json({ error: 'No attachments found for this document.' }); return; }
+
+  // Pick one: explicit att param, or the sole attachment. If several and none
+  // chosen, return the list so the page can present a picker (no token used).
+  let chosen = attId ? attachments.find((a) => a.id === attId) : (attachments.length === 1 ? attachments[0] : null);
+  if (!chosen) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json({ multiple: true, documentId: docId, attachments });
+    return;
+  }
+
+  // 2) Stream the file with the Bearer token.
+  if (!token) { res.setHeader('Cache-Control', 'no-store'); res.status(503).json({ error: 'EDIS downloads are unavailable right now (server token not configured).' }); return; }
+  let up = null;
+  try { up = await fetchHeaders(`${EDIS}/download/${docId}/${chosen.id}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/pdf' } }, CONNECT_TIMEOUT_MS); }
+  catch (e) { res.setHeader('Cache-Control', 'no-store'); res.status(504).json({ error: 'EDIS download timed out.', detail: clientErrorDetail(e) }); return; }
+  if (up.status === 401 || up.status === 403) { res.setHeader('Cache-Control', 'no-store'); res.status(502).json({ error: 'EDIS authorization failed — the server token has likely expired and needs to be refreshed.' }); return; }
+  if (!up.ok) { res.setHeader('Cache-Control', 'no-store'); res.status(502).json({ error: `EDIS download failed: HTTP ${up.status}` }); return; }
+
+  const base = (chosen.title || `edis-${docId}-${chosen.id}`).replace(/[^A-Za-z0-9._ -]/g, '_').slice(0, 120) || `edis-${docId}`;
+  const fname = /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+  res.setHeader('Content-Type', up.headers.get('content-type') || 'application/pdf');
+  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${fname}"`);
+  const len = up.headers.get('content-length'); if (len) res.setHeader('Content-Length', len);
+  // Public EDIS documents are immutable — cache at the edge so repeat downloads
+  // don't re-hit EDIS or re-spend the token.
+  res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+  res.statusCode = 200;
+  if (!up.body) { res.end(Buffer.from(await up.arrayBuffer())); return; }
+  const ns = Readable.fromWeb(up.body);
+  ns.on('error', () => { try { res.end(); } catch { /* already closed */ } });
+  ns.pipe(res);
+}
+
 export default async function handler(req, res) {
+  // EDIS Section 337 download proxy (independent of the USPTO key path below).
+  if (req.query.itcdl) { await itcDownload(req, res); return; }
+
   const apiKey = process.env.USPTO_API_KEY;
   if (!apiKey) { res.status(500).json({ error: 'Server missing USPTO_API_KEY.' }); return; }
 

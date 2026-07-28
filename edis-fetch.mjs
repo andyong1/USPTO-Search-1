@@ -65,6 +65,17 @@ function publicNumber(title) {
   const m = String(title || '').match(/337-TA-\d+/i);
   return m ? m[0].toUpperCase() : null;
 }
+// The public identifier. Pre-institution matters are EDIS DOCKET numbers
+// ("DN 3926"), not 337-TA investigations — EDIS mislabels them "337-TA-<docket>"
+// in the title. A record is a docket when its number's numeric part equals the
+// docket (EDIS reuses the docket as the number pre-institution) or the status is
+// Preinstitution — covers both still-pending and withdrawn-before-institution.
+function derivePublicNumber(r) {
+  const x = String(r.investigationNumber || '').split('-')[1] || '';
+  const isDocket = (r.docketNumber && x === String(r.docketNumber)) || r.investigationStatus === 'Preinstitution';
+  if (isDocket) return r.docketNumber ? `DN ${r.docketNumber}` : (x ? `DN ${x}` : null);
+  return publicNumber(r.investigationTitle);
+}
 
 async function getXml(url, { tries = 4 } = {}) {
   for (let attempt = 1; attempt <= tries; attempt++) {
@@ -124,7 +135,7 @@ async function crawlInvestigations() {
     title: r.investigationTitle,
     type: r.investigationType,
     docket: r.docketNumber,
-    publicNumber: publicNumber(r.investigationTitle),
+    publicNumber: derivePublicNumber(r),
     // Keep only real 337 dockets ("337-<digits>"); the Sec 337 feed also returns
     // malformed/administrative test records (e.g. "x337-3483x", "NR-004", "MISC-999").
   })).filter((i) => i.phase && /^337-\d+$/.test(i.number || ''));

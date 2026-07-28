@@ -158,6 +158,17 @@ function detailUrl(inv) {
   return `/itc-investigation?inv=${encodeURIComponent(inv.investigation_number)}`;
 }
 
+// Pre-institution matters are EDIS docket numbers (DN xxxx), not instituted
+// 337-TA investigations (EDIS misleadingly puts "337-TA-<docket>" in their title).
+// A record is a docket when its number's numeric part equals the docket number
+// (EDIS reuses the docket as the number pre-institution), or status is
+// Preinstitution — covers both still-pending and withdrawn-before-institution.
+function displayNumber(r) {
+  const x = String(r.investigation_number || "").split("-")[1] || "";
+  const isDN = (r.docket_number && x === String(r.docket_number)) || r.status === "Preinstitution";
+  return isDN ? "DN " + (r.docket_number || x) : (r.public_number || r.investigation_number);
+}
+
 function renderKpis(summary) {
   const cells = [
     ["Investigations", summary.total],
@@ -181,7 +192,7 @@ function applyFilter() {
   state.filtered = state.all.filter((r) => {
     if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
     if (!q) return true;
-    const hay = [r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" ")].join(" ").toLowerCase();
+    const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" ")].join(" ").toLowerCase();
     return hay.includes(q);
   });
   const dir = state.sortDir, k = state.sortK;
@@ -204,7 +215,7 @@ function renderRows() {
     const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
     const parties = (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
     return `<tr>
-      <td><a class="link" href="${detailUrl(r)}">${esc(r.public_number || r.investigation_number)}</a></td>
+      <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
       <td>${esc(r.title || "")}<div class="parties">${esc(parties)}</div></td>
       <td>${esc(r.investigation_phase || "")}</td>
       <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>

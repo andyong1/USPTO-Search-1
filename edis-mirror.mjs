@@ -20,10 +20,12 @@
 //   node edis-mirror.mjs                 # mirror all pending key docs
 //   node edis-mirror.mjs --inv 337-1000  # just one investigation
 //   node edis-mirror.mjs --limit 100     # cap this run
-// Then: node edis-upload.mjs --derive-only   # republish per-inv blobs with mirrorUrl
+// It republishes the affected investigations' detail blobs itself, so the mirror
+// links go live immediately — no edis-upload step needed afterward.
 
 import { put } from '@vercel/blob';
 import { keyPublicDocsToMirror, countKeyPublicDocsToMirror, setDocumentMirror } from './lib/itc-db.js';
+import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 
 for (const v of ['POSTGRES_URL', 'BLOB_READ_WRITE_TOKEN', 'EDIS_TOKEN']) {
   if (!process.env[v]) { console.error(`${v} is not set. Load grounds-secrets.env (and set EDIS_TOKEN) first.`); process.exit(1); }
@@ -115,12 +117,13 @@ console.log(`${pending} key public document(s) pending mirror${INV ? ` for ${INV
 const docs = await keyPublicDocsToMirror(Math.min(MAX, pending || MAX), INV);
 
 let ok = 0, empty = 0, failed = 0, bytes = 0; const errs = [];
+const touched = new Set();     // investigations whose detail blob needs a mirror-link refresh
 for (let i = 0; i < docs.length; i++) {
   const d = docs[i];
   try {
     const r = await retry(() => mirrorDoc(d.id));
     await setDocumentMirror(d.id, r.url, r.attId, r.size);
-    if (r.url) { ok++; bytes += r.size || 0; } else empty++;
+    if (r.url) { ok++; bytes += r.size || 0; touched.add(d.investigation_number); } else empty++;
   } catch (e) {
     failed++;
     const msg = String((e && e.message) || e);
@@ -135,4 +138,16 @@ for (let i = 0; i < docs.length; i++) {
 process.stdout.write('\n');
 if (errs.length) console.log('Errors:', errs);
 console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(1)} MB), ${empty} had no downloadable file, ${failed} failed.`);
-console.log(ok ? 'Next: node edis-upload.mjs --derive-only  (republish per-investigation blobs with the new mirror links)' : '');
+
+// Republish ONLY the touched investigations' detail blobs (fast — no full pass),
+// so the new mirror links go live immediately without re-deriving everything.
+if (touched.size) {
+  let metaByNumber = new Map();
+  try { ({ metaByNumber } = await loadCatalogMaps('itc-work')); } catch { /* header meta optional */ }
+  let rp = 0;
+  for (const number of touched) {
+    try { await publishInvestigationDocs(number, metaByNumber.get(number)); rp++; }
+    catch (e) { console.error(`  republish ${number} failed: ${(e && e.message) || e}`); }
+  }
+  console.log(`Republished ${rp} investigation detail blob(s) with mirror links — no further step needed.`);
+}

@@ -38,9 +38,14 @@
     .sec { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .sec-public { background: var(--ok-bg); color: var(--ok-fg); }
     .sec-conf { background: var(--warn-bg); color: var(--warn-fg); }
-    .dl-links { display: inline-flex; gap: 12px; white-space: nowrap; }
-    .dl-links a { color: var(--heading); font-weight: 600; text-decoration: none; }
-    .dl-links a:hover { text-decoration: underline; }
+    .dl-links { display: inline-flex; gap: 8px; white-space: nowrap; align-items: center; }
+    .btn-view, .btn-dl { display: inline-block; cursor: pointer; font-size: 0.78rem; font-weight: 600; border: none; padding: 4px 12px; border-radius: 5px; text-decoration: none; }
+    .btn-view { color: #fff; background: var(--brand); }
+    .btn-view:hover { background: var(--brand-hover); }
+    .btn-dl { color: var(--heading); background: var(--border); }
+    .btn-dl:hover { background: var(--border-2); }
+    .edis-link { font-size: 0.8rem; color: var(--text-5); font-weight: 600; text-decoration: none; }
+    .edis-link:hover { text-decoration: underline; }
     .na { color: var(--text-5); font-size: 0.8rem; }
     .state { text-align: center; padding: 40px 20px; color: var(--text-5); }
     .disclaimer { font-size: 0.76rem; color: var(--text-4); margin-top: 12px; line-height: 1.5; }
@@ -119,14 +124,14 @@ function edisInvUrl() { return `https://edis.usitc.gov/external/search?investiga
 // documents open an on-site picker page served by the proxy.
 function docCell(d) {
   if (d.mirrorUrl) {
-    return `<span class="dl-links"><a href="${esc(d.mirrorUrl)}" target="_blank" rel="noopener">View</a><a href="${esc(d.mirrorUrl)}" download>Download</a></span>`;
+    return `<span class="dl-links"><a class="btn-view" href="${esc(d.mirrorUrl)}" target="_blank" rel="noopener">View</a><a class="btn-dl" href="${esc(d.mirrorUrl)}" download>Download</a></span>`;
   }
   if (!isPublic(d)) return `<span class="na">Confidential — not available</span>`;
   // EDIS blocks server-side downloads (datacenter IP) and anonymous API access
   // cannot download attachments, so non-mirrored public docs open in EDIS, where
   // the user downloads via their own Login.gov session. Mirrored docs (above)
-  // download straight from this site.
-  return `<span class="dl-links"><a href="${edisInvUrl()}" target="_blank" rel="noopener" title="Opens this investigation in EDIS — downloading requires signing in to EDIS">On EDIS ↗</a></span>`;
+  // download straight from this site as buttons.
+  return `<a class="edis-link" href="${edisInvUrl()}" target="_blank" rel="noopener" title="Opens this investigation in EDIS — downloading requires signing in to EDIS">On EDIS ↗</a>`;
 }
 
 function applyFilter() {

@@ -154,6 +154,7 @@ const OUTCOMES = [
   ["terminated_other", "Terminated (other)"],
   ["pending", "Pending"],
   ["unknown", "Unknown"],
+  ["ai", "AI-classified"],
 ];
 const OUT_LABEL = Object.fromEntries(OUTCOMES.map(([k, v]) => [k, v]));
 
@@ -221,7 +222,8 @@ function renderChips() {
 function applyFilter() {
   const q = state.q.toLowerCase().trim();
   state.filtered = state.all.filter((r) => {
-    if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
+    if (state.outcome === "ai") { if (!r.ai_disposition) return false; }
+    else if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
     if (!q) return true;
     const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" "), AI_LABEL[r.ai_disposition] || "", r.ai_note || ""].join(" ").toLowerCase();
     return hay.includes(q);

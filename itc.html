@@ -47,6 +47,14 @@
     .o-terminated_other { background: var(--warn-bg); color: var(--warn-fg); }
     .o-pending { background: var(--surface-3); color: var(--text-2); }
     .o-unknown { background: var(--border); color: var(--text-2); }
+    .ai-violation_found, .ai-terminated_default { background: var(--bad-bg); color: var(--bad-fg); }
+    .ai-no_violation { background: var(--ok-bg); color: var(--ok-fg); }
+    .ai-terminated_settlement, .ai-terminated_consent, .ai-terminated_arbitration { background: var(--accent2-bg); color: var(--accent2-fg); }
+    .ai-terminated_withdrawal, .ai-terminated_other { background: var(--warn-bg); color: var(--warn-fg); }
+    .ai-pending { background: var(--surface-3); color: var(--text-2); }
+    .aitag { font-size: 0.6rem; font-weight: 700; color: var(--text-5); margin-left: 4px; letter-spacing: 0.04em; }
+    .conf { font-size: 0.68rem; margin-left: 2px; color: var(--text-5); cursor: help; }
+    .disagree { color: var(--warn-fg); font-weight: 700; cursor: help; margin-left: 3px; }
     .rem { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: var(--brand); color: #fff; }
     .flag { color: var(--warn-fg); font-weight: 700; cursor: help; }
     .status-active { color: var(--ok-fg); font-weight: 700; }
@@ -103,7 +111,7 @@
                 <th data-k="status">Status</th>
                 <th data-k="institution_date">Instituted</th>
                 <th data-k="last_doc_date">Last activity</th>
-                <th data-k="outcome">Outcome (heuristic)</th>
+                <th data-k="outcome">Outcome</th>
                 <th data-k="doc_count">Docs</th>
               </tr>
             </thead>
@@ -149,6 +157,28 @@ const OUTCOMES = [
 ];
 const OUT_LABEL = Object.fromEntries(OUTCOMES.map(([k, v]) => [k, v]));
 
+// AI (text-based) outcome labels + coarse categories to flag AI-vs-heuristic
+// disagreement. The AI outcome is read from the Commission opinion/decision text.
+const AI_LABEL = { violation_found: "Violation found", no_violation: "No violation", terminated_settlement: "Settled", terminated_consent: "Consent order", terminated_default: "Default", terminated_withdrawal: "Withdrawn", terminated_arbitration: "Arbitration", terminated_other: "Terminated", pending: "Pending" };
+const coarseAi = (d) => ({ violation_found: "violation", terminated_default: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_consent: "settled", terminated_withdrawal: "terminated", terminated_arbitration: "terminated", terminated_other: "terminated", pending: "pending" }[d] || "");
+const coarseHeur = (o) => ({ violation_remedy: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_other: "terminated", pending: "pending", unknown: "" }[o] || "");
+const CONF_MARK = { medium: "~", low: "?" };
+
+// Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip,
+// and an "AI" tag) when present; else the caption heuristic. Flags disagreement.
+function outcomeCell(r) {
+  if (r.ai_disposition) {
+    const rems = (r.ai_remedies || []).map((x) => `<span class="rem">${esc(x)}</span>`).join("");
+    const conf = CONF_MARK[r.ai_confidence] ? `<span class="conf" title="AI confidence: ${esc(r.ai_confidence)}">${CONF_MARK[r.ai_confidence]}</span>` : "";
+    const ca = coarseAi(r.ai_disposition), ch = coarseHeur(r.outcome);
+    const disagree = (ca && ch && ca !== ch) ? `<span class="disagree" title="AI: ${esc(AI_LABEL[r.ai_disposition])} · caption heuristic: ${esc(OUT_LABEL[r.outcome] || r.outcome)}">≠</span>` : "";
+    return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}<span class="aitag" title="Classified by AI from the Commission opinion/decision text">AI</span>${disagree}`;
+  }
+  const remedy = r.remedy ? `<span class="rem">${esc(r.remedy)}</span>` : "";
+  const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
+  return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
+}
+
 const state = { all: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -178,6 +208,7 @@ function renderKpis(summary) {
     ["No violation", summary.no_violation],
     ["General excl. (GEO)", summary.geo || 0],
     ["Limited excl. (LEO)", summary.leo || 0],
+    ["AI outcomes", summary.ai_classified || 0],
   ];
   $("kpis").innerHTML = cells.map(([lbl, n]) => `<div class="kpi"><div class="num">${n ?? 0}</div><div class="lbl">${lbl}</div></div>`).join("");
 }
@@ -192,7 +223,7 @@ function applyFilter() {
   state.filtered = state.all.filter((r) => {
     if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
     if (!q) return true;
-    const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" ")].join(" ").toLowerCase();
+    const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" "), AI_LABEL[r.ai_disposition] || "", r.ai_note || ""].join(" ").toLowerCase();
     return hay.includes(q);
   });
   const dir = state.sortDir, k = state.sortK;
@@ -211,8 +242,6 @@ function renderRows() {
   const slice = state.filtered.slice(start, start + state.pageSize);
   if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="8" class="state">No matching investigations.</td></tr>`; }
   else $("rows").innerHTML = slice.map((r) => {
-    const remedy = r.remedy ? `<span class="rem">${esc(r.remedy)}</span>` : "";
-    const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
     const parties = (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
     return `<tr>
       <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
@@ -221,7 +250,7 @@ function renderRows() {
       <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>
       <td>${esc(r.institution_date || "—")}</td>
       <td>${esc(r.last_doc_date || "—")}</td>
-      <td><span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}</td>
+      <td>${outcomeCell(r)}</td>
       <td>${r.doc_count == null ? "—" : r.doc_count}</td>
     </tr>`;
   }).join("");
@@ -285,7 +314,7 @@ async function load() {
     state.all = data.investigations || [];
     renderKpis(data.summary || {});
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
-    $("disclaimer").innerHTML = `Source: USITC EDIS public metadata. <b>Outcome, remedy, institution date, and firm/party data are Phase-1 heuristics derived from document types and titles</b> — not from the text of decisions — and precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
+    $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderFirms(); apply();
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="8" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;

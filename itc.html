@@ -165,7 +165,8 @@ function renderKpis(summary) {
     ["Violation + remedy", summary.violation_remedy],
     ["Settled", summary.terminated_settlement],
     ["No violation", summary.no_violation],
-    ["Excl. orders (GEO/LEO)", (summary.geo || 0) + (summary.leo || 0)],
+    ["General excl. (GEO)", summary.geo || 0],
+    ["Limited excl. (LEO)", summary.leo || 0],
   ];
   $("kpis").innerHTML = cells.map(([lbl, n]) => `<div class="kpi"><div class="num">${n ?? 0}</div><div class="lbl">${lbl}</div></div>`).join("");
 }

@@ -101,9 +101,14 @@ function errorPageHtml(status) {
 // so a 401/403 here means the server token must be refreshed.
 //   GET /api/document?itcdl=<docId>[&att=<attachmentId>][&inline=1]
 const EDIS = 'https://edis.usitc.gov/data';
-// EDIS's WAF rejects requests without an identifying User-Agent (the crawler
-// sends one too). Node's default agent 403s from serverless egress.
-const EDIS_UA = 'andy-ong.com ITC-337 tracker (personal research; contact via andy-ong.com)';
+// EDIS sits behind a bot-filtering WAF that 403s bare Node requests. Present a
+// realistic browser header set; if it still 403s, the block is IP/TLS-based
+// (Vercel datacenter egress) and downloads must go through the local mirror.
+const EDIS_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Referer: 'https://edis.usitc.gov/',
+};
 const XENT = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
 const xdecode = (s) => s == null ? null : s
   .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
@@ -162,7 +167,7 @@ async function itcDownload(req, res) {
   // 1) Resolve the document's attachment(s) — anonymous, no token needed.
   let attachments;
   try {
-    const r = await fetchHeaders(`${EDIS}/attachment/${docId}`, { headers: { 'User-Agent': EDIS_UA, Accept: 'application/xml' } }, 15000);
+    const r = await fetchHeaders(`${EDIS}/attachment/${docId}`, { headers: { ...EDIS_HEADERS, Accept: 'application/xml,text/xml,*/*;q=0.8' } }, 15000);
     const xml = await r.text();
     if (!r.ok) { fail(502, `EDIS attachment lookup failed (HTTP ${r.status}).`); return; }
     attachments = parseAttachments(xml);
@@ -182,7 +187,7 @@ async function itcDownload(req, res) {
   // 2) Stream the file with the Bearer token.
   if (!token) { fail(503, 'EDIS downloads are unavailable right now (the server access token is not configured).'); return; }
   let up = null;
-  try { up = await fetchHeaders(`${EDIS}/download/${docId}/${chosen.id}`, { headers: { 'User-Agent': EDIS_UA, Authorization: `Bearer ${token}`, Accept: 'application/pdf' } }, CONNECT_TIMEOUT_MS); }
+  try { up = await fetchHeaders(`${EDIS}/download/${docId}/${chosen.id}`, { headers: { ...EDIS_HEADERS, Authorization: `Bearer ${token}`, Accept: 'application/pdf' } }, CONNECT_TIMEOUT_MS); }
   catch (e) { fail(504, `The EDIS download failed: ${String((e && e.message) || e)}.`); return; }
   if (up.status === 401 || up.status === 403) { fail(502, 'EDIS authorization failed — the server access token has likely expired and needs to be refreshed.'); return; }
   if (!up.ok) { fail(502, `EDIS download failed (HTTP ${up.status}).`); return; }

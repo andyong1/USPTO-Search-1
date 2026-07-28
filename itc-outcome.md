@@ -41,7 +41,8 @@ Fields (use exactly these enum values; use `null` when a field doesn't apply):
 - **source_docs** — array of the `docId`s you relied on (from the headers). Optional but preferred.
 
 ## Guidance
-- If the investigation has an **enforcement/remand/modification** posture in the text, classify the *most recent controlling* action; mention the posture in the note.
+- **Default resolutions**: if respondents were found in default and the Commission issued remedial orders under § 337(g), use `terminated_default` (with the remedies) — NOT `violation_found`.
+- **Sub-proceedings**: the staged text may include later ENFORCEMENT, REMAND, MODIFICATION, ADVISORY, or RESCISSION proceedings that post-date the original determination. Classify the disposition of the **original investigation** (its merits/remedy outcome) and describe the sub-proceeding in the note. Do NOT let a later enforcement termination or a withdrawn *enforcement* complaint override the underlying violation/remedy — e.g., an investigation that issued an exclusion order by default is `terminated_default` even if a subsequent enforcement complaint was later withdrawn.
 - A **partial** result is common (violation as to some patents/respondents, termination as to others). Set `violation":"partial"` and explain in the note.
 - If only a settlement/consent/withdrawal appears (no merits ruling), set `violation":null` and the matching `terminated_*` disposition.
 - If the staged text is empty/scanned or clearly insufficient to tell, set your best-guess disposition with `confidence":"low"` (or `pending` if truly nothing), and say so in the note. Do not invent facts.

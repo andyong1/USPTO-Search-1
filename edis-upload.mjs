@@ -215,9 +215,22 @@ async function publish() {
   // Exclude any malformed/administrative records that predate the crawl-side
   // filter, so the published projection is clean without a re-crawl.
   const rows = (await retry(() => listInvestigations())).filter((r) => /^337-\d+$/.test(r.investigation_number || ''));
-  // AI outcomes (per investigation number) overlaid onto each phase-row.
   const outcomes = await retry(() => listOutcomes());
   const oMap = new Map(outcomes.map((o) => [o.investigation_number, o]));
+  // The AI outcome is investigation-level; attach it ONLY to the primary phase —
+  // the 'Violation' phase, else the earliest-instituted — so sub-proceeding rows
+  // (Enforcement/Remand/Modification/etc.) keep their own per-phase heuristic
+  // instead of all showing the same duplicated AI outcome.
+  const primaryByNumber = new Map();
+  for (const r of rows) {
+    const cur = primaryByNumber.get(r.investigation_number);
+    if (!cur) { primaryByNumber.set(r.investigation_number, r); continue; }
+    if (cur.investigation_phase === 'Violation') continue;
+    if (r.investigation_phase === 'Violation'
+        || String(r.institution_date || '9999-99-99') < String(cur.institution_date || '9999-99-99')) {
+      primaryByNumber.set(r.investigation_number, r);
+    }
+  }
   const summary = { total: rows.length, active: 0, violation_remedy: 0, no_violation: 0,
     terminated_settlement: 0, terminated_other: 0, pending: 0, unknown: 0, geo: 0, leo: 0, cdo: 0,
     ai_classified: oMap.size };
@@ -226,7 +239,7 @@ async function publish() {
     if (r.outcome && summary[r.outcome] != null) summary[r.outcome]++;
     if (r.remedy === 'GEO') summary.geo++; else if (r.remedy === 'LEO') summary.leo++; else if (r.remedy === 'CDO') summary.cdo++;
     const o = oMap.get(r.investigation_number);
-    if (o) {
+    if (o && primaryByNumber.get(r.investigation_number) === r) {
       r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
       r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
     }

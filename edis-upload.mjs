@@ -160,7 +160,7 @@ async function publishInvestigationDocs(number, meta) {
     documents: docs.map((d) => ({
       id: d.id, phase: d.investigation_phase, type: d.document_type, title: d.document_title,
       security: d.security_level, firm: d.firm_organization, filedBy: d.filed_by,
-      onBehalfOf: d.on_behalf_of, date: d.received_date || d.document_date, mirrorUrl: null,
+      onBehalfOf: d.on_behalf_of, date: d.received_date || d.document_date, mirrorUrl: d.mirror_url || null,
     })),
   };
   await put(`itc/inv/${number}.json`, JSON.stringify(payload), {

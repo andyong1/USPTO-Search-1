@@ -38,12 +38,10 @@
     .sec { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
     .sec-public { background: var(--ok-bg); color: var(--ok-fg); }
     .sec-conf { background: var(--warn-bg); color: var(--warn-fg); }
-    .dlbtn { cursor: pointer; background: var(--brand); color: #fff; border: none; font-weight: 600; font-size: 0.8rem; padding: 5px 12px; border-radius: 6px; white-space: nowrap; }
-    .dlbtn:hover:not(:disabled) { background: var(--brand-hover); }
-    .dlbtn:disabled { opacity: 0.5; cursor: default; }
+    .dl-links { display: inline-flex; gap: 12px; white-space: nowrap; }
+    .dl-links a { color: var(--heading); font-weight: 600; text-decoration: none; }
+    .dl-links a:hover { text-decoration: underline; }
     .na { color: var(--text-5); font-size: 0.8rem; }
-    .picker { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-    .picker button { text-align: left; }
     .state { text-align: center; padding: 40px 20px; color: var(--text-5); }
     .disclaimer { font-size: 0.76rem; color: var(--text-4); margin-top: 12px; line-height: 1.5; }
     .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
@@ -115,53 +113,17 @@ const isPublic = (d) => (d.security || "").toLowerCase() === "public";
 
 function edisInvUrl() { return `https://edis.usitc.gov/external/search?investigationNumber=${encodeURIComponent(INV)}`; }
 
-// Trigger a browser download from a proxy response blob.
-function saveBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = filename || "document.pdf";
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-function filenameFrom(res, fallback) {
-  const m = (res.headers.get("content-disposition") || "").match(/filename="?([^"]+)"?/);
-  return (m && m[1]) || fallback;
-}
-
-// Download via the on-site proxy (/api/document?itcdl=…). Handles the multi-
-// attachment case by expanding an inline picker. Prefers a mirrorUrl if present.
-async function dl(docId, attId, btn, fallbackName) {
-  const orig = btn.textContent; btn.disabled = true; btn.textContent = "…";
-  try {
-    const q = attId ? `?itcdl=${docId}&att=${attId}` : `?itcdl=${docId}`;
-    const res = await fetch(`/api/document${q}`);
-    const ct = res.headers.get("content-type") || "";
-    if (ct.includes("application/json")) {
-      const j = await res.json();
-      if (j.multiple) { renderPicker(docId, j.attachments, btn); return; }
-      throw new Error(j.error || `HTTP ${res.status}`);
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    saveBlob(await res.blob(), filenameFrom(res, fallbackName || `edis-${docId}.pdf`));
-  } catch (e) {
-    alert("Download failed: " + e.message + "\n\nIf this persists, the EDIS server token may need refreshing.");
-  } finally { btn.disabled = false; btn.textContent = orig; }
-}
-
-function renderPicker(docId, attachments, btn) {
-  const box = document.createElement("div"); box.className = "picker";
-  for (const a of attachments) {
-    const b = document.createElement("button"); b.className = "dlbtn";
-    const kb = a.fileSize ? ` (${Math.round(Number(a.fileSize) / 1024)} KB)` : "";
-    b.textContent = `↓ ${a.title || ("Attachment " + a.id)}${kb}`;
-    b.onclick = () => dl(docId, a.id, b, (a.title || `edis-${docId}-${a.id}`) + ".pdf");
-    box.appendChild(b);
-  }
-  btn.replaceWith(box);
-}
-
+// View / Download links per document, matching the rest of the app. The proxy
+// resolves attachments and streams the PDF (inline for View, attachment for
+// Download); a mirrored Blob copy is preferred when present. Multi-attachment
+// documents open an on-site picker page served by the proxy.
 function docCell(d) {
-  if (d.mirrorUrl) return `<a class="dlbtn" style="text-decoration:none" href="${esc(d.mirrorUrl)}" download>↓ Download</a>`;
-  if (!isPublic(d)) return `<span class="na">Confidential — not downloadable</span>`;
-  return `<button class="dlbtn" data-doc="${esc(d.id)}" data-name="${esc((d.title || d.type || ("edis-" + d.id)))}">↓ Download</button>`;
+  if (d.mirrorUrl) {
+    return `<span class="dl-links"><a href="${esc(d.mirrorUrl)}" target="_blank" rel="noopener">View</a><a href="${esc(d.mirrorUrl)}" download>Download</a></span>`;
+  }
+  if (!isPublic(d)) return `<span class="na">Confidential — not available</span>`;
+  const id = encodeURIComponent(d.id);
+  return `<span class="dl-links"><a href="/api/document?itcdl=${id}&inline=1" target="_blank" rel="noopener">View</a><a href="/api/document?itcdl=${id}">Download</a></span>`;
 }
 
 function applyFilter() {
@@ -187,7 +149,6 @@ function renderRows() {
       <td>${docCell(d)}</td>
     </tr>`;
   }).join("");
-  $("rows").querySelectorAll("button.dlbtn[data-doc]").forEach((b) => b.onclick = () => dl(b.dataset.doc, null, b, (b.dataset.name || "document") + ".pdf"));
   renderPager();
 }
 

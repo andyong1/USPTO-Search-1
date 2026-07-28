@@ -119,11 +119,41 @@ function parseAttachments(xml) {
   return out.filter((a) => a.id);
 }
 
+function itcNoticeHtml(msg) {
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Document unavailable</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#525659;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}.box{max-width:460px;text-align:center;line-height:1.55}h1{font-size:1.1rem;margin:0 0 10px;color:#fff}p{font-size:.95rem;margin:0;color:#cbd5e0}</style></head><body>
+  <div class="box"><h1>Document unavailable</h1><p>${msg}</p></div></body></html>`;
+}
+
+// On-site picker for a document with several attachments — plain View/Download
+// links per file, so the detail page can use simple anchors (no client JS).
+function itcPickerHtml(docId, attachments) {
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const items = attachments.map((a) => {
+    const kb = a.fileSize ? ` · ${Math.round(Number(a.fileSize) / 1024)} KB` : '';
+    const pg = a.pageCount ? ` · ${a.pageCount} pp` : '';
+    return `<li><span class="t">${esc(a.title || ('Attachment ' + a.id))}${kb}${pg}</span>
+      <a href="/api/document?itcdl=${docId}&att=${a.id}&inline=1" target="_blank" rel="noopener">View</a>
+      <a href="/api/document?itcdl=${docId}&att=${a.id}">Download</a></li>`;
+  }).join('');
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Document attachments</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f7fafc;color:#1a202c;margin:0;padding:28px}h1{font-size:1.05rem;margin:0 0 14px}ul{list-style:none;padding:0;margin:0;max-width:760px}li{padding:12px 14px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}.t{flex:1;min-width:220px}a{color:#1a3a6b;font-weight:600;text-decoration:none}a:hover{text-decoration:underline}</style></head><body>
+  <h1>This document has ${attachments.length} attachments</h1><ul>${items}</ul></body></html>`;
+}
+
 async function itcDownload(req, res) {
   const token = process.env.EDIS_TOKEN;
   const docId = String(req.query.itcdl || '').replace(/[^0-9]/g, '');
   const attId = String(req.query.att || '').replace(/[^0-9]/g, '');
   const inline = String(req.query.inline || '') === '1';
+  // Error responder: a friendly HTML notice for View (inline) tabs, JSON otherwise.
+  const fail = (status, msg) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (inline) { res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(itcNoticeHtml(msg)); }
+    else res.status(status).json({ error: msg });
+  };
   if (!docId) { res.status(400).json({ error: 'itcdl (document id) is required.' }); return; }
 
   // 1) Resolve the document's attachment(s) — anonymous, no token needed.
@@ -133,29 +163,26 @@ async function itcDownload(req, res) {
     const xml = await r.text();
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     attachments = parseAttachments(xml);
-  } catch (e) {
-    res.setHeader('Cache-Control', 'no-store');
-    res.status(502).json({ error: 'Could not resolve EDIS attachments.', detail: clientErrorDetail(e) });
-    return;
-  }
-  if (!attachments.length) { res.status(404).json({ error: 'No attachments found for this document.' }); return; }
+  } catch (e) { fail(502, `Could not resolve EDIS attachments (${clientErrorDetail(e)}).`); return; }
+  if (!attachments.length) { fail(404, 'No attachments were found for this document.'); return; }
 
   // Pick one: explicit att param, or the sole attachment. If several and none
-  // chosen, return the list so the page can present a picker (no token used).
-  let chosen = attId ? attachments.find((a) => a.id === attId) : (attachments.length === 1 ? attachments[0] : null);
+  // chosen, serve an on-site picker page with View + Download per attachment.
+  const chosen = attId ? attachments.find((a) => a.id === attId) : (attachments.length === 1 ? attachments[0] : null);
   if (!chosen) {
     res.setHeader('Cache-Control', 'no-store');
-    res.status(200).json({ multiple: true, documentId: docId, attachments });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200).send(itcPickerHtml(docId, attachments));
     return;
   }
 
   // 2) Stream the file with the Bearer token.
-  if (!token) { res.setHeader('Cache-Control', 'no-store'); res.status(503).json({ error: 'EDIS downloads are unavailable right now (server token not configured).' }); return; }
+  if (!token) { fail(503, 'EDIS downloads are unavailable right now (the server access token is not configured).'); return; }
   let up = null;
   try { up = await fetchHeaders(`${EDIS}/download/${docId}/${chosen.id}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/pdf' } }, CONNECT_TIMEOUT_MS); }
-  catch (e) { res.setHeader('Cache-Control', 'no-store'); res.status(504).json({ error: 'EDIS download timed out.', detail: clientErrorDetail(e) }); return; }
-  if (up.status === 401 || up.status === 403) { res.setHeader('Cache-Control', 'no-store'); res.status(502).json({ error: 'EDIS authorization failed — the server token has likely expired and needs to be refreshed.' }); return; }
-  if (!up.ok) { res.setHeader('Cache-Control', 'no-store'); res.status(502).json({ error: `EDIS download failed: HTTP ${up.status}` }); return; }
+  catch (e) { fail(504, `The EDIS download timed out (${clientErrorDetail(e)}).`); return; }
+  if (up.status === 401 || up.status === 403) { fail(502, 'EDIS authorization failed — the server access token has likely expired and needs to be refreshed.'); return; }
+  if (!up.ok) { fail(502, `EDIS download failed (HTTP ${up.status}).`); return; }
 
   const base = (chosen.title || `edis-${docId}-${chosen.id}`).replace(/[^A-Za-z0-9._ -]/g, '_').slice(0, 120) || `edis-${docId}`;
   const fname = /\.pdf$/i.test(base) ? base : `${base}.pdf`;

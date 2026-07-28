@@ -16,10 +16,13 @@
 //                             of trusted roots (incl. the interception CA) so
 //                             Node's fetch can reach Neon/Blob over TLS.
 //
-//   node edis-upload.mjs               # ingest + derive + publish
-//   node edis-upload.mjs --derive-only # skip ingest; re-derive from DB + publish
-//                                        (use when documents are already in Neon)
-//   node edis-upload.mjs --no-blob     # ingest + derive only (skip publish)
+//   node edis-upload.mjs                # ingest + derive + publish
+//   node edis-upload.mjs --derive-only  # skip ingest; re-derive from DB + publish
+//                                         (use when documents are already in Neon)
+//   node edis-upload.mjs --publish-only # ONLY rebuild the main projection blob
+//                                         (fast; use after new AI outcomes — no
+//                                         re-derive, no per-investigation blobs)
+//   node edis-upload.mjs --no-blob      # ingest + derive only (skip publish)
 
 import { readFile, readdir } from 'node:fs/promises';
 import { put } from '@vercel/blob';
@@ -249,7 +252,9 @@ async function publish() {
 
 // ── Entry ────────────────────────────────────────────────────────────
 try {
-  if (args.includes('--derive-only')) {
+  if (args.includes('--publish-only')) {
+    console.log('Rebuilding the main projection only (no re-derive, no per-investigation blobs)…');
+  } else if (args.includes('--derive-only')) {
     const numbers = await numbersWithDocuments();
     console.log(`Re-deriving from ${numbers.length} investigation(s) already in Neon…`);
     await deriveNumbers(numbers);

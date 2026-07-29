@@ -21,10 +21,10 @@
     .card + .card { margin-top: 22px; }
     .card h2 { font-size: 1.1rem; color: var(--heading); margin-bottom: 6px; }
     .sub { color: var(--text-5); font-size: 0.85rem; margin-bottom: 14px; }
-    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
-    .tab { padding: 9px 16px; border: none; background: none; color: var(--text-4); font-weight: 600; font-size: 0.92rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-    .tab:hover { color: var(--heading); }
-    .tab.on { color: var(--heading); border-bottom-color: var(--brand); }
+    .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border-2); margin-bottom: 16px; flex-wrap: wrap; }
+    .tab { padding: 8px 16px; border: 1px solid var(--border-2); border-radius: 8px 8px 0 0; background: var(--surface-2); color: var(--text-4); font-weight: 600; font-size: 0.92rem; cursor: pointer; margin-bottom: -1px; }
+    .tab:hover { color: var(--heading); background: var(--surface-3); }
+    .tab.on { background: var(--surface); color: var(--heading); border-bottom-color: var(--surface); }
     .tab-count { font-size: 0.72rem; color: var(--text-5); background: var(--surface-2); border-radius: 10px; padding: 1px 7px; margin-left: 6px; }
     .tab.on .tab-count { background: var(--brand); color: #fff; }
     .pane[hidden] { display: none; }
@@ -48,6 +48,8 @@
     .muted { color: var(--text-5); }
     .parties { font-size: 0.8rem; color: var(--text-4); max-width: 320px; }
     #tbl td.wrapcol { max-width: 220px; white-space: normal; word-break: break-word; font-size: 0.82rem; }
+    .cl-toggle { display: inline-block; margin-top: 3px; background: none; border: none; padding: 0; color: var(--heading); font-weight: 600; font-size: 0.76rem; cursor: pointer; }
+    .cl-toggle:hover { text-decoration: underline; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
     .o-violation_remedy { background: var(--bad-bg); color: var(--bad-fg); }
     .o-no_violation { background: var(--ok-bg); color: var(--ok-fg); }
@@ -240,6 +242,17 @@ function patLink(p) {
   return `<a class="link" href="https://patents.google.com/patent/US${d}" target="_blank" rel="noopener">${esc(p)}</a>`;
 }
 
+// Respondent lists can be long (20-40 entities). Show the first few and collapse
+// the rest behind a "+N more" toggle (expanded via the delegated handler in wire()).
+function respCell(arr) {
+  const items = (arr || []).map(esc);
+  if (!items.length) return "—";
+  const MAX = 4;
+  if (items.length <= MAX) return items.join("; ");
+  const n = items.length - MAX;
+  return `<span class="resp">${items.slice(0, MAX).join("; ")}<span class="resp-more" hidden>; ${items.slice(MAX).join("; ")}</span><button class="cl-toggle" data-n="${n}">+${n} more</button></span>`;
+}
+
 // public_number is derived server-side (edis-fetch.mjs derivePublicNumber) as the
 // single source of truth: "337-TA-<n>" for instituted investigations, "Dkt. No.
 // <n>" for pre-institution docket filings. Trust it; fall back to the raw number.
@@ -296,13 +309,12 @@ function renderRows() {
     // parties in their own columns. All three populate as the NOI backfill runs.
     const pats = (r.asserted_patents || []).map(patLink).join(" · ");
     const comps = (r.complainants || []).join("; ");
-    const resps = (r.respondents || []).join("; ");
     return `<tr>
       <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
       <td>${esc(r.title || "")}</td>
       <td class="wrapcol">${pats || "—"}</td>
       <td class="wrapcol">${esc(comps) || "—"}</td>
-      <td class="wrapcol">${esc(resps) || "—"}</td>
+      <td class="wrapcol">${respCell(r.respondents)}</td>
       <td>${esc(r.investigation_phase || "")}</td>
       <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>
       <td>${esc(r.institution_date || "—")}</td>
@@ -394,6 +406,14 @@ function apply() { applyFilter(); renderChips(); renderRows(); }
 
 function wire() {
   document.querySelectorAll(".tab").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
+  // Delegated toggle for the "+N more" respondent expanders (survives re-renders).
+  $("rows").addEventListener("click", (e) => {
+    const btn = e.target.closest(".cl-toggle"); if (!btn) return;
+    const more = btn.closest(".resp").querySelector(".resp-more");
+    const expanding = more.hidden;
+    more.hidden = !expanding;
+    btn.textContent = expanding ? "show less" : `+${btn.dataset.n} more`;
+  });
   $("q").oninput = (e) => { state.q = e.target.value; state.page = 0; applyFilter(); renderRows(); renderDockets(); };
   document.querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => {
     const k = th.dataset.k;

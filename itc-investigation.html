@@ -213,13 +213,10 @@ async function load() {
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
     state.docs = data.documents || [];
-    // Pre-institution matters show their EDIS docket number (DN xxxx), not a
-    // 337-TA investigation number (which EDIS misleadingly puts in the title).
-    // Docket when the number's numeric part equals the docket, or preinstitution.
-    const x = String(INV).split("-")[1] || "";
-    const docket = (data.phases || []).map((p) => p.docket).find(Boolean) || "";
-    const isDN = (docket && x === String(docket)) || (data.phases || []).some((p) => p.status === "Preinstitution");
-    const label = isDN ? "DN " + (docket || x) : (data.publicNumber || INV);
+    // publicNumber is the single source of truth (edis-fetch.mjs derivePublicNumber):
+    // "337-TA-<n>" for instituted investigations, "Dkt. No. <n>" for pre-institution
+    // docket filings. Trust it; fall back to the raw investigation number.
+    const label = data.publicNumber || INV;
     $("hdrTitle").textContent = `USITC ${label}`;
     $("invTitle").textContent = data.title || label;
     const pubCount = state.docs.filter(isPublic).length;

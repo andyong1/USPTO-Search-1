@@ -65,15 +65,28 @@ function publicNumber(title) {
   const m = String(title || '').match(/337-TA-\d+/i);
   return m ? m[0].toUpperCase() : null;
 }
-// The public identifier. Pre-institution matters are EDIS DOCKET numbers
-// ("DN 3926"), not 337-TA investigations — EDIS mislabels them "337-TA-<docket>"
-// in the title. A record is a docket when its number's numeric part equals the
-// docket (EDIS reuses the docket as the number pre-institution) or the status is
-// Preinstitution — covers both still-pending and withdrawn-before-institution.
+// The public identifier, and the SINGLE SOURCE OF TRUTH for docket-vs-investigation
+// labeling (the display just trusts public_number). Pre-institution matters are
+// EDIS DOCKET numbers, which the ITC calls "Dkt. No. <n>" — NOT 337-TA
+// investigations (EDIS misleadingly puts "Inv. No. 337-TA-<docket>" in their
+// titles). A record is a docket when ANY of these hold:
+//   • status is Preinstitution (still-pending or withdrawn-before-institution);
+//   • the title carries EDIS's "DN <n>" docket shorthand; or
+//   • the numeric part is above the instituted 337-TA range (~1450 today, growing
+//     ~40/yr) — observed dockets sit at 2000-3900, a wide clean gap. Bump
+//     DOCKET_FLOOR if the instituted series ever approaches it.
+// NOTE: do NOT key off docketNumber == number — EDIS also sets that on some
+// INSTITUTED investigations (e.g. 337-TA-1125 has docketNumber 1125), so it
+// false-positives real investigations as dockets.
+const DOCKET_FLOOR = 2000;
 function derivePublicNumber(r) {
   const x = String(r.investigationNumber || '').split('-')[1] || '';
-  const isDocket = (r.docketNumber && x === String(r.docketNumber)) || r.investigationStatus === 'Preinstitution';
-  if (isDocket) return r.docketNumber ? `DN ${r.docketNumber}` : (x ? `DN ${x}` : null);
+  const nx = Number(x);
+  const isDocket =
+    r.investigationStatus === 'Preinstitution' ||
+    /\bDN\b/i.test(String(r.investigationTitle || '')) ||
+    (Number.isFinite(nx) && nx >= DOCKET_FLOOR);
+  if (isDocket) return x ? `Dkt. No. ${x}` : null;
   return publicNumber(r.investigationTitle);
 }
 

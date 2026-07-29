@@ -194,15 +194,11 @@ function detailUrl(inv) {
   return `/itc-investigation?inv=${encodeURIComponent(inv.investigation_number)}`;
 }
 
-// Pre-institution matters are EDIS docket numbers (DN xxxx), not instituted
-// 337-TA investigations (EDIS misleadingly puts "337-TA-<docket>" in their title).
-// A record is a docket when its number's numeric part equals the docket number
-// (EDIS reuses the docket as the number pre-institution), or status is
-// Preinstitution — covers both still-pending and withdrawn-before-institution.
+// public_number is derived server-side (edis-fetch.mjs derivePublicNumber) as the
+// single source of truth: "337-TA-<n>" for instituted investigations, "Dkt. No.
+// <n>" for pre-institution docket filings. Trust it; fall back to the raw number.
 function displayNumber(r) {
-  const x = String(r.investigation_number || "").split("-")[1] || "";
-  const isDN = (r.docket_number && x === String(r.docket_number)) || r.status === "Preinstitution";
-  return isDN ? "DN " + (r.docket_number || x) : (r.public_number || r.investigation_number);
+  return r.public_number || r.investigation_number;
 }
 
 function renderKpis(summary) {

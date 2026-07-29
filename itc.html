@@ -28,6 +28,19 @@
     .tab-count { font-size: 0.72rem; color: var(--text-5); background: var(--surface-2); border-radius: 10px; padding: 1px 7px; margin-left: 6px; }
     .tab.on .tab-count { background: var(--brand); color: #fff; }
     .pane[hidden] { display: none; }
+    .analytics-note { font-size: 0.8rem; color: var(--text-5); margin-bottom: 16px; }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 20px; }
+    .chart { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+    .chart h3 { font-size: 0.92rem; color: var(--heading); margin-bottom: 3px; }
+    .chart .csub { font-size: 0.74rem; color: var(--text-5); margin-bottom: 12px; }
+    .chart .stat { font-size: 2rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
+    .barrow { display: grid; grid-template-columns: 132px 1fr 42px; align-items: center; gap: 8px; margin: 5px 0; font-size: 0.8rem; }
+    .barrow .bl { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bartrack { background: var(--surface-3); border-radius: 5px; height: 16px; overflow: hidden; }
+    .barfill { height: 100%; border-radius: 5px; background: var(--brand); min-width: 2px; }
+    .barrow .bv { text-align: right; color: var(--heading); font-weight: 600; }
+    .bf-violation { background: var(--bad-fg); } .bf-noviol { background: var(--ok-fg); }
+    .bf-settled { background: var(--accent2-fg); } .bf-terminated { background: var(--warn-fg); } .bf-pending { background: var(--text-5); }
     .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 6px 0 4px; }
     @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
@@ -113,6 +126,7 @@
     <div class="tabs" role="tablist">
       <button class="tab on" data-tab="inst" role="tab">Instituted investigations (337-TA)<span class="tab-count" id="cntInst">0</span></button>
       <button class="tab" data-tab="dkt" role="tab">Pre-institution docket filings<span class="tab-count" id="cntDkt">0</span></button>
+      <button class="tab" data-tab="analytics" role="tab">Analytics</button>
     </div>
     <p class="sub" id="tabSub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
     <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
@@ -157,6 +171,10 @@
           <tbody id="drows"></tbody>
         </table>
       </div>
+    </div>
+
+    <div id="pane-analytics" class="pane" hidden>
+      <div id="charts"></div>
     </div>
 
     <p class="disclaimer" id="disclaimer"></p>
@@ -390,16 +408,77 @@ function renderDockets() {
 const TAB_SUB = {
   inst: "Matters the Commission voted to institute, each with a 337-TA investigation number.",
   dkt: "Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter gets a 337-TA number and appears under the other tab.",
+  analytics: "Aggregate analytics across instituted 337-TA investigations. Outcomes/remedies are from the AI classifier (Commission decision text); investigations without a classified outcome are excluded from those charts.",
 };
-// Toggle between the instituted-investigations table and the docket-filings table.
-// The outcome chips + pager belong to the instituted table only.
+// Toggle between the instituted table, the docket table, and the analytics view.
+// The search box + outcome chips apply only to the tables.
 function switchTab(t) {
   state.tab = t;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
   $("pane-inst").hidden = t !== "inst";
   $("pane-dkt").hidden = t !== "dkt";
+  $("pane-analytics").hidden = t !== "analytics";
+  $("q").style.display = t === "analytics" ? "none" : "";
   $("outcomeChips").style.display = t === "inst" ? "" : "none";
   $("tabSub").innerHTML = TAB_SUB[t];
+}
+
+// Analytics view — aggregates computed client-side from the loaded projection.
+function renderAnalytics() {
+  const inv = state.all;                          // instituted 337-TA rows
+  const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset (primary phase)
+  const bars = (entries) => {
+    const max = Math.max(1, ...entries.map((e) => e.value));
+    return entries.map((e) => `<div class="barrow"><span class="bl" title="${esc(e.label)}">${esc(e.label)}</span><span class="bartrack"><span class="barfill ${e.cls || ""}" style="width:${Math.round(e.value / max * 100)}%"></span></span><span class="bv">${e.value}</span></div>`).join("");
+  };
+  const card = (title, sub, inner) => `<div class="chart"><h3>${title}</h3>${sub ? `<div class="csub">${sub}</div>` : ""}${inner}</div>`;
+
+  const DISP_ORDER = ["violation_found", "no_violation", "terminated_default", "terminated_consent", "terminated_settlement", "terminated_withdrawal", "terminated_arbitration", "terminated_other", "pending"];
+  const DISP_CLS = { violation_found: "bf-violation", terminated_default: "bf-violation", no_violation: "bf-noviol", terminated_settlement: "bf-settled", terminated_consent: "bf-settled", terminated_withdrawal: "bf-terminated", terminated_arbitration: "bf-terminated", terminated_other: "bf-terminated", pending: "bf-pending" };
+  const dcount = {};
+  for (const r of cls) dcount[r.ai_disposition] = (dcount[r.ai_disposition] || 0) + 1;
+  const dispEntries = DISP_ORDER.filter((k) => dcount[k]).map((k) => ({ label: AI_LABEL[k] || k, value: dcount[k], cls: DISP_CLS[k] }));
+
+  const rem = { LEO: 0, GEO: 0, CDO: 0 };
+  for (const r of cls) for (const x of (r.ai_remedies || [])) if (rem[x] != null) rem[x]++;
+  const remEntries = [{ label: "Limited excl. (LEO)", value: rem.LEO, cls: "bf-violation" }, { label: "General excl. (GEO)", value: rem.GEO, cls: "bf-violation" }, { label: "Cease & desist (CDO)", value: rem.CDO, cls: "bf-violation" }];
+
+  const g = { adjV: 0, adjN: 0, settled: 0, other: 0, pending: 0 };
+  for (const r of cls) { const d = r.ai_disposition;
+    if (d === "violation_found" || d === "terminated_default") g.adjV++;
+    else if (d === "no_violation") g.adjN++;
+    else if (["terminated_settlement", "terminated_consent", "terminated_withdrawal", "terminated_arbitration"].includes(d)) g.settled++;
+    else if (d === "pending") g.pending++;
+    else g.other++;
+  }
+  const groupEntries = [
+    { label: "Violation / remedy", value: g.adjV, cls: "bf-violation" },
+    { label: "No violation", value: g.adjN, cls: "bf-noviol" },
+    { label: "Settled / consent", value: g.settled, cls: "bf-settled" },
+    { label: "Other termination", value: g.other, cls: "bf-terminated" },
+    { label: "Pending", value: g.pending, cls: "bf-pending" },
+  ];
+
+  // Filings by institution year — one count per investigation (not per phase-row).
+  const invYear = new Map();
+  for (const r of inv) { const y = String(r.institution_date || "").slice(0, 4); if (/^\d{4}$/.test(y) && !invYear.has(r.investigation_number)) invYear.set(r.investigation_number, y); }
+  const byYear = {};
+  for (const y of invYear.values()) byYear[y] = (byYear[y] || 0) + 1;
+  const yearEntries = Object.keys(byYear).sort().map((y) => ({ label: y, value: byYear[y] }));
+
+  const adjudicated = g.adjV + g.adjN;
+  const violRate = adjudicated ? Math.round(g.adjV / adjudicated * 100) : 0;
+  const settleRate = cls.length ? Math.round(g.settled / cls.length * 100) : 0;
+
+  const cards = [
+    card("Outcome distribution", `${cls.length} investigations with an AI-classified outcome`, bars(dispEntries)),
+    card("Violation rate", "Share of adjudicated matters (violation/remedy or default vs. no violation) finding a violation", `<div class="stat">${violRate}%</div><div class="csub">${g.adjV} of ${adjudicated} adjudicated matters</div>`),
+    card("Settled / consent rate", "Share of classified investigations resolved by settlement, consent, or withdrawal", `<div class="stat">${settleRate}%</div><div class="csub">${g.settled} of ${cls.length} classified</div>`),
+    card("Remedy mix", "Remedies issued (an investigation may carry several)", bars(remEntries)),
+    card("Disposition category", "How instituted investigations resolve", bars(groupEntries)),
+    card("Filings by institution year", "Instituted 337-TA investigations per year (heuristic institution date)", bars(yearEntries)),
+  ];
+  $("charts").innerHTML = `<p class="analytics-note">Pendency (time-to-decision) and by-ALJ breakdowns are coming once those fields are derived.</p><div class="charts-grid">${cards.join("")}</div>`;
 }
 
 function apply() { applyFilter(); renderChips(); renderRows(); }
@@ -445,7 +524,7 @@ async function load() {
     $("cntDkt").textContent = state.dockets.length;
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
-    wire(); renderFirms(); renderDockets(); apply();
+    wire(); renderFirms(); renderDockets(); renderAnalytics(); apply();
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="11" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
   }

@@ -32,6 +32,10 @@
     .parties .pval { color: var(--heading); }
     .parties .pat { display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 0.82rem; }
     .parties a.pat:hover { border-color: var(--heading); }
+    .holding { margin-top: 14px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+    .holding h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-2); margin-bottom: 5px; }
+    .holding p { font-size: 0.9rem; color: var(--heading); line-height: 1.5; }
+    .holding .aitag { font-size: 0.6rem; font-weight: 700; color: var(--text-5); margin-left: 6px; letter-spacing: 0.04em; }
     .table-filter { width: 100%; max-width: 460px; padding: 9px 12px; border: 1.5px solid var(--border-2); border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; background: var(--surface); color: var(--text); }
     .table-wrap { overflow: auto; max-height: 76vh; border-radius: 8px; border: 1px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -85,6 +89,7 @@
     <p class="sub" id="invMeta"></p>
     <div class="phases" id="phases"></div>
     <div class="parties" id="parties"></div>
+    <div class="holding" id="holding"></div>
   </div>
 
   <div class="card">
@@ -247,6 +252,9 @@ async function load() {
     $("invMeta").innerHTML = `${label} · ${state.docs.length} documents (${pubCount} public / downloadable) · <a href="${edisInvUrl()}" target="_blank" rel="noopener" style="color:var(--heading);font-weight:600">EDIS ↗</a>`;
     $("phases").innerHTML = (data.phases || []).map((p) => `<span class="ph ${p.status === "Active" ? "active" : ""}">${esc(p.phase)}${p.status ? " · " + esc(p.status) : ""}</span>`).join("");
     renderParties(data.parties);
+    $("holding").innerHTML = data.holdingSummary
+      ? `<h3>What the Commission held <span class="aitag" title="Summarized by AI from the Commission's opinion/decision text — verify against EDIS">AI</span></h3><p>${esc(data.holdingSummary)}</p>`
+      : "";
     $("disclaimer").innerHTML = `Documents and metadata from USITC EDIS. Confidential filings are listed but not downloadable. Documents mirrored to this site download here; the rest open in EDIS, where downloading requires signing in. Verify anything material against EDIS. Not legal advice.`;
     wire(); applyFilter(); renderRows();
   } catch (e) {

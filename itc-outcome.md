@@ -48,7 +48,7 @@ Fields (use exactly these enum values; use `null` when a field doesn't apply):
   - `no_violation` — Commission found no violation.
   - `terminated_settlement` — terminated on a settlement agreement.
   - `terminated_consent` — terminated on a consent order.
-  - `terminated_default` — resolved by default / consent to judgment against defaulting respondents (with remedy).
+  - `terminated_default` — the violation was **presumed from the respondents' default** (facts taken as true under § 337(g)) rather than adjudicated on the merits; remedy issued against the defaulters. See **Default resolutions** in Guidance for the merits-vs-default test.
   - `terminated_withdrawal` — complaint withdrawn.
   - `terminated_arbitration` — terminated for arbitration.
   - `terminated_other` — other termination (e.g., partial, procedural) where none of the above fits.
@@ -61,7 +61,10 @@ Fields (use exactly these enum values; use `null` when a field doesn't apply):
 - **source_docs** — array of the `docId`s you relied on (from the headers). Optional but preferred.
 
 ## Guidance
-- **Default resolutions**: if respondents were found in default and the Commission issued remedial orders under § 337(g), use `terminated_default` (with the remedies) — NOT `violation_found`.
+- **Default resolutions**: the deciding question is **how the violation was established, not whether respondents defaulted or which subsection the exclusion order cites**.
+  - Use `terminated_default` (with the remedies) when the violation rests **solely on the default** — the Commission presumed the complaint's facts as true under § 337(g)(1) (no respondent appeared) or § 337(g)(2), without adjudicating infringement and domestic industry on the merits.
+  - Use `violation_found` when there is an **affirmative merits finding** of violation (infringement + domestic industry actually adjudicated — e.g., on summary determination, or a contested hearing), *even if* some or all respondents defaulted and *even if* the exclusion order issued under § 337(d)(2)/(f). A GEO issued under § 337(d)(2) requires proof of a violation on the merits, so it is `violation_found`, not `terminated_default`.
+  - Tie-breaker — follow the Commission's own language: "presumed the facts pursuant to § 337(g)" → `terminated_default`; "found a violation" / "affirmed the summary determination of violation" → `violation_found`. When a merits finding covers some respondents and pure default covers others, use `violation_found` with `violation":"partial"` and explain the split in the note.
 - **Sub-proceedings**: the staged text may include later ENFORCEMENT, REMAND, MODIFICATION, ADVISORY, or RESCISSION proceedings that post-date the original determination. Classify the disposition of the **original investigation** (its merits/remedy outcome) and describe the sub-proceeding in the note. Do NOT let a later enforcement termination or a withdrawn *enforcement* complaint override the underlying violation/remedy — e.g., an investigation that issued an exclusion order by default is `terminated_default` even if a subsequent enforcement complaint was later withdrawn.
 - A **partial** result is common (violation as to some patents/respondents, termination as to others). Set `violation":"partial"` and explain in the note.
 - If only a settlement/consent/withdrawal appears (no merits ruling), set `violation":null` and the matching `terminated_*` disposition.

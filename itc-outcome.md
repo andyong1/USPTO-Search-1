@@ -1,8 +1,28 @@
-# ITC Section 337 outcome classification
+# ITC Section 337 outcome classification (nightly AI step)
 
-You are classifying the **outcome of a USITC Section 337 investigation** from the
-text of its dispositive documents. This runs as a local batch: read each staged
-file and append one JSON object per investigation to the output file.
+Classify the **outcome of each staged USITC Section 337 investigation** from the
+text of its dispositive documents. Like the §325(d)/FWD jobs, this runs **inside
+the scheduled Claude session** — the session itself does the classification with
+its own tools; there is no API key and no nested `claude -p`.
+
+## Procedure
+
+1. Load env + stage a batch (one Bash command):
+
+   ```bash
+   set -a; . <(tr -d '\r' < grounds-secrets.env); set +a; export NODE_OPTIONS=--use-system-ca
+   node itc-outcome-fetch.mjs --limit 60
+   ```
+   If it reports nothing to classify, stop.
+2. Read `itc-work/outcome-work/manifest.json`, then each `itc-work/outcome-work/<investigation_number>.txt`.
+3. For each investigation, append one JSON object (one line) to
+   `itc-work/outcome-work/itc-outcome-out.jsonl` using the schema below.
+4. Upload + republish (one Bash command):
+
+   ```bash
+   set -a; . <(tr -d '\r' < grounds-secrets.env); set +a; export NODE_OPTIONS=--use-system-ca
+   node itc-outcome-upload.mjs && node edis-upload.mjs --publish-only
+   ```
 
 ## Input
 - `itc-work/outcome-work/manifest.json` — the list of investigations and their staged docs.
@@ -48,4 +68,4 @@ Fields (use exactly these enum values; use `null` when a field doesn't apply):
 - If the staged text is empty/scanned or clearly insufficient to tell, set your best-guess disposition with `confidence":"low"` (or `pending` if truly nothing), and say so in the note. Do not invent facts.
 - Base everything on the document text. This is a factual classification, not legal advice.
 
-When done, `itc-outcome-out.jsonl` should have exactly one line per staged investigation. Then the user runs `node itc-outcome-upload.mjs`.
+When done, `itc-outcome-out.jsonl` has exactly one line per staged investigation; then run Procedure step 4 (upload + republish).

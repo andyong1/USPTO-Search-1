@@ -28,7 +28,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
-  setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes,
+  setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes, listParties,
 } from './lib/itc-db.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 
@@ -217,6 +217,8 @@ async function publish() {
   const rows = (await retry(() => listInvestigations())).filter((r) => /^337-\d+$/.test(r.investigation_number || ''));
   const outcomes = await retry(() => listOutcomes());
   const oMap = new Map(outcomes.map((o) => [o.investigation_number, o]));
+  const parties = await retry(() => listParties());
+  const pMap = new Map(parties.map((p) => [p.investigation_number, p]));
   // The AI outcome is investigation-level; attach it ONLY to the primary phase —
   // the 'Violation' phase, else the earliest-instituted — so sub-proceeding rows
   // (Enforcement/Remand/Modification/etc.) keep their own per-phase heuristic
@@ -238,10 +240,17 @@ async function publish() {
     if (r.status === 'Active') summary.active++;
     if (r.outcome && summary[r.outcome] != null) summary[r.outcome]++;
     if (r.remedy === 'GEO') summary.geo++; else if (r.remedy === 'LEO') summary.leo++; else if (r.remedy === 'CDO') summary.cdo++;
-    const o = oMap.get(r.investigation_number);
-    if (o && primaryByNumber.get(r.investigation_number) === r) {
-      r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
-      r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
+    if (primaryByNumber.get(r.investigation_number) === r) {
+      const o = oMap.get(r.investigation_number);
+      if (o) {
+        r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
+        r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
+      }
+      const p = pMap.get(r.investigation_number);
+      if (p) {
+        r.complainants = p.complainants; r.respondents = p.respondents;
+        r.asserted_patents = p.asserted_patents; r.accused_products = p.accused_products;
+      }
     }
   }
   const payload = { generatedAt: new Date().toISOString(), source: 'USITC EDIS', derivedV: DERIVED_V, summary, investigations: rows };

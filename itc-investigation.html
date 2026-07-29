@@ -26,6 +26,12 @@
     .phases { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 2px; }
     .ph { padding: 3px 10px; border-radius: 12px; font-size: 0.76rem; font-weight: 600; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2); }
     .ph.active { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+    .parties { margin-top: 12px; display: grid; gap: 6px; font-size: 0.9rem; }
+    .parties .prow { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+    .parties .plabel { min-width: 108px; color: var(--text-2); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.02em; }
+    .parties .pval { color: var(--heading); }
+    .parties .pat { display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 0.82rem; }
+    .parties a.pat:hover { border-color: var(--heading); }
     .table-filter { width: 100%; max-width: 460px; padding: 9px 12px; border: 1.5px solid var(--border-2); border-radius: 8px; font-size: 0.92rem; margin-bottom: 12px; background: var(--surface); color: var(--text); }
     .table-wrap { overflow: auto; max-height: 76vh; border-radius: 8px; border: 1px solid var(--border); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -78,6 +84,7 @@
     <h2 id="invTitle">Loading…</h2>
     <p class="sub" id="invMeta"></p>
     <div class="phases" id="phases"></div>
+    <div class="parties" id="parties"></div>
   </div>
 
   <div class="card">
@@ -121,6 +128,23 @@ const esc = (s) => String(s == null ? "" : s)
 const isPublic = (d) => (d.security || "").toLowerCase() === "public";
 
 function edisInvUrl() { return `https://edis.usitc.gov/external/search?investigationNumber=${encodeURIComponent(INV)}`; }
+
+// Parties + asserted patents (AI-extracted from the Notice of Investigation).
+function patLink(p) {
+  const d = String(p).replace(/[^0-9A-Za-z]/g, "");
+  return `<a class="pat" href="https://patents.google.com/patent/US${d}" target="_blank" rel="noopener">${esc(p)}</a>`;
+}
+function renderParties(P) {
+  const el = $("parties");
+  if (!P) { el.innerHTML = ""; return; }
+  const row = (label, val) => `<div class="prow"><span class="plabel">${label}</span><span class="pval">${val}</span></div>`;
+  const rows = [];
+  if (P.complainants && P.complainants.length) rows.push(row("Complainant", P.complainants.map(esc).join("; ")));
+  if (P.respondents && P.respondents.length) rows.push(row("Respondents", P.respondents.map(esc).join("; ")));
+  if (P.assertedPatents && P.assertedPatents.length) rows.push(row("Asserted patents", P.assertedPatents.map(patLink).join("")));
+  if (P.accusedProducts) rows.push(row("Accused products", esc(P.accusedProducts)));
+  el.innerHTML = rows.join("");
+}
 
 // View / Download links per document, matching the rest of the app. The proxy
 // resolves attachments and streams the PDF (inline for View, attachment for
@@ -222,6 +246,7 @@ async function load() {
     const pubCount = state.docs.filter(isPublic).length;
     $("invMeta").innerHTML = `${label} · ${state.docs.length} documents (${pubCount} public / downloadable) · <a href="${edisInvUrl()}" target="_blank" rel="noopener" style="color:var(--heading);font-weight:600">EDIS ↗</a>`;
     $("phases").innerHTML = (data.phases || []).map((p) => `<span class="ph ${p.status === "Active" ? "active" : ""}">${esc(p.phase)}${p.status ? " · " + esc(p.status) : ""}</span>`).join("");
+    renderParties(data.parties);
     $("disclaimer").innerHTML = `Documents and metadata from USITC EDIS. Confidential filings are listed but not downloadable. Documents mirrored to this site download here; the rest open in EDIS, where downloading requires signing in. Verify anything material against EDIS. Not legal advice.`;
     wire(); applyFilter(); renderRows();
   } catch (e) {

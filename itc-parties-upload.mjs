@@ -10,6 +10,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { setParties, countInvestigationsForParties, PARTIES_AI_V } from './lib/itc-db.js';
+import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 
 if (!process.env.POSTGRES_URL) { console.error('POSTGRES_URL is not set. Load grounds-secrets.env first.'); process.exit(1); }
 
@@ -27,7 +28,7 @@ try { raw = await readFile(FILE, 'utf-8'); }
 catch { console.error(`Not found: ${FILE}. Stage with itc-parties-fetch.mjs and extract per itc-parties.md first.`); process.exit(1); }
 
 const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
-let ok = 0, bad = 0; const errs = [];
+let ok = 0, bad = 0; const errs = []; const touched = [];
 for (const line of lines) {
   let o;
   try { o = JSON.parse(line); }
@@ -45,8 +46,21 @@ for (const line of lines) {
       note: o.note ? String(o.note).slice(0, 600) : null,
       sourceDoc: o.source_doc ? String(o.source_doc) : null,
     }, PARTIES_AI_V);
-    ok++;
+    ok++; touched.push(number);
   } catch (e) { bad++; if (errs.length < 10) errs.push({ number, error: String((e && e.message) || e) }); }
+}
+
+// Republish just the touched investigations' detail blobs so their parties/patents
+// go live (the main projection is refreshed separately via edis-upload --publish-only).
+if (touched.length && process.env.BLOB_READ_WRITE_TOKEN) {
+  let metaByNumber = new Map();
+  try { ({ metaByNumber } = await loadCatalogMaps('itc-work')); } catch { /* header meta optional */ }
+  let rp = 0;
+  for (const number of touched) {
+    try { await publishInvestigationDocs(number, metaByNumber.get(number)); rp++; }
+    catch (e) { if (errs.length < 15) errs.push({ number, error: `republish: ${(e && e.message) || e}` }); }
+  }
+  console.log(`Republished ${rp} detail blob(s) with parties/patents.`);
 }
 
 if (errs.length) console.log('Issues:', errs);

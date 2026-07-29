@@ -226,7 +226,7 @@ function applyFilter() {
     if (state.outcome === "ai") { if (!r.ai_disposition) return false; }
     else if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
     if (!q) return true;
-    const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.top_firms || []).map((f) => f.firm).join(" "), AI_LABEL[r.ai_disposition] || "", r.ai_note || ""].join(" ").toLowerCase();
+    const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.complainants || []).join(" "), (r.respondents || []).join(" "), (r.asserted_patents || []).join(" "), r.accused_products || "", (r.top_firms || []).map((f) => f.firm).join(" "), AI_LABEL[r.ai_disposition] || "", r.ai_note || ""].join(" ").toLowerCase();
     return hay.includes(q);
   });
   const dir = state.sortDir, k = state.sortK;
@@ -245,7 +245,11 @@ function renderRows() {
   const slice = state.filtered.slice(start, start + state.pageSize);
   if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="8" class="state">No matching investigations.</td></tr>`; }
   else $("rows").innerHTML = slice.map((r) => {
-    const parties = (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
+    // Prefer the AI-roled complainant v. respondents; fall back to the unroled participant list.
+    const roled = (r.complainants && r.complainants.length) || (r.respondents && r.respondents.length);
+    const parties = roled
+      ? [(r.complainants || []).join("; "), (r.respondents || []).join("; ")].filter(Boolean).join("  v.  ")
+      : (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
     return `<tr>
       <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
       <td>${esc(r.title || "")}<div class="parties">${esc(parties)}</div></td>

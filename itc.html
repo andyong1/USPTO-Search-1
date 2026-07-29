@@ -40,6 +40,7 @@
     a.link:hover { text-decoration: underline; }
     .muted { color: var(--text-5); }
     .parties { font-size: 0.8rem; color: var(--text-4); max-width: 320px; }
+    #tbl td.wrapcol { max-width: 220px; white-space: normal; word-break: break-word; font-size: 0.82rem; }
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
     .o-violation_remedy { background: var(--bad-bg); color: var(--bad-fg); }
     .o-no_violation { background: var(--ok-bg); color: var(--ok-fg); }
@@ -97,41 +98,41 @@
   </div>
 
   <div class="card">
-    <div class="cols-2">
-      <div>
-        <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, firm…" />
-        <div class="chips" id="outcomeChips"></div>
-        <div class="table-wrap">
-          <table id="tbl">
-            <thead>
-              <tr>
-                <th data-k="public_number">Inv. No.</th>
-                <th data-k="title">Title</th>
-                <th data-k="investigation_phase">Phase</th>
-                <th data-k="status">Status</th>
-                <th data-k="institution_date">Instituted</th>
-                <th data-k="last_doc_date">Last activity</th>
-                <th data-k="outcome">Outcome</th>
-                <th data-k="doc_count">Docs</th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
-        </div>
-        <div class="table-pager" id="pager"></div>
-      </div>
-      <div>
-        <h2 style="font-size:1rem">Firm league table</h2>
-        <p class="sub">Investigations in which a firm appears as a filer (public documents; the Commission is excluded). Heuristic — a firm may appear for any party/role.</p>
-        <div class="table-wrap" style="max-height:74vh">
-          <table>
-            <thead><tr><th>Firm</th><th>Invs.</th></tr></thead>
-            <tbody id="firms"></tbody>
-          </table>
-        </div>
-      </div>
+    <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
+    <div class="chips" id="outcomeChips"></div>
+    <div class="table-wrap">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th data-k="public_number">Inv. No.</th>
+            <th data-k="title">Title</th>
+            <th>Asserted patents</th>
+            <th>Complainants</th>
+            <th>Respondents</th>
+            <th data-k="investigation_phase">Phase</th>
+            <th data-k="status">Status</th>
+            <th data-k="institution_date">Instituted</th>
+            <th data-k="last_doc_date">Last activity</th>
+            <th data-k="outcome">Outcome</th>
+            <th data-k="doc_count">Docs</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
     </div>
+    <div class="table-pager" id="pager"></div>
     <p class="disclaimer" id="disclaimer"></p>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:1rem">Firm league table</h2>
+    <p class="sub">Investigations in which a firm appears as a filer (public documents; the Commission is excluded). Heuristic — a firm may appear for any party/role.</p>
+    <div class="table-wrap" style="max-width:640px">
+      <table>
+        <thead><tr><th>Firm</th><th>Invs.</th></tr></thead>
+        <tbody id="firms"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -243,16 +244,19 @@ function applyFilter() {
 function renderRows() {
   const start = state.page * state.pageSize;
   const slice = state.filtered.slice(start, start + state.pageSize);
-  if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="8" class="state">No matching investigations.</td></tr>`; }
+  if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="11" class="state">No matching investigations.</td></tr>`; }
   else $("rows").innerHTML = slice.map((r) => {
-    // Prefer the AI-roled complainant v. respondents; fall back to the unroled participant list.
-    const roled = (r.complainants && r.complainants.length) || (r.respondents && r.respondents.length);
-    const parties = roled
-      ? [(r.complainants || []).join("; "), (r.respondents || []).join("; ")].filter(Boolean).join("  v.  ")
-      : (r.participants || []).slice(0, 3).join("; ") + ((r.participants || []).length > 3 ? " …" : "");
+    // Asserted patents joined with " · " (they contain internal commas); roled
+    // parties in their own columns. All three populate as the NOI backfill runs.
+    const pats = (r.asserted_patents || []).join(" · ");
+    const comps = (r.complainants || []).join("; ");
+    const resps = (r.respondents || []).join("; ");
     return `<tr>
       <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
-      <td>${esc(r.title || "")}<div class="parties">${esc(parties)}</div></td>
+      <td>${esc(r.title || "")}</td>
+      <td class="wrapcol">${esc(pats) || "—"}</td>
+      <td class="wrapcol">${esc(comps) || "—"}</td>
+      <td class="wrapcol">${esc(resps) || "—"}</td>
       <td>${esc(r.investigation_phase || "")}</td>
       <td class="${r.status === "Active" ? "status-active" : "muted"}">${esc(r.status || "")}</td>
       <td>${esc(r.institution_date || "—")}</td>
@@ -311,7 +315,7 @@ function wire() {
 
 async function load() {
   if (!DATA_URL || DATA_URL === "PASTE_BLOB_URL_HERE") {
-    $("rows").innerHTML = `<tr><td colspan="8" class="state">Not configured yet. Run <code>node edis-fetch.mjs investigations</code> then <code>node edis-upload.mjs</code>, and paste the printed Blob URL into <code>ITC_DATA_URL</code> in itc.html.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="11" class="state">Not configured yet. Run <code>node edis-fetch.mjs investigations</code> then <code>node edis-upload.mjs</code>, and paste the printed Blob URL into <code>ITC_DATA_URL</code> in itc.html.</td></tr>`;
     return;
   }
   try {
@@ -324,7 +328,7 @@ async function load() {
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderFirms(); apply();
   } catch (e) {
-    $("rows").innerHTML = `<tr><td colspan="8" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="11" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
   }
 }
 load();

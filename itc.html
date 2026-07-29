@@ -195,6 +195,12 @@ function detailUrl(inv) {
   return `/itc-investigation?inv=${encodeURIComponent(inv.investigation_number)}`;
 }
 
+// A single asserted patent → a Google Patents link (bare US number resolves to the grant).
+function patLink(p) {
+  const d = String(p).replace(/[^0-9A-Za-z]/g, "");
+  return `<a class="link" href="https://patents.google.com/patent/US${d}" target="_blank" rel="noopener">${esc(p)}</a>`;
+}
+
 // public_number is derived server-side (edis-fetch.mjs derivePublicNumber) as the
 // single source of truth: "337-TA-<n>" for instituted investigations, "Dkt. No.
 // <n>" for pre-institution docket filings. Trust it; fall back to the raw number.
@@ -248,13 +254,13 @@ function renderRows() {
   else $("rows").innerHTML = slice.map((r) => {
     // Asserted patents joined with " · " (they contain internal commas); roled
     // parties in their own columns. All three populate as the NOI backfill runs.
-    const pats = (r.asserted_patents || []).join(" · ");
+    const pats = (r.asserted_patents || []).map(patLink).join(" · ");
     const comps = (r.complainants || []).join("; ");
     const resps = (r.respondents || []).join("; ");
     return `<tr>
       <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
       <td>${esc(r.title || "")}</td>
-      <td class="wrapcol">${esc(pats) || "—"}</td>
+      <td class="wrapcol">${pats || "—"}</td>
       <td class="wrapcol">${esc(comps) || "—"}</td>
       <td class="wrapcol">${esc(resps) || "—"}</td>
       <td>${esc(r.investigation_phase || "")}</td>

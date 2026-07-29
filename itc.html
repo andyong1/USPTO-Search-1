@@ -59,6 +59,9 @@
     .rem { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: var(--brand); color: #fff; }
     .flag { color: var(--warn-fg); font-weight: 700; cursor: help; }
     .status-active { color: var(--ok-fg); font-weight: 700; }
+    .d-pending { background: var(--warn-bg); color: var(--warn-fg); }
+    .d-active { background: var(--accent2-bg); color: var(--accent2-fg); }
+    .d-none { background: var(--surface-3); color: var(--text-2); }
     .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
     .pg { padding: 5px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--heading); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
     .pg:hover:not(:disabled) { background: var(--surface-3); }
@@ -98,6 +101,8 @@
   </div>
 
   <div class="card">
+    <h2>Instituted investigations (337-TA)</h2>
+    <p class="sub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
     <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
     <div class="chips" id="outcomeChips"></div>
     <div class="table-wrap">
@@ -122,6 +127,25 @@
     </div>
     <div class="table-pager" id="pager"></div>
     <p class="disclaimer" id="disclaimer"></p>
+  </div>
+
+  <div class="card">
+    <h2>Pre-institution docket filings</h2>
+    <p class="sub">Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter moves to the table above with a 337-TA number.</p>
+    <div class="table-wrap" style="max-height:52vh">
+      <table id="dtbl">
+        <thead>
+          <tr>
+            <th>Dkt. No.</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Last activity</th>
+            <th>Docs</th>
+          </tr>
+        </thead>
+        <tbody id="drows"></tbody>
+      </table>
+    </div>
   </div>
 
   <div class="card">
@@ -181,7 +205,10 @@ function outcomeCell(r) {
   return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
 }
 
-const state = { all: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
+const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
+// Pre-institution matters carry an EDIS Docket Number (public_number "Dkt. No. <n>")
+// rather than an instituted 337-TA number — they live in their own table.
+const isDocket = (r) => String(r.public_number || "").startsWith("Dkt. No.");
 const $ = (id) => document.getElementById(id);
 // Decode any pre-existing HTML entities first (EDIS double-encodes ampersands in
 // firm/party names, e.g. "Fish &amp; Richardson"), THEN re-encode for safe HTML —
@@ -210,8 +237,9 @@ function displayNumber(r) {
 
 function renderKpis(summary) {
   const cells = [
-    ["Investigations", summary.total],
+    ["Instituted (337-TA)", summary.total],
     ["Active", summary.active],
+    ["Docket filings", summary.dockets || 0],
     ["Violation + remedy", summary.violation_remedy],
     ["Settled", summary.terminated_settlement],
     ["No violation", summary.no_violation],
@@ -308,10 +336,37 @@ function renderFirms() {
   $("firms").innerHTML = ranked.map(([firm, n]) => `<tr><td>${esc(firm)}</td><td>${n}</td></tr>`).join("") || `<tr><td colspan="2" class="state">No firm data yet — run the document crawl.</td></tr>`;
 }
 
+// Pre-institution docket status badge: pending the Commission's institution vote,
+// still an open docket, or a docket that never proceeded to an investigation.
+function dktBadge(r) {
+  if (r.status === "Preinstitution") return `<span class="badge d-pending">Pending institution</span>`;
+  if (r.status === "Active") return `<span class="badge d-active">Active docket</span>`;
+  return `<span class="badge d-none">Not instituted</span>`;
+}
+const DKT_RANK = { Preinstitution: 0, Active: 1 };   // pending first, then open, then inactive
+function renderDockets() {
+  const q = state.q.toLowerCase().trim();
+  const dnum = (r) => { const m = String(r.investigation_number || "").match(/(\d+)\s*$/); return m ? parseInt(m[1], 10) : 0; };
+  const rows = state.dockets
+    .filter((r) => !q || [displayNumber(r), r.investigation_number, r.title].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => {
+      const ra = DKT_RANK[a.status] ?? 2, rb = DKT_RANK[b.status] ?? 2;
+      return ra !== rb ? ra - rb : dnum(b) - dnum(a);
+    });
+  if (!rows.length) { $("drows").innerHTML = `<tr><td colspan="5" class="state">No matching docket filings.</td></tr>`; return; }
+  $("drows").innerHTML = rows.map((r) => `<tr>
+    <td><a class="link" href="${detailUrl(r)}">${esc(displayNumber(r))}</a></td>
+    <td>${esc(r.title || "")}</td>
+    <td>${dktBadge(r)}</td>
+    <td>${esc(r.last_doc_date || "—")}</td>
+    <td>${r.doc_count == null ? "—" : r.doc_count}</td>
+  </tr>`).join("");
+}
+
 function apply() { applyFilter(); renderChips(); renderRows(); }
 
 function wire() {
-  $("q").oninput = (e) => { state.q = e.target.value; state.page = 0; applyFilter(); renderRows(); };
+  $("q").oninput = (e) => { state.q = e.target.value; state.page = 0; applyFilter(); renderRows(); renderDockets(); };
   document.querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => {
     const k = th.dataset.k;
     if (state.sortK === k) state.sortDir *= -1; else { state.sortK = k; state.sortDir = 1; }
@@ -328,11 +383,19 @@ async function load() {
     const res = await fetch(DATA_URL, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    state.all = data.investigations || [];
-    renderKpis(data.summary || {});
+    const all = data.investigations || [];
+    state.all = all.filter((r) => !isDocket(r));   // instituted 337-TA investigations
+    state.dockets = all.filter(isDocket);          // pre-institution docket filings
+    // The server summary counts every row; re-scope the headline counts to the
+    // instituted table and expose the docket count separately.
+    const summary = Object.assign({}, data.summary || {});
+    summary.total = state.all.length;
+    summary.active = state.all.filter((r) => r.status === "Active").length;
+    summary.dockets = state.dockets.length;
+    renderKpis(summary);
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
-    wire(); renderFirms(); apply();
+    wire(); renderFirms(); renderDockets(); apply();
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="11" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
   }

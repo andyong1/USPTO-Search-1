@@ -1,46 +1,54 @@
-// USITC Section 337 tracker — LOCAL authenticated PDF mirror.
+// USITC Section 337 tracker — LOCAL authenticated PDF mirror to Cloudflare R2.
 //
-// Why this exists: EDIS's WAF 403s Vercel's serverless egress, and anonymous
-// EDIS API access "cannot download any attachments" (per the EDIS guide). So the
-// on-site download proxy can't work. Instead we mirror the KEY public PDFs from
-// THIS machine (a normal IP EDIS accepts) using an EDIS Login.gov token, upload
-// them to public Vercel Blob, and record each mirror_url in Neon. The static
-// /itc-investigation page then serves View/Download straight from Blob — no
-// Vercel→EDIS call, no serve-time token.
+// EDIS 403s Vercel's serverless egress and anonymous EDIS can't download
+// attachments, and the EDIS website now requires a cumbersome Login.gov sign-in
+// to download. So we mirror the KEY public PDFs from THIS machine (a normal IP,
+// with your EDIS token) to Cloudflare R2 (10 GB free + free egress), record each
+// public R2 URL in Neon (itc_document.mirror_url), and the /itc-investigation
+// page serves View/Download straight from R2 — no EDIS login for visitors.
 //
-// Scope: "Key document types" (lib/itc-db.js KEY_DOC_PATTERNS) — complaints,
-// notices of investigation, IDs, Commission opinions/notices, and remedial
-// orders. Resumable (mirror_url gate) and retry-hardened.
+// Scope (lib/itc-outcome.js selectMirrorDocs): the dispositive set (Commission
+// opinion, final ID, remedy/consent orders + latest FR notice) plus the complaint
+// and notice of investigation — public only, type-driven (no procedural flood).
+// Per-file size cap skips giant exhibit bundles. Resumable (mirror_url gate).
 //
-// Requires in the environment (load grounds-secrets.env first):
-//   POSTGRES_URL, BLOB_READ_WRITE_TOKEN, EDIS_TOKEN   (+ NODE_EXTRA_CA_CERTS on
-//   an SSL-inspected network). Get EDIS_TOKEN by signing into EDIS via Login.gov
-//   and copying your API token; it expires, but this job is resumable.
+// Requires (load grounds-secrets.env first):
+//   POSTGRES_URL, EDIS_TOKEN, BLOB_READ_WRITE_TOKEN (to republish detail blobs),
+//   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE
+//   (+ NODE_OPTIONS=--use-system-ca on the corporate network).
 //
-//   node edis-mirror.mjs                 # mirror all pending key docs
+//   node edis-mirror.mjs                 # mirror all investigations (newest first)
 //   node edis-mirror.mjs --inv 337-1000  # just one investigation
-//   node edis-mirror.mjs --limit 100     # cap this run
-// It republishes the affected investigations' detail blobs itself, so the mirror
-// links go live immediately — no edis-upload step needed afterward.
+//   node edis-mirror.mjs --limit 100     # cap to N investigations this run
+// Republishes the affected detail blobs itself — mirror links go live immediately.
 
-import { put } from '@vercel/blob';
-import { keyPublicDocsToMirror, countKeyPublicDocsToMirror, setDocumentMirror } from './lib/itc-db.js';
+import { AwsClient } from 'aws4fetch';
+import { numbersWithDocuments, documentsForDetail, setDocumentMirror } from './lib/itc-db.js';
+import { selectMirrorDocs } from './lib/itc-outcome.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 
-for (const v of ['POSTGRES_URL', 'BLOB_READ_WRITE_TOKEN', 'EDIS_TOKEN']) {
-  if (!process.env[v]) { console.error(`${v} is not set. Load grounds-secrets.env (and set EDIS_TOKEN) first.`); process.exit(1); }
-}
+const NEED = ['POSTGRES_URL', 'EDIS_TOKEN', 'BLOB_READ_WRITE_TOKEN', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_PUBLIC_BASE'];
+for (const v of NEED) { if (!process.env[v]) { console.error(`${v} is not set. Load grounds-secrets.env (with the R2 + EDIS credentials) first.`); process.exit(1); } }
 
 const EDIS = 'https://edis.usitc.gov/data';
 const UA = 'andy-ong.com ITC-337 tracker (personal research; contact via andy-ong.com)';
 const TOKEN = process.env.EDIS_TOKEN;
+const MAX_BYTES = 40 * 1048576;   // skip attachments larger than 40 MB (exhibit bundles)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const args = process.argv.slice(2);
-const invIdx = args.indexOf('--inv');
-const INV = invIdx >= 0 ? args[invIdx + 1] : null;
-const limIdx = args.indexOf('--limit');
-const MAX = limIdx >= 0 ? Number(args[limIdx + 1]) : 100000;
+const INV = args.includes('--inv') ? args[args.indexOf('--inv') + 1] : null;
+const MAX = args.includes('--limit') ? Number(args[args.indexOf('--limit') + 1]) : 100000;
+
+// R2 (S3-compatible) via aws4fetch (tiny SigV4 signer).
+const r2 = new AwsClient({ accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY, region: 'auto', service: 's3' });
+const R2_ENDPOINT = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET}`;
+const R2_PUBLIC = process.env.R2_PUBLIC_BASE.replace(/\/$/, '');
+async function r2Put(key, buf, contentType) {
+  const res = await r2.fetch(`${R2_ENDPOINT}/${key}`, { method: 'PUT', body: buf, headers: { 'Content-Type': contentType } });
+  if (!res.ok) throw new Error(`R2 PUT HTTP ${res.status}`);
+  return `${R2_PUBLIC}/${key}`;
+}
 
 const ENT = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'" };
 const decode = (s) => s == null ? null : s
@@ -61,42 +69,34 @@ function parseAttachments(xml) {
 }
 
 async function edisFetch(url, headers, tries = 4) {
-  for (let attempt = 1; attempt <= tries; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 60000);
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: ctrl.signal });
-      clearTimeout(timer);
-      return res;
-    } catch (e) {
-      clearTimeout(timer);
-      if (attempt === tries) throw e;
-      await sleep(1200 * attempt);
-    }
+    try { const res = await fetch(url, { headers: { 'User-Agent': UA, ...headers }, signal: ctrl.signal }); clearTimeout(timer); return res; }
+    catch (e) { clearTimeout(timer); if (attempt >= tries) throw e; await sleep(1200 * attempt); }
   }
 }
 
-// Mirror one document: resolve its attachment(s), download the primary PDF with
-// the token, upload to Blob, and return the Blob URL (or '' if nothing to fetch).
+// Resolve the primary attachment, download the PDF with the token, upload to R2.
+// Returns {url,attId,size}; url '' when there's nothing to fetch or it's too big.
 async function mirrorDoc(docId) {
   const ar = await edisFetch(`${EDIS}/attachment/${docId}`, { Accept: 'application/xml' });
   const axml = await ar.text();
   if (!ar.ok) throw new Error(`attachment lookup HTTP ${ar.status}`);
   const attachments = parseAttachments(axml);
-  if (!attachments.length) return { url: '', attId: null, size: 0 };  // nothing downloadable
-  const att = attachments[0];                                         // primary attachment (the document itself)
+  if (!attachments.length) return { url: '', attId: null, size: 0 };
+  const att = attachments[0];
+  if (att.fileSize && Number(att.fileSize) > MAX_BYTES) return { url: '', attId: att.id, size: Number(att.fileSize), tooBig: true };
 
   const dr = await edisFetch(`${EDIS}/download/${docId}/${att.id}`, { Authorization: `Bearer ${TOKEN}`, Accept: 'application/pdf' });
   if (dr.status === 401 || dr.status === 403) throw new Error('EDIS_TOKEN rejected (401/403) — refresh the token');
   if (!dr.ok) throw new Error(`download HTTP ${dr.status}`);
   const buf = Buffer.from(await dr.arrayBuffer());
   if (!buf.length) throw new Error('empty download');
+  if (buf.length > MAX_BYTES) return { url: '', attId: att.id, size: buf.length, tooBig: true };
 
-  const blob = await put(`itc/doc/${docId}.pdf`, buf, {
-    access: 'public', contentType: 'application/pdf',
-    addRandomSuffix: false, allowOverwrite: true, cacheControlMaxAge: 31536000,
-  });
-  return { url: blob.url, attId: att.id, size: buf.length, multi: attachments.length > 1 };
+  const url = await r2Put(`itc/doc/${docId}.pdf`, buf, 'application/pdf');
+  return { url, attId: att.id, size: buf.length };
 }
 
 async function retry(fn, tries = 3) {
@@ -104,43 +104,52 @@ async function retry(fn, tries = 3) {
     try { return await fn(); }
     catch (e) {
       const msg = String((e && e.message) || e);
-      if (msg.includes('token rejected') || msg.includes('token')) throw e;   // don't retry auth failures
-      if (i >= tries || !/fetch failed|ECONN|ETIMEDOUT|EPIPE|socket|network|terminated|HTTP 5\d\d/i.test(msg)) throw e;
+      if (/token/i.test(msg)) throw e;   // don't retry auth failures
+      if (i >= tries || !/fetch failed|ECONN|ETIMEDOUT|EPIPE|socket|network|terminated|HTTP 5\d\d|R2 PUT HTTP 5/i.test(msg)) throw e;
       await sleep(1000 * i);
     }
   }
 }
 
 // ── Run ────────────────────────────────────────────────────────────────
-const pending = await countKeyPublicDocsToMirror(INV);
-console.log(`${pending} key public document(s) pending mirror${INV ? ` for ${INV}` : ''}. Fetching up to ${Math.min(MAX, pending)}…`);
-const docs = await keyPublicDocsToMirror(Math.min(MAX, pending || MAX), INV);
+const invNum = (n) => parseInt(String(n || '').match(/(\d+)$/)?.[1] || '0', 10);
+let numbers = INV ? [INV] : (await numbersWithDocuments()).sort((a, b) => invNum(b) - invNum(a));
+if (!INV) numbers = numbers.slice(0, MAX);
+console.log(`Mirroring key documents for ${numbers.length} investigation(s) to R2 (${R2_PUBLIC})…`);
 
-let ok = 0, empty = 0, failed = 0, bytes = 0; const errs = [];
-const touched = new Set();     // investigations whose detail blob needs a mirror-link refresh
-for (let i = 0; i < docs.length; i++) {
-  const d = docs[i];
-  try {
-    const r = await retry(() => mirrorDoc(d.id));
-    await setDocumentMirror(d.id, r.url, r.attId, r.size);
-    if (r.url) { ok++; bytes += r.size || 0; touched.add(d.investigation_number); } else empty++;
-  } catch (e) {
-    failed++;
-    const msg = String((e && e.message) || e);
-    if (errs.length < 10) errs.push({ id: d.id, inv: d.investigation_number, error: msg });
-    if (/token/i.test(msg)) { console.error(`\nStopping: ${msg}. Refresh EDIS_TOKEN and re-run (already-mirrored docs are skipped).`); break; }
+let ok = 0, empty = 0, big = 0, skipped = 0, failed = 0, bytes = 0, i = 0; const errs = [];
+const touched = new Set();
+let stop = false;
+for (const number of numbers) {
+  i++;
+  if (stop) break;
+  let docs;
+  try { docs = await documentsForDetail(number); }
+  catch (e) { failed++; if (errs.length < 10) errs.push({ inv: number, error: String((e && e.message) || e) }); continue; }
+  const done = new Set(docs.filter((d) => d.mirror_url != null).map((d) => d.id)); // '' (tried) or url (mirrored)
+  for (const s of selectMirrorDocs(docs)) {
+    if (done.has(s.id)) { skipped++; continue; }
+    try {
+      const r = await retry(() => mirrorDoc(s.id));
+      await setDocumentMirror(s.id, r.url, r.attId, r.size);
+      if (r.url) { ok++; bytes += r.size || 0; touched.add(number); }
+      else if (r.tooBig) big++;
+      else empty++;
+    } catch (e) {
+      failed++;
+      const msg = String((e && e.message) || e);
+      if (errs.length < 10) errs.push({ id: s.id, inv: number, error: msg });
+      if (/token/i.test(msg)) { console.error(`\nStopping: ${msg}. Refresh EDIS_TOKEN and re-run (mirrored docs are skipped).`); stop = true; break; }
+    }
+    await sleep(250);
   }
-  if ((i + 1) % 10 === 0 || i === docs.length - 1) {
-    process.stdout.write(`\r  ${i + 1}/${docs.length} · ${ok} mirrored (${(bytes / 1048576).toFixed(1)} MB), ${empty} no-file, ${failed} failed…`);
-  }
-  await sleep(300);
+  if (i % 10 === 0 || i === numbers.length) process.stdout.write(`\r  ${i}/${numbers.length} inv · ${ok} mirrored (${(bytes / 1048576).toFixed(0)} MB), ${big} too-big, ${empty} no-file, ${skipped} done, ${failed} failed…`);
 }
 process.stdout.write('\n');
 if (errs.length) console.log('Errors:', errs);
-console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(1)} MB), ${empty} had no downloadable file, ${failed} failed.`);
+console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(0)} MB), ${big} too big (>40MB, skipped), ${empty} no downloadable file, ${skipped} already done, ${failed} failed.`);
 
-// Republish ONLY the touched investigations' detail blobs (fast — no full pass),
-// so the new mirror links go live immediately without re-deriving everything.
+// Republish ONLY the touched investigations' detail blobs so the R2 links go live.
 if (touched.size) {
   let metaByNumber = new Map();
   try { ({ metaByNumber } = await loadCatalogMaps('itc-work')); } catch { /* header meta optional */ }
@@ -149,5 +158,5 @@ if (touched.size) {
     try { await publishInvestigationDocs(number, metaByNumber.get(number)); rp++; }
     catch (e) { console.error(`  republish ${number} failed: ${(e && e.message) || e}`); }
   }
-  console.log(`Republished ${rp} investigation detail blob(s) with mirror links — no further step needed.`);
+  console.log(`Republished ${rp} investigation detail blob(s) with R2 mirror links.`);
 }

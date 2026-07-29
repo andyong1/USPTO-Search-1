@@ -113,7 +113,11 @@ const DATA_URL = params.get("data") || (INV ? `${BLOB_BASE}/itc/inv/${encodeURIC
 
 const state = { docs: [], q: "", sortK: "date", sortDir: -1, page: 0, pageSize: 60 };
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Decode pre-existing HTML entities (EDIS double-encodes ampersands, e.g. "Ezra
+// Sutton &amp; Associates"), THEN re-encode for safe HTML — shows "&" not "&amp;".
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0*39;|&apos;/g, "'")
+  .replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isPublic = (d) => (d.security || "").toLowerCase() === "public";
 
 function edisInvUrl() { return `https://edis.usitc.gov/external/search?investigationNumber=${encodeURIComponent(INV)}`; }

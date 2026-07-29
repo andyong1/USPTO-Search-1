@@ -182,7 +182,12 @@ function outcomeCell(r) {
 
 const state = { all: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Decode any pre-existing HTML entities first (EDIS double-encodes ampersands in
+// firm/party names, e.g. "Fish &amp; Richardson"), THEN re-encode for safe HTML —
+// so the page shows "&" not "&amp;" while staying XSS-safe.
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#0*39;|&apos;/g, "'")
+  .replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function detailUrl(inv) {
   // On-site investigation detail page (document list + downloads).

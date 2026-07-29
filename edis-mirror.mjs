@@ -39,6 +39,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const args = process.argv.slice(2);
 const INV = args.includes('--inv') ? args[args.indexOf('--inv') + 1] : null;
 const MAX = args.includes('--limit') ? Number(args[args.indexOf('--limit') + 1]) : 100000;
+// Recency window: mirror only investigations instituted (earliest document) in
+// this year or later — keeps R2 within the 10 GB free tier (~5.7 GB at 2015,
+// with headroom for new filings; older docs still link to EDIS). --since 0 = all.
+const SINCE = args.includes('--since') ? Number(args[args.indexOf('--since') + 1]) : 2015;
 
 // R2 (S3-compatible) via aws4fetch (tiny SigV4 signer).
 const r2 = new AwsClient({ accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY, region: 'auto', service: 's3' });
@@ -115,9 +119,9 @@ async function retry(fn, tries = 3) {
 const invNum = (n) => parseInt(String(n || '').match(/(\d+)$/)?.[1] || '0', 10);
 let numbers = INV ? [INV] : (await numbersWithDocuments()).sort((a, b) => invNum(b) - invNum(a));
 if (!INV) numbers = numbers.slice(0, MAX);
-console.log(`Mirroring key documents for ${numbers.length} investigation(s) to R2 (${R2_PUBLIC})…`);
+console.log(`Mirroring key documents for ${numbers.length} investigation(s) to R2 (${R2_PUBLIC})${INV || !SINCE ? '' : `, instituted >= ${SINCE}`}…`);
 
-let ok = 0, empty = 0, big = 0, skipped = 0, failed = 0, bytes = 0, i = 0; const errs = [];
+let ok = 0, empty = 0, big = 0, skipped = 0, failed = 0, oldSkip = 0, bytes = 0, i = 0; const errs = [];
 const touched = new Set();
 let stop = false;
 for (const number of numbers) {
@@ -126,6 +130,12 @@ for (const number of numbers) {
   let docs;
   try { docs = await documentsForDetail(number); }
   catch (e) { failed++; if (errs.length < 10) errs.push({ inv: number, error: String((e && e.message) || e) }); continue; }
+  // Recency gate: skip investigations instituted before SINCE (earliest doc date).
+  if (!INV && SINCE) {
+    const dates = docs.map((d) => String(d.received_date || '')).filter(Boolean).sort();
+    const year = dates[0] ? Number(dates[0].slice(0, 4)) : 0;
+    if (year && year < SINCE) { oldSkip++; continue; }
+  }
   const done = new Set(docs.filter((d) => d.mirror_url != null).map((d) => d.id)); // '' (tried) or url (mirrored)
   for (const s of selectMirrorDocs(docs)) {
     if (done.has(s.id)) { skipped++; continue; }
@@ -147,7 +157,7 @@ for (const number of numbers) {
 }
 process.stdout.write('\n');
 if (errs.length) console.log('Errors:', errs);
-console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(0)} MB), ${big} too big (>40MB, skipped), ${empty} no downloadable file, ${skipped} already done, ${failed} failed.`);
+console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(0)} MB), ${big} too big (>40MB, skipped), ${empty} no downloadable file, ${skipped} already done, ${oldSkip} pre-${SINCE} investigations skipped, ${failed} failed.`);
 
 // Republish ONLY the touched investigations' detail blobs so the R2 links go live.
 if (touched.size) {

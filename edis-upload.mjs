@@ -31,6 +31,7 @@ import {
   setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes, listParties,
 } from './lib/itc-db.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
+import { dispositiveRole } from './lib/itc-outcome.js';
 
 if (!process.env.POSTGRES_URL) {
   console.error('POSTGRES_URL is not set. Load it from grounds-secrets.env first.');
@@ -118,9 +119,24 @@ function deriveOne(docs, status) {
   const topFirms = [...firmCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([firm, count]) => ({ firm, count }));
   const dates = docs.map((d) => d.received_date).filter(Boolean).sort();
 
+  // Presiding ALJ from an "Assignment of ALJ <name>" document title (partial
+  // coverage — ~1/3 of assignment notices don't name the judge). Take the most
+  // recent name-bearing assignment (handles reassignments).
+  let alj = null;
+  const assigns = docs.filter((d) => /assignment/i.test(d.document_title || ''))
+    .sort((a, b) => String(b.received_date || '').localeCompare(String(a.received_date || '')));
+  for (const d of assigns) {
+    const m = String(d.document_title || '').match(/(?:re)?assignment (?:of|to)\s+(?:the presiding\s+)?(?:chief\s+)?(?:administrative law judge|alj|calj)\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)?)/i);
+    if (m) { alj = m[1].trim().replace(/\s+/g, ' '); break; }
+  }
+  // Decision date = latest dispositive-document date (final-determination proxy for pendency).
+  const decDates = docs.filter((d) => dispositiveRole(d.document_type, d.document_title)).map((d) => d.received_date).filter(Boolean).sort();
+
   return {
     institutionDate: institutionDate(docs),
     lastDocDate: dates.length ? dates[dates.length - 1] : null,
+    decisionDate: decDates.length ? decDates[decDates.length - 1] : null,
+    alj,
     docCount: docs.length,
     publicDocCount: publicDocs.length,
     outcome, remedy, reviewFlag,

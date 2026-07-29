@@ -37,7 +37,7 @@
     .barrow { display: grid; grid-template-columns: 132px 1fr 42px; align-items: center; gap: 8px; margin: 5px 0; font-size: 0.8rem; }
     .barrow .bl { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bartrack { background: var(--surface-3); border-radius: 5px; height: 16px; overflow: hidden; }
-    .barfill { height: 100%; border-radius: 5px; background: var(--brand); min-width: 2px; }
+    .barfill { display: block; height: 100%; border-radius: 5px; background: var(--brand); min-width: 2px; }
     .barrow .bv { text-align: right; color: var(--heading); font-weight: 600; }
     .bf-violation { background: var(--bad-fg); } .bf-noviol { background: var(--ok-fg); }
     .bf-settled { background: var(--accent2-fg); } .bf-terminated { background: var(--warn-fg); } .bf-pending { background: var(--text-5); }
@@ -470,6 +470,30 @@ function renderAnalytics() {
   const violRate = adjudicated ? Math.round(g.adjV / adjudicated * 100) : 0;
   const settleRate = cls.length ? Math.round(g.settled / cls.length * 100) : 0;
 
+  // Pendency: institution date → latest dispositive-document date, per investigation.
+  const pend = new Map();
+  for (const r of inv) {
+    if (!r.institution_date || !r.decision_date) continue;
+    const cur = pend.get(r.investigation_number);
+    if (!cur || r.institution_date < cur.inst) pend.set(r.investigation_number, { inst: r.institution_date, dec: r.decision_date });
+  }
+  const months = [];
+  for (const { inst, dec } of pend.values()) {
+    const m = (new Date(dec) - new Date(inst)) / (1000 * 60 * 60 * 24 * 30.44);
+    if (m > 0 && m < 120) months.push(m);
+  }
+  months.sort((a, b) => a - b);
+  const median = months.length ? months[Math.floor(months.length / 2)] : 0;
+  const pendBuckets = [["< 12 mo", 0, 12], ["12–18 mo", 12, 18], ["18–24 mo", 18, 24], ["24–36 mo", 24, 36], ["36+ mo", 36, 999]];
+  const pendHist = pendBuckets.map(([label, lo, hi]) => ({ label, value: months.filter((m) => m >= lo && m < hi).length }));
+
+  // Investigations by presiding ALJ (one per investigation; partial coverage).
+  const aljByInv = new Map();
+  for (const r of inv) if (r.alj && !aljByInv.has(r.investigation_number)) aljByInv.set(r.investigation_number, r.alj);
+  const aljCount = {};
+  for (const a of aljByInv.values()) aljCount[a] = (aljCount[a] || 0) + 1;
+  const aljEntries = Object.entries(aljCount).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([label, value]) => ({ label, value }));
+
   const cards = [
     card("Outcome distribution", `${cls.length} investigations with an AI-classified outcome`, bars(dispEntries)),
     card("Violation rate", "Share of adjudicated matters (violation/remedy or default vs. no violation) finding a violation", `<div class="stat">${violRate}%</div><div class="csub">${g.adjV} of ${adjudicated} adjudicated matters</div>`),
@@ -477,8 +501,10 @@ function renderAnalytics() {
     card("Remedy mix", "Remedies issued (an investigation may carry several)", bars(remEntries)),
     card("Disposition category", "How instituted investigations resolve", bars(groupEntries)),
     card("Filings by institution year", "Instituted 337-TA investigations per year (heuristic institution date)", bars(yearEntries)),
+    card("Median pendency", "Institution → last dispositive document (approximate; investigations with a decision date)", `<div class="stat">${median.toFixed(1)} mo</div><div class="csub">median across ${months.length} investigations</div>${bars(pendHist)}`),
+    card("Investigations by ALJ", "Presiding judge, from assignment notices (partial coverage — ~⅓ of notices don't name the judge)", aljEntries.length ? bars(aljEntries) : `<div class="csub">No ALJ data yet.</div>`),
   ];
-  $("charts").innerHTML = `<p class="analytics-note">Pendency (time-to-decision) and by-ALJ breakdowns are coming once those fields are derived.</p><div class="charts-grid">${cards.join("")}</div>`;
+  $("charts").innerHTML = `<div class="charts-grid">${cards.join("")}</div>`;
 }
 
 function apply() { applyFilter(); renderChips(); renderRows(); }

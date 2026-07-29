@@ -21,6 +21,13 @@
     .card + .card { margin-top: 22px; }
     .card h2 { font-size: 1.1rem; color: var(--heading); margin-bottom: 6px; }
     .sub { color: var(--text-5); font-size: 0.85rem; margin-bottom: 14px; }
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
+    .tab { padding: 9px 16px; border: none; background: none; color: var(--text-4); font-weight: 600; font-size: 0.92rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .tab:hover { color: var(--heading); }
+    .tab.on { color: var(--heading); border-bottom-color: var(--brand); }
+    .tab-count { font-size: 0.72rem; color: var(--text-5); background: var(--surface-2); border-radius: 10px; padding: 1px 7px; margin-left: 6px; }
+    .tab.on .tab-count { background: var(--brand); color: #fff; }
+    .pane[hidden] { display: none; }
     .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 6px 0 4px; }
     @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
@@ -101,51 +108,56 @@
   </div>
 
   <div class="card">
-    <h2>Instituted investigations (337-TA)</h2>
-    <p class="sub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-tab="inst" role="tab">Instituted investigations (337-TA)<span class="tab-count" id="cntInst">0</span></button>
+      <button class="tab" data-tab="dkt" role="tab">Pre-institution docket filings<span class="tab-count" id="cntDkt">0</span></button>
+    </div>
+    <p class="sub" id="tabSub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
     <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
     <div class="chips" id="outcomeChips"></div>
-    <div class="table-wrap">
-      <table id="tbl">
-        <thead>
-          <tr>
-            <th data-k="public_number">Inv. No.</th>
-            <th data-k="title">Title</th>
-            <th>Asserted patents</th>
-            <th>Complainants</th>
-            <th>Respondents</th>
-            <th data-k="investigation_phase">Phase</th>
-            <th data-k="status">Status</th>
-            <th data-k="institution_date">Instituted</th>
-            <th data-k="last_doc_date">Last activity</th>
-            <th data-k="outcome">Outcome</th>
-            <th data-k="doc_count">Docs</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <div class="table-pager" id="pager"></div>
-    <p class="disclaimer" id="disclaimer"></p>
-  </div>
 
-  <div class="card">
-    <h2>Pre-institution docket filings</h2>
-    <p class="sub">Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter moves to the table above with a 337-TA number.</p>
-    <div class="table-wrap" style="max-height:52vh">
-      <table id="dtbl">
-        <thead>
-          <tr>
-            <th>Dkt. No.</th>
-            <th>Title</th>
-            <th>Status</th>
-            <th>Last activity</th>
-            <th>Docs</th>
-          </tr>
-        </thead>
-        <tbody id="drows"></tbody>
-      </table>
+    <div id="pane-inst" class="pane">
+      <div class="table-wrap">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th data-k="public_number">Inv. No.</th>
+              <th data-k="title">Title</th>
+              <th>Asserted patents</th>
+              <th>Complainants</th>
+              <th>Respondents</th>
+              <th data-k="investigation_phase">Phase</th>
+              <th data-k="status">Status</th>
+              <th data-k="institution_date">Instituted</th>
+              <th data-k="last_doc_date">Last activity</th>
+              <th data-k="outcome">Outcome</th>
+              <th data-k="doc_count">Docs</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="table-pager" id="pager"></div>
     </div>
+
+    <div id="pane-dkt" class="pane" hidden>
+      <div class="table-wrap" style="max-height:60vh">
+        <table id="dtbl">
+          <thead>
+            <tr>
+              <th>Dkt. No.</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Last activity</th>
+              <th>Docs</th>
+            </tr>
+          </thead>
+          <tbody id="drows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="disclaimer" id="disclaimer"></p>
   </div>
 
   <div class="card">
@@ -205,7 +217,7 @@ function outcomeCell(r) {
   return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
 }
 
-const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50 };
+const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50, tab: "inst" };
 // Pre-institution matters carry an EDIS Docket Number (public_number "Dkt. No. <n>")
 // rather than an instituted 337-TA number — they live in their own table.
 const isDocket = (r) => String(r.public_number || "").startsWith("Dkt. No.");
@@ -363,9 +375,25 @@ function renderDockets() {
   </tr>`).join("");
 }
 
+const TAB_SUB = {
+  inst: "Matters the Commission voted to institute, each with a 337-TA investigation number.",
+  dkt: "Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter gets a 337-TA number and appears under the other tab.",
+};
+// Toggle between the instituted-investigations table and the docket-filings table.
+// The outcome chips + pager belong to the instituted table only.
+function switchTab(t) {
+  state.tab = t;
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  $("pane-inst").hidden = t !== "inst";
+  $("pane-dkt").hidden = t !== "dkt";
+  $("outcomeChips").style.display = t === "inst" ? "" : "none";
+  $("tabSub").innerHTML = TAB_SUB[t];
+}
+
 function apply() { applyFilter(); renderChips(); renderRows(); }
 
 function wire() {
+  document.querySelectorAll(".tab").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
   $("q").oninput = (e) => { state.q = e.target.value; state.page = 0; applyFilter(); renderRows(); renderDockets(); };
   document.querySelectorAll("th[data-k]").forEach((th) => th.onclick = () => {
     const k = th.dataset.k;
@@ -393,6 +421,8 @@ async function load() {
     summary.active = state.all.filter((r) => r.status === "Active").length;
     summary.dockets = state.dockets.length;
     renderKpis(summary);
+    $("cntInst").textContent = state.all.length;
+    $("cntDkt").textContent = state.dockets.length;
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderFirms(); renderDockets(); apply();

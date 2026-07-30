@@ -219,23 +219,30 @@ const ITC_COUNSEL_URL = "https://zektsojdx4i0uvfy.public.blob.vercel-storage.com
 // Dev/testing override: /itc?data=./itc-work/sample-itc-data.json
 const DATA_URL = new URLSearchParams(location.search).get("data") || ITC_DATA_URL;
 
-const OUTCOMES = [
+// Filter chips — keyed by the COARSE outcome CATEGORY so they match the DISPLAYED
+// outcome (which prefers the AI disposition over the caption heuristic). "unknown"
+// = no outcome at all (empty category).
+const CHIPS = [
   ["all", "All"],
-  ["violation_remedy", "Violation + remedy"],
+  ["violation", "Violation + remedy"],
   ["no_violation", "No violation"],
-  ["terminated_settlement", "Settled"],
-  ["terminated_other", "Terminated (other)"],
+  ["settled", "Settled"],
+  ["terminated", "Terminated (other)"],
   ["pending", "Pending"],
   ["unknown", "Unknown"],
   ["ai", "AI-classified"],
 ];
-const OUT_LABEL = Object.fromEntries(OUTCOMES.map(([k, v]) => [k, v]));
+// Heuristic-outcome badge labels (r.outcome enum), used by the outcome cell.
+const OUT_LABEL = { violation_remedy: "Violation + remedy", no_violation: "No violation", terminated_settlement: "Settled", terminated_other: "Terminated (other)", pending: "Pending", unknown: "Unknown" };
 
 // AI (text-based) outcome labels + coarse categories to flag AI-vs-heuristic
 // disagreement. The AI outcome is read from the Commission opinion/decision text.
 const AI_LABEL = { violation_found: "Violation found", no_violation: "No violation", terminated_settlement: "Settled", terminated_consent: "Consent order", terminated_default: "Default", terminated_withdrawal: "Withdrawn", terminated_arbitration: "Arbitration", terminated_other: "Terminated", pending: "Pending" };
 const coarseAi = (d) => ({ violation_found: "violation", terminated_default: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_consent: "settled", terminated_withdrawal: "terminated", terminated_arbitration: "terminated", terminated_other: "terminated", pending: "pending" }[d] || "");
 const coarseHeur = (o) => ({ violation_remedy: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_other: "terminated", pending: "pending", unknown: "" }[o] || "");
+// Effective coarse outcome category as SHOWN to the user (AI disposition preferred
+// over the caption heuristic) — the basis for both the filter chips and the KPI tiles.
+const effCat = (r) => r.ai_disposition ? coarseAi(r.ai_disposition) : coarseHeur(r.outcome);
 const CONF_MARK = { medium: "~", low: "?" };
 
 // Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip,
@@ -310,7 +317,7 @@ function renderKpis(summary) {
 }
 
 function renderChips() {
-  $("outcomeChips").innerHTML = OUTCOMES.map(([k, v]) => `<span class="chip ${state.outcome === k ? "on" : ""}" data-o="${k}">${v}</span>`).join("");
+  $("outcomeChips").innerHTML = CHIPS.map(([k, v]) => `<span class="chip ${state.outcome === k ? "on" : ""}" data-o="${k}">${v}</span>`).join("");
   $("outcomeChips").querySelectorAll(".chip").forEach((c) => c.onclick = () => { state.outcome = c.dataset.o; state.page = 0; apply(); });
 }
 
@@ -318,7 +325,10 @@ function applyFilter() {
   const q = state.q.toLowerCase().trim();
   state.filtered = state.all.filter((r) => {
     if (state.outcome === "ai") { if (!r.ai_disposition) return false; }
-    else if (state.outcome !== "all" && r.outcome !== state.outcome) return false;
+    else if (state.outcome !== "all") {
+      const c = effCat(r);   // AI disposition preferred, matching the displayed badge
+      if (state.outcome === "unknown" ? c !== "" : c !== state.outcome) return false;
+    }
     if (!q) return true;
     const hay = [displayNumber(r), r.public_number, r.investigation_number, r.title, (r.participants || []).join(" "), (r.complainants || []).join(" "), (r.respondents || []).join(" "), (r.asserted_patents || []).join(" "), r.accused_products || "", (r.top_firms || []).map((f) => f.firm).join(" "), AI_LABEL[r.ai_disposition] || "", r.ai_note || ""].join(" ").toLowerCase();
     return hay.includes(q);
@@ -593,6 +603,14 @@ async function load() {
     summary.total = instCount;
     summary.active = uniq(state.all.filter((r) => r.status === "Active"));
     summary.dockets = docketCount;
+    // Outcome-category KPI tiles by EFFECTIVE category (AI preferred), counted per
+    // unique investigation, so the tiles match the filter chips exactly.
+    const catByInv = new Map();
+    for (const r of state.all) { const c = effCat(r); if (!c) continue; if (r.ai_disposition || !catByInv.has(r.investigation_number)) catByInv.set(r.investigation_number, c); }
+    const cc = {}; for (const c of catByInv.values()) cc[c] = (cc[c] || 0) + 1;
+    summary.violation_remedy = cc.violation || 0;
+    summary.no_violation = cc.no_violation || 0;
+    summary.terminated_settlement = cc.settled || 0;
     renderKpis(summary);
     $("cntInst").textContent = instCount;
     $("cntDkt").textContent = docketCount;

@@ -41,6 +41,8 @@
     .barrow .bv { text-align: right; color: var(--heading); font-weight: 600; }
     .bf-violation { background: var(--bad-fg); } .bf-noviol { background: var(--ok-fg); }
     .bf-settled { background: var(--accent2-fg); } .bf-terminated { background: var(--warn-fg); } .bf-pending { background: var(--text-5); }
+    .splitbar { display: flex; height: 14px; width: 130px; border-radius: 4px; overflow: hidden; background: var(--surface-3); }
+    .splitbar .sc { background: var(--brand); } .splitbar .sr { background: var(--warn-fg); }
     .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 6px 0 4px; }
     @media (max-width: 800px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
     .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
@@ -127,6 +129,7 @@
       <button class="tab on" data-tab="inst" role="tab">Instituted investigations (337-TA)<span class="tab-count" id="cntInst">0</span></button>
       <button class="tab" data-tab="dkt" role="tab">Pre-institution docket filings<span class="tab-count" id="cntDkt">0</span></button>
       <button class="tab" data-tab="analytics" role="tab">Analytics</button>
+      <button class="tab" data-tab="counsel" role="tab">Counsel</button>
     </div>
     <p class="sub" id="tabSub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
     <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
@@ -177,6 +180,24 @@
       <div id="charts"></div>
     </div>
 
+    <div id="pane-counsel" class="pane" hidden>
+      <p class="analytics-note">Law firms by the side they represented, from AI-roled parties matched to each firm's filings. <span style="color:var(--brand)">■</span> complainant · <span style="color:var(--warn-fg)">■</span> respondent. A firm may appear on both sides across different investigations. Top 80 by total.</p>
+      <div class="table-wrap" style="max-height:70vh">
+        <table id="counselTbl">
+          <thead>
+            <tr>
+              <th>Firm</th>
+              <th>Complainant-side</th>
+              <th>Respondent-side</th>
+              <th>Split</th>
+              <th>Total invs.</th>
+            </tr>
+          </thead>
+          <tbody id="counselRows"></tbody>
+        </table>
+      </div>
+    </div>
+
     <p class="disclaimer" id="disclaimer"></p>
   </div>
 
@@ -200,6 +221,7 @@
 // a CDN-served static file. After the FIRST `node edis-upload.mjs`, paste the
 // printed URL here; it is stable across runs.
 const ITC_DATA_URL = "https://zektsojdx4i0uvfy.public.blob.vercel-storage.com/itc/itc-data.json";
+const ITC_COUNSEL_URL = "https://zektsojdx4i0uvfy.public.blob.vercel-storage.com/itc/counsel.json";
 // Dev/testing override: /itc?data=./itc-work/sample-itc-data.json
 const DATA_URL = new URLSearchParams(location.search).get("data") || ITC_DATA_URL;
 
@@ -409,6 +431,7 @@ const TAB_SUB = {
   inst: "Matters the Commission voted to institute, each with a 337-TA investigation number.",
   dkt: "Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter gets a 337-TA number and appears under the other tab.",
   analytics: "Aggregate analytics across instituted 337-TA investigations. Outcomes/remedies are from the AI classifier (Commission decision text); investigations without a classified outcome are excluded from those charts.",
+  counsel: "Which law firms represent complainants vs. respondents, from AI-roled parties matched to each firm's filings.",
 };
 // Toggle between the instituted table, the docket table, and the analytics view.
 // The search box + outcome chips apply only to the tables.
@@ -418,9 +441,11 @@ function switchTab(t) {
   $("pane-inst").hidden = t !== "inst";
   $("pane-dkt").hidden = t !== "dkt";
   $("pane-analytics").hidden = t !== "analytics";
-  $("q").style.display = t === "analytics" ? "none" : "";
+  $("pane-counsel").hidden = t !== "counsel";
+  $("q").style.display = (t === "analytics" || t === "counsel") ? "none" : "";
   $("outcomeChips").style.display = t === "inst" ? "" : "none";
   $("tabSub").innerHTML = TAB_SUB[t];
+  if (t === "counsel") loadCounsel();
 }
 
 // Analytics view — aggregates computed client-side from the loaded projection.
@@ -505,6 +530,33 @@ function renderAnalytics() {
     card("Investigations by ALJ", "Presiding judge, from assignment notices (partial coverage — ~⅓ of notices don't name the judge)", aljEntries.length ? bars(aljEntries) : `<div class="csub">No ALJ data yet.</div>`),
   ];
   $("charts").innerHTML = `<div class="charts-grid">${cards.join("")}</div>`;
+}
+
+// Counsel representation — lazily fetched from the counsel aggregate blob on first
+// open of the Counsel tab. Each row: firm, #complainant-side, #respondent-side, split.
+let _counselLoaded = false;
+async function loadCounsel() {
+  if (_counselLoaded) return;
+  _counselLoaded = true;
+  try {
+    const res = await fetch(ITC_COUNSEL_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const list = (await res.json()).counsel || [];
+    if (!list.length) { $("counselRows").innerHTML = `<tr><td colspan="5" class="state">No counsel data yet.</td></tr>`; return; }
+    $("counselRows").innerHTML = list.map((c) => {
+      const tot = c.comp + c.resp, cp = tot ? Math.round(c.comp / tot * 100) : 0;
+      return `<tr>
+        <td>${esc(c.firm)}</td>
+        <td>${c.comp}</td>
+        <td>${c.resp}</td>
+        <td><span class="splitbar" title="${cp}% complainant / ${100 - cp}% respondent"><span class="sc" style="width:${cp}%"></span><span class="sr" style="width:${100 - cp}%"></span></span></td>
+        <td><b>${c.total}</b></td>
+      </tr>`;
+    }).join("");
+  } catch (e) {
+    _counselLoaded = false;
+    $("counselRows").innerHTML = `<tr><td colspan="5" class="state">Could not load counsel data (${esc(e.message)}).</td></tr>`;
+  }
 }
 
 function apply() { applyFilter(); renderChips(); renderRows(); }

@@ -235,10 +235,11 @@ async function publish() {
   const oMap = new Map(outcomes.map((o) => [o.investigation_number, o]));
   const parties = await retry(() => listParties());
   const pMap = new Map(parties.map((p) => [p.investigation_number, p]));
-  // The AI outcome is investigation-level; attach it ONLY to the primary phase —
-  // the 'Violation' phase, else the earliest-instituted — so sub-proceeding rows
-  // (Enforcement/Remand/Modification/etc.) keep their own per-phase heuristic
-  // instead of all showing the same duplicated AI outcome.
+  // The AI outcome is investigation-level; attach it to EVERY phase row so
+  // sub-proceeding rows (Modification/Rescission/Remand/Enforcement/etc.) show
+  // the investigation's disposition instead of a bare "unknown" dash. Parties are
+  // still overlaid onto the primary phase only (the 'Violation' phase, else the
+  // earliest-instituted) to avoid duplicating them across every phase row.
   const primaryByNumber = new Map();
   for (const r of rows) {
     const cur = primaryByNumber.get(r.investigation_number);
@@ -256,12 +257,12 @@ async function publish() {
     if (r.status === 'Active') summary.active++;
     if (r.outcome && summary[r.outcome] != null) summary[r.outcome]++;
     if (r.remedy === 'GEO') summary.geo++; else if (r.remedy === 'LEO') summary.leo++; else if (r.remedy === 'CDO') summary.cdo++;
+    const o = oMap.get(r.investigation_number);
+    if (o) {
+      r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
+      r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
+    }
     if (primaryByNumber.get(r.investigation_number) === r) {
-      const o = oMap.get(r.investigation_number);
-      if (o) {
-        r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
-        r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
-      }
       const p = pMap.get(r.investigation_number);
       if (p) {
         r.complainants = p.complainants; r.respondents = p.respondents;

@@ -81,6 +81,9 @@
     .conf { font-size: 0.68rem; margin-left: 2px; color: var(--text-5); cursor: help; }
     .disagree { color: var(--warn-fg); font-weight: 700; cursor: help; margin-left: 3px; }
     .rem { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: var(--brand); color: #fff; }
+    a.rem { text-decoration: none; }
+    a.rem:hover { filter: brightness(1.15); text-decoration: none; }
+    a.rem::after { content: " \2193"; opacity: 0.85; }
     .flag { color: var(--warn-fg); font-weight: 700; cursor: help; }
     .status-active { color: var(--ok-fg); font-weight: 700; }
     .d-pending { background: var(--warn-bg); color: var(--warn-fg); }
@@ -247,15 +250,27 @@ const CONF_MARK = { medium: "~", low: "?" };
 
 // Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip,
 // and an "AI" tag) when present; else the caption heuristic. Flags disagreement.
+// A remedy chip (GEO/LEO/CDO). When the matching order PDF is mirrored to our
+// site, render it as a direct-download link; otherwise plain text. GEO & LEO map
+// to the exclusion order, CDO to the cease-and-desist order.
+function remChip(code, links) {
+  const url = links && (code === "CDO" ? links.cdo : links.excl);
+  if (url) {
+    const kind = code === "CDO" ? "cease-and-desist order" : "exclusion order";
+    return `<a class="rem" href="${esc(url)}" target="_blank" rel="noopener" download title="Download the ${kind} (PDF)">${esc(code)}</a>`;
+  }
+  return `<span class="rem">${esc(code)}</span>`;
+}
 function outcomeCell(r) {
+  const links = r.order_links;
   if (r.ai_disposition) {
-    const rems = (r.ai_remedies || []).map((x) => `<span class="rem">${esc(x)}</span>`).join("");
+    const rems = (r.ai_remedies || []).map((x) => remChip(x, links)).join("");
     const conf = CONF_MARK[r.ai_confidence] ? `<span class="conf" title="AI confidence: ${esc(r.ai_confidence)}">${CONF_MARK[r.ai_confidence]}</span>` : "";
     const ca = coarseAi(r.ai_disposition), ch = coarseHeur(r.outcome);
     const disagree = (ca && ch && ca !== ch) ? `<span class="disagree" title="AI: ${esc(AI_LABEL[r.ai_disposition])} · caption heuristic: ${esc(OUT_LABEL[r.outcome] || r.outcome)}">≠</span>` : "";
     return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}<span class="aitag" title="Classified by AI from the Commission opinion/decision text">AI</span>${disagree}`;
   }
-  const remedy = r.remedy ? `<span class="rem">${esc(r.remedy)}</span>` : "";
+  const remedy = r.remedy ? remChip(r.remedy, links) : "";
   const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
   return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
 }

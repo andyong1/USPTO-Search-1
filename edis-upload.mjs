@@ -29,6 +29,7 @@ import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
   setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes, listParties,
+  listRemedyOrderLinks,
 } from './lib/itc-db.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 import { dispositiveRole } from './lib/itc-outcome.js';
@@ -235,6 +236,8 @@ async function publish() {
   const oMap = new Map(outcomes.map((o) => [o.investigation_number, o]));
   const parties = await retry(() => listParties());
   const pMap = new Map(parties.map((p) => [p.investigation_number, p]));
+  const orderLinks = await retry(() => listRemedyOrderLinks());
+  const olMap = new Map(orderLinks.map((o) => [o.investigation_number, o]));
   // The AI outcome is investigation-level; attach it to EVERY phase row so
   // sub-proceeding rows (Modification/Rescission/Remand/Enforcement/etc.) show
   // the investigation's disposition instead of a bare "unknown" dash. Parties are
@@ -261,6 +264,12 @@ async function publish() {
     if (o) {
       r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;
       r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
+    }
+    const ol = olMap.get(r.investigation_number);
+    if (ol && (ol.excl_url || ol.cdo_url)) {
+      r.order_links = {};
+      if (ol.excl_url) r.order_links.excl = ol.excl_url;   // GEO / LEO chips
+      if (ol.cdo_url) r.order_links.cdo = ol.cdo_url;       // CDO chip
     }
     if (primaryByNumber.get(r.investigation_number) === r) {
       const p = pMap.get(r.investigation_number);

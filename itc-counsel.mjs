@@ -46,6 +46,7 @@ for (const row of rows) {
   const forComp = p.comp.some((c) => obo.includes(c));
   const forResp = p.resp.some((c) => obo.includes(c));
   if (!forComp && !forResp) continue;
+  if (forComp && forResp) continue;   // joint/combined on_behalf_of (names both sides) — ambiguous, skip
   if (!byFirm.has(firm)) byFirm.set(firm, { comp: new Set(), resp: new Set() });
   const f = byFirm.get(firm);
   if (forComp) f.comp.add(row.investigation_number);

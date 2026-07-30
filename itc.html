@@ -87,10 +87,10 @@
     .d-active { background: var(--accent2-bg); color: var(--accent2-fg); }
     .d-none { background: var(--surface-3); color: var(--text-2); }
     .table-pager { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 14px; }
-    .pg { padding: 5px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--heading); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
-    .pg:hover:not(:disabled) { background: var(--surface-3); }
+    .pg { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .pg:hover:not(:disabled) { background: var(--border-2); }
     .pg:disabled { opacity: 0.45; cursor: default; }
-    .pg.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .pg.active { background: var(--brand); color: #fff; }
     .state { text-align: center; padding: 40px 20px; color: var(--text-5); }
     .disclaimer { font-size: 0.76rem; color: var(--text-4); margin-top: 12px; line-height: 1.5; }
     .cols-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 22px; align-items: start; }
@@ -148,7 +148,6 @@
               <th data-k="institution_date">Instituted</th>
               <th data-k="last_doc_date">Last activity</th>
               <th data-k="outcome">Outcome</th>
-              <th data-k="doc_count">Docs</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>
@@ -254,7 +253,7 @@ function outcomeCell(r) {
   return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
 }
 
-const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 50, tab: "inst" };
+const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 100, tab: "inst" };
 // Pre-institution matters carry an EDIS Docket Number (public_number "Dkt. No. <n>")
 // rather than an instituted 337-TA number — they live in their own table.
 const isDocket = (r) => String(r.public_number || "").startsWith("Dkt. No.");
@@ -338,7 +337,7 @@ function applyFilter() {
 function renderRows() {
   const start = state.page * state.pageSize;
   const slice = state.filtered.slice(start, start + state.pageSize);
-  if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="11" class="state">No matching investigations.</td></tr>`; }
+  if (!slice.length) { $("rows").innerHTML = `<tr><td colspan="10" class="state">No matching investigations.</td></tr>`; }
   else $("rows").innerHTML = slice.map((r) => {
     // Asserted patents joined with " · " (they contain internal commas); roled
     // parties in their own columns. All three populate as the NOI backfill runs.
@@ -355,7 +354,6 @@ function renderRows() {
       <td>${esc(r.institution_date || "—")}</td>
       <td>${esc(r.last_doc_date || "—")}</td>
       <td>${outcomeCell(r)}</td>
-      <td>${r.doc_count == null ? "—" : r.doc_count}</td>
     </tr>`;
   }).join("");
   const total = state.filtered.length;
@@ -381,6 +379,9 @@ function renderRows() {
     else if (p === "next") { if (state.page < pages - 1) state.page++; }
     else state.page = Number(p) - 1;
     renderRows();
+    // Scroll back to the top of the table for the new page.
+    const wrap = $("tbl").closest(".table-wrap");
+    if (wrap) { wrap.scrollTop = 0; wrap.scrollIntoView({ block: "start" }); }
   });
 }
 
@@ -572,7 +573,7 @@ function wire() {
 
 async function load() {
   if (!DATA_URL || DATA_URL === "PASTE_BLOB_URL_HERE") {
-    $("rows").innerHTML = `<tr><td colspan="11" class="state">Not configured yet. Run <code>node edis-fetch.mjs investigations</code> then <code>node edis-upload.mjs</code>, and paste the printed Blob URL into <code>ITC_DATA_URL</code> in itc.html.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="10" class="state">Not configured yet. Run <code>node edis-fetch.mjs investigations</code> then <code>node edis-upload.mjs</code>, and paste the printed Blob URL into <code>ITC_DATA_URL</code> in itc.html.</td></tr>`;
     return;
   }
   try {
@@ -595,7 +596,7 @@ async function load() {
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderDockets(); renderAnalytics(); apply();
   } catch (e) {
-    $("rows").innerHTML = `<tr><td colspan="11" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="10" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
   }
 }
 load();

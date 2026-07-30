@@ -125,11 +125,9 @@
   </div>
 
   <div class="card">
-    <div class="tabs" role="tablist">
+    <div class="tabs" id="tabs-main" role="tablist">
       <button class="tab on" data-tab="inst" role="tab">Instituted investigations (337-TA)<span class="tab-count" id="cntInst">0</span></button>
       <button class="tab" data-tab="dkt" role="tab">Pre-institution docket filings<span class="tab-count" id="cntDkt">0</span></button>
-      <button class="tab" data-tab="analytics" role="tab">Analytics</button>
-      <button class="tab" data-tab="counsel" role="tab">Counsel</button>
     </div>
     <p class="sub" id="tabSub">Matters the Commission voted to institute, each with a 337-TA investigation number.</p>
     <input type="search" class="table-filter" id="q" placeholder="Search title, number, party, patent, firm…" />
@@ -176,7 +174,17 @@
       </div>
     </div>
 
-    <div id="pane-analytics" class="pane" hidden>
+    <p class="disclaimer" id="disclaimer"></p>
+  </div>
+
+  <div class="card">
+    <div class="tabs" id="tabs-stats" role="tablist">
+      <button class="tab on" data-tab="analytics" role="tab">Investigation statistics</button>
+      <button class="tab" data-tab="counsel" role="tab">Counsel statistics</button>
+    </div>
+    <p class="sub" id="statSub">Aggregate statistics across instituted 337-TA investigations — outcomes, remedies, pendency, and by-ALJ.</p>
+
+    <div id="pane-analytics" class="pane">
       <div id="charts"></div>
     </div>
 
@@ -196,19 +204,6 @@
           <tbody id="counselRows"></tbody>
         </table>
       </div>
-    </div>
-
-    <p class="disclaimer" id="disclaimer"></p>
-  </div>
-
-  <div class="card">
-    <h2 style="font-size:1rem">Firm league table</h2>
-    <p class="sub">Investigations in which a firm appears as a filer (public documents; the Commission is excluded). Heuristic — a firm may appear for any party/role.</p>
-    <div class="table-wrap" style="max-width:640px">
-      <table>
-        <thead><tr><th>Firm</th><th>Invs.</th></tr></thead>
-        <tbody id="firms"></tbody>
-      </table>
     </div>
   </div>
 </div>
@@ -389,17 +384,6 @@ function renderRows() {
   });
 }
 
-function renderFirms() {
-  // Aggregate distinct-investigation appearances per firm across the corpus.
-  const byFirm = new Map();
-  for (const r of state.all) for (const f of (r.top_firms || [])) {
-    if (!byFirm.has(f.firm)) byFirm.set(f.firm, new Set());
-    byFirm.get(f.firm).add(r.investigation_number);
-  }
-  const ranked = [...byFirm.entries()].map(([firm, set]) => [firm, set.size]).sort((a, b) => b[1] - a[1]).slice(0, 40);
-  $("firms").innerHTML = ranked.map(([firm, n]) => `<tr><td>${esc(firm)}</td><td>${n}</td></tr>`).join("") || `<tr><td colspan="2" class="state">No firm data yet — run the document crawl.</td></tr>`;
-}
-
 // Pre-institution docket status badge: pending the Commission's institution vote,
 // still an open docket, or a docket that never proceeded to an investigation.
 function dktBadge(r) {
@@ -430,21 +414,27 @@ function renderDockets() {
 const TAB_SUB = {
   inst: "Matters the Commission voted to institute, each with a 337-TA investigation number.",
   dkt: "Section 337 complaints tracked by their EDIS <b>Docket Number</b> — matters awaiting the Commission's vote to institute, or that never proceeded to an investigation. Once instituted, a matter gets a 337-TA number and appears under the other tab.",
-  analytics: "Aggregate analytics across instituted 337-TA investigations. Outcomes/remedies are from the AI classifier (Commission decision text); investigations without a classified outcome are excluded from those charts.",
+};
+const STAT_SUB = {
+  analytics: "Aggregate statistics across instituted 337-TA investigations. Outcomes/remedies are from the AI classifier (Commission decision text); investigations without a classified outcome are excluded from those charts.",
   counsel: "Which law firms represent complainants vs. respondents, from AI-roled parties matched to each firm's filings.",
 };
-// Toggle between the instituted table, the docket table, and the analytics view.
-// The search box + outcome chips apply only to the tables.
+// Frame 1 (data tables): instituted investigations vs. docket filings. The search
+// box + outcome chips apply here (chips to the instituted table only).
 function switchTab(t) {
   state.tab = t;
-  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll("#tabs-main .tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
   $("pane-inst").hidden = t !== "inst";
   $("pane-dkt").hidden = t !== "dkt";
-  $("pane-analytics").hidden = t !== "analytics";
-  $("pane-counsel").hidden = t !== "counsel";
-  $("q").style.display = (t === "analytics" || t === "counsel") ? "none" : "";
   $("outcomeChips").style.display = t === "inst" ? "" : "none";
   $("tabSub").innerHTML = TAB_SUB[t];
+}
+// Frame 2 (statistics): investigation statistics vs. counsel statistics.
+function switchStat(t) {
+  document.querySelectorAll("#tabs-stats .tab").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  $("pane-analytics").hidden = t !== "analytics";
+  $("pane-counsel").hidden = t !== "counsel";
+  $("statSub").innerHTML = STAT_SUB[t];
   if (t === "counsel") loadCounsel();
 }
 
@@ -562,7 +552,8 @@ async function loadCounsel() {
 function apply() { applyFilter(); renderChips(); renderRows(); }
 
 function wire() {
-  document.querySelectorAll(".tab").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
+  document.querySelectorAll("#tabs-main .tab").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
+  document.querySelectorAll("#tabs-stats .tab").forEach((b) => b.onclick = () => switchStat(b.dataset.tab));
   // Delegated toggle for the "+N more" respondent expanders (survives re-renders).
   $("rows").addEventListener("click", (e) => {
     const btn = e.target.closest(".cl-toggle"); if (!btn) return;
@@ -602,7 +593,7 @@ async function load() {
     $("cntDkt").textContent = state.dockets.length;
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
-    wire(); renderFirms(); renderDockets(); renderAnalytics(); apply();
+    wire(); renderDockets(); renderAnalytics(); apply();
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="11" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;
   }

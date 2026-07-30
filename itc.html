@@ -585,13 +585,17 @@ async function load() {
     state.dockets = all.filter(isDocket);          // pre-institution docket filings
     // The server summary counts every row; re-scope the headline counts to the
     // instituted table and expose the docket count separately.
+    // Count UNIQUE investigation numbers, not phase rows (one investigation can have
+    // several phase rows — Violation / Remand / Enforcement — kept separate in the table).
+    const uniq = (rows) => new Set(rows.map((r) => r.investigation_number)).size;
+    const instCount = uniq(state.all), docketCount = uniq(state.dockets);
     const summary = Object.assign({}, data.summary || {});
-    summary.total = state.all.length;
-    summary.active = state.all.filter((r) => r.status === "Active").length;
-    summary.dockets = state.dockets.length;
+    summary.total = instCount;
+    summary.active = uniq(state.all.filter((r) => r.status === "Active"));
+    summary.dockets = docketCount;
     renderKpis(summary);
-    $("cntInst").textContent = state.all.length;
-    $("cntDkt").textContent = state.dockets.length;
+    $("cntInst").textContent = instCount;
+    $("cntDkt").textContent = docketCount;
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
     $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderDockets(); renderAnalytics(); apply();

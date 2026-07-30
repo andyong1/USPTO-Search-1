@@ -23,6 +23,7 @@
 // Republishes the affected detail blobs itself — mirror links go live immediately.
 
 import { AwsClient } from 'aws4fetch';
+import { sql } from '@vercel/postgres';
 import { numbersWithDocuments, documentsForDetail, setDocumentMirror } from './lib/itc-db.js';
 import { selectMirrorDocs } from './lib/itc-outcome.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
@@ -43,6 +44,10 @@ const MAX = args.includes('--limit') ? Number(args[args.indexOf('--limit') + 1])
 // this year or later — keeps R2 within the 10 GB free tier (~5.7 GB at 2015,
 // with headroom for new filings; older docs still link to EDIS). --since 0 = all.
 const SINCE = args.includes('--since') ? Number(args[args.indexOf('--since') + 1]) : 2015;
+// Targeted mode: mirror an explicit comma-separated list of document IDs, bypassing
+// the per-investigation dispositive selection and the recency gate. Used to backfill
+// specific docs (e.g. the remedy orders/notices that light up the GEO/LEO chips).
+const DOCS = args.includes('--docs') ? (args[args.indexOf('--docs') + 1] || '').split(',').map((s) => s.replace(/[^0-9]/g, '')).filter(Boolean) : null;
 
 // R2 (S3-compatible) via aws4fetch (tiny SigV4 signer).
 const r2 = new AwsClient({ accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY, region: 'auto', service: 's3' });
@@ -113,6 +118,43 @@ async function retry(fn, tries = 3) {
       await sleep(1000 * i);
     }
   }
+}
+
+// ── Targeted run: mirror an explicit list of document IDs ────────────────
+if (DOCS) {
+  const { rows: docRows } = await sql`
+    SELECT id, investigation_number, mirror_url FROM itc_document WHERE id = ANY(${DOCS})`;
+  console.log(`Targeted mirror of ${docRows.length}/${DOCS.length} document(s) to R2 (${R2_PUBLIC})…`);
+  let ok = 0, empty = 0, big = 0, skipped = 0, failed = 0, bytes = 0; const errs = []; const touched = new Set();
+  for (const d of docRows) {
+    if (d.mirror_url && d.mirror_url.startsWith('http')) { skipped++; continue; }   // already mirrored
+    try {
+      const r = await retry(() => mirrorDoc(d.id));
+      await setDocumentMirror(d.id, r.url, r.attId, r.size);
+      if (r.url) { ok++; bytes += r.size || 0; touched.add(d.investigation_number); }
+      else if (r.tooBig) big++;
+      else empty++;
+    } catch (e) {
+      failed++;
+      const msg = String((e && e.message) || e);
+      if (errs.length < 10) errs.push({ id: d.id, inv: d.investigation_number, error: msg });
+      if (/token/i.test(msg)) { console.error(`\nStopping: ${msg}. Refresh EDIS_TOKEN and re-run.`); break; }
+    }
+    await sleep(250);
+  }
+  if (errs.length) console.log('Errors:', errs);
+  console.log(`Done: ${ok} mirrored (${(bytes / 1048576).toFixed(0)} MB), ${big} too big, ${empty} no file, ${skipped} already done, ${failed} failed.`);
+  if (touched.size) {
+    let metaByNumber = new Map();
+    try { ({ metaByNumber } = await loadCatalogMaps('itc-work')); } catch { /* header meta optional */ }
+    let rp = 0;
+    for (const number of touched) {
+      try { await publishInvestigationDocs(number, metaByNumber.get(number)); rp++; }
+      catch (e) { console.error(`  republish ${number} failed: ${(e && e.message) || e}`); }
+    }
+    console.log(`Republished ${rp} investigation detail blob(s). Now run: node edis-upload.mjs --publish-only`);
+  }
+  process.exit(0);
 }
 
 // ── Run ────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
   setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes, listParties,
-  listRemedyOrderLinks,
+  listOutcomeDocLinks,
 } from './lib/itc-db.js';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 import { dispositiveRole } from './lib/itc-outcome.js';
@@ -236,8 +236,8 @@ async function publish() {
   const oMap = new Map(outcomes.map((o) => [o.investigation_number, o]));
   const parties = await retry(() => listParties());
   const pMap = new Map(parties.map((p) => [p.investigation_number, p]));
-  const orderLinks = await retry(() => listRemedyOrderLinks());
-  const olMap = new Map(orderLinks.map((o) => [o.investigation_number, o]));
+  const outcomeDocLinks = await retry(() => listOutcomeDocLinks());
+  const olMap = new Map(outcomeDocLinks.map((o) => [o.investigation_number, o]));
   // The AI outcome is investigation-level; attach it to EVERY phase row so
   // sub-proceeding rows (Modification/Rescission/Remand/Enforcement/etc.) show
   // the investigation's disposition instead of a bare "unknown" dash. Parties are
@@ -266,10 +266,13 @@ async function publish() {
       r.ai_commission_action = o.ai_commission_action; r.ai_confidence = o.ai_confidence; r.ai_note = o.ai_note;
     }
     const ol = olMap.get(r.investigation_number);
-    if (ol && (ol.excl_url || ol.cdo_url)) {
-      r.order_links = {};
-      if (ol.excl_url) r.order_links.excl = ol.excl_url;   // GEO / LEO chips
-      if (ol.cdo_url) r.order_links.cdo = ol.cdo_url;       // CDO chip
+    if (ol) {
+      if (ol.excl_url || ol.cdo_url) {
+        r.order_links = {};
+        if (ol.excl_url) r.order_links.excl = ol.excl_url;   // GEO / LEO chips
+        if (ol.cdo_url) r.order_links.cdo = ol.cdo_url;       // CDO chip
+      }
+      if (ol.opinion_url) r.opinion_url = ol.opinion_url;    // outcome badge → Commission opinion
     }
     if (primaryByNumber.get(r.investigation_number) === r) {
       const p = pMap.get(r.investigation_number);

@@ -84,6 +84,9 @@
     a.rem { text-decoration: none; }
     a.rem:hover { filter: brightness(1.15); text-decoration: none; }
     a.rem::after { content: " \2193"; opacity: 0.85; }
+    a.opinion { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 600; color: var(--brand); border: 1px solid var(--brand); text-decoration: none; white-space: nowrap; }
+    a.opinion:hover { background: var(--brand); color: #fff; text-decoration: none; }
+    a.opinion::after { content: " \2193"; opacity: 0.85; }
     .flag { color: var(--warn-fg); font-weight: 700; cursor: help; }
     .status-active { color: var(--ok-fg); font-weight: 700; }
     .d-pending { background: var(--warn-bg); color: var(--warn-fg); }
@@ -261,18 +264,25 @@ function remChip(code, links) {
   }
   return `<span class="rem">${esc(code)}</span>`;
 }
+// Link to the Commission opinion PDF when a mirrored copy exists, else "".
+function opinionLink(r) {
+  return r.opinion_url
+    ? `<a class="opinion" href="${esc(r.opinion_url)}" target="_blank" rel="noopener" download title="Download the Commission opinion (PDF)">Opinion</a>`
+    : "";
+}
 function outcomeCell(r) {
   const links = r.order_links;
+  const opinion = opinionLink(r);
   if (r.ai_disposition) {
     const rems = (r.ai_remedies || []).map((x) => remChip(x, links)).join("");
     const conf = CONF_MARK[r.ai_confidence] ? `<span class="conf" title="AI confidence: ${esc(r.ai_confidence)}">${CONF_MARK[r.ai_confidence]}</span>` : "";
     const ca = coarseAi(r.ai_disposition), ch = coarseHeur(r.outcome);
     const disagree = (ca && ch && ca !== ch) ? `<span class="disagree" title="AI: ${esc(AI_LABEL[r.ai_disposition])} · caption heuristic: ${esc(OUT_LABEL[r.outcome] || r.outcome)}">≠</span>` : "";
-    return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}<span class="aitag" title="Classified by AI from the Commission opinion/decision text">AI</span>${disagree}`;
+    return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}<span class="aitag" title="Classified by AI from the Commission opinion/decision text">AI</span>${disagree}${opinion}`;
   }
   const remedy = r.remedy ? remChip(r.remedy, links) : "";
   const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
-  return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}`;
+  return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}${opinion}`;
 }
 
 const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 100, tab: "inst" };

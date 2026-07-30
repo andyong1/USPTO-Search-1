@@ -61,7 +61,10 @@ const { rows } = await q(() => sql`
     AND investigation_number NOT IN (SELECT investigation_number FROM itc_outcome WHERE ai_disposition IS NOT NULL)
     AND (${INV}::text IS NULL OR investigation_number = ${INV})
     AND investigation_number IN (SELECT DISTINCT investigation_number FROM itc_document
-        WHERE document_type IN ('Opinion, Commission','ID/RD - Final on Violation','Order, Commission','ID/RD - Other Than Final on Violation'))
+        WHERE document_type IN ('Opinion, Commission','ID/RD - Final on Violation','Order, Commission','ID/RD - Other Than Final on Violation','Opinion','Court Opinion')
+           OR document_type ILIKE '%pre-edis%'
+           OR (lower(document_type)='notice' AND document_title ~* 'determination|terminat|violation|remed|exclusion|cease and desist|consent')
+           OR (lower(document_type)='order' AND document_title ~* 'exclusion order|cease and desist|consent order|final determination|terminat'))
   ORDER BY investigation_number DESC`);
 const targets = rows.map((r) => r.investigation_number).slice(0, LIMIT);
 console.log(`${targets.length} unclassified investigation(s) with dispositive docs to fetch for OCR…`);

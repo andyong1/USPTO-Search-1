@@ -14,7 +14,7 @@
 //
 // Runs anonymously (no key). Be polite: modest delay + retries. Node 18+.
 //   node edis-fetch.mjs investigations              # full 337 catalog → itc-work/investigations.json
-//   node edis-fetch.mjs documents --active          # docs for Active investigations (default)
+//   node edis-fetch.mjs documents --active          # docs for the CHANGING set: Active + Preinstitution dockets (default)
 //   node edis-fetch.mjs documents --all             # docs for EVERY investigation (heavy backfill)
 //   node edis-fetch.mjs documents --inv 337-1000    # docs for one investigation
 //   node edis-fetch.mjs documents --active --limit 20
@@ -194,11 +194,13 @@ async function resolveTargets(args) {
   try { list = JSON.parse(await readFile(`${DIR}/investigations.json`, 'utf-8')); }
   catch { console.error(`No ${DIR}/investigations.json — run "node edis-fetch.mjs investigations" first.`); process.exit(1); }
   const wantAll = args.includes('--all');
-  // Distinct investigation NUMBERS (documents span all phases of a number).
+  // The default (--active) crawls the CHANGING set — investigations still Active
+  // AND pre-institution dockets (new complaints accrue filings and get instituted).
+  // Concluded/Inactive matters are frozen, so they're skipped unless --all.
   const seen = new Set();
   const nums = [];
   for (const i of list) {
-    if (!wantAll && i.status !== 'Active') continue;
+    if (!wantAll && i.status !== 'Active' && i.status !== 'Preinstitution') continue;
     if (seen.has(i.number)) continue;
     seen.add(i.number); nums.push(i.number);
   }
@@ -214,7 +216,7 @@ try {
     await crawlInvestigations();
   } else if (mode === 'documents') {
     const targets = await resolveTargets(args);
-    if (!targets.length) { console.log('No target investigations (none Active? try --all or --inv).'); }
+    if (!targets.length) { console.log('No target investigations (none Active/Preinstitution? try --all or --inv).'); }
     else { console.log(`Crawling documents for ${targets.length} investigation(s)…`); await crawlDocuments(targets); }
   } else {
     console.log('Usage:\n  node edis-fetch.mjs investigations\n  node edis-fetch.mjs documents [--active|--all|--inv 337-XXXX] [--limit N]');

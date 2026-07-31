@@ -420,11 +420,28 @@ function renderRows() {
   });
 }
 
+// EDIS leaves some old dockets marked "Active" for years after they went dormant
+// (the ITC never cleared the status), so an "Active" docket with no recent filing
+// is stale cruft, not a live matter — treat it as not-instituted for display.
+function dktStale(r) {
+  if (!r.doc_count) return true;                 // zero/no documents → never really opened
+  if (!r.last_doc_date) return true;
+  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2);
+  return new Date(r.last_doc_date) < cutoff;     // no filing in ~2 years
+}
+// Effective docket status (used for BOTH badge and sort so they agree): the live
+// EDIS state, except a stale "Active" collapses to Inactive.
+function effDktStatus(r) {
+  if (r.status === "Preinstitution") return "Preinstitution";
+  if (r.status === "Active" && !dktStale(r)) return "Active";
+  return "Inactive";
+}
 // Pre-institution docket status badge: pending the Commission's institution vote,
 // still an open docket, or a docket that never proceeded to an investigation.
 function dktBadge(r) {
-  if (r.status === "Preinstitution") return `<span class="badge d-pending">Pending institution</span>`;
-  if (r.status === "Active") return `<span class="badge d-active">Active docket</span>`;
+  const s = effDktStatus(r);
+  if (s === "Preinstitution") return `<span class="badge d-pending">Pending institution</span>`;
+  if (s === "Active") return `<span class="badge d-active">Active docket</span>`;
   return `<span class="badge d-none">Not instituted</span>`;
 }
 const DKT_RANK = { Preinstitution: 0, Active: 1 };   // pending first, then open, then inactive
@@ -434,7 +451,7 @@ function renderDockets() {
   const rows = state.dockets
     .filter((r) => !q || [displayNumber(r), r.investigation_number, r.title].join(" ").toLowerCase().includes(q))
     .sort((a, b) => {
-      const ra = DKT_RANK[a.status] ?? 2, rb = DKT_RANK[b.status] ?? 2;
+      const ra = DKT_RANK[effDktStatus(a)] ?? 2, rb = DKT_RANK[effDktStatus(b)] ?? 2;
       return ra !== rb ? ra - rb : dnum(b) - dnum(a);
     });
   if (!rows.length) { $("drows").innerHTML = `<tr><td colspan="5" class="state">No matching docket filings.</td></tr>`; return; }

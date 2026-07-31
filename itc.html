@@ -244,7 +244,10 @@ const OUT_LABEL = { violation_remedy: "Violation + remedy", no_violation: "No vi
 // AI (text-based) outcome labels + coarse categories to flag AI-vs-heuristic
 // disagreement. The AI outcome is read from the Commission opinion/decision text.
 const AI_LABEL = { violation_found: "Violation found", no_violation: "No violation", terminated_settlement: "Settled", terminated_consent: "Consent order", terminated_default: "Default", terminated_withdrawal: "Withdrawn", terminated_arbitration: "Arbitration", terminated_other: "Terminated", pending: "Pending" };
-const coarseAi = (d) => ({ violation_found: "violation", terminated_default: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_consent: "settled", terminated_withdrawal: "terminated", terminated_arbitration: "terminated", terminated_other: "terminated", pending: "pending" }[d] || "");
+// "Settled" = settlement + consent order + withdrawal (matches the USITC's own
+// "Settlement/Consent Order or Complaints Withdrawn" grouping). Arbitration and
+// other terminations stay in "terminated"; default stays with violation (§337(g)).
+const coarseAi = (d) => ({ violation_found: "violation", terminated_default: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_consent: "settled", terminated_withdrawal: "settled", terminated_arbitration: "terminated", terminated_other: "terminated", pending: "pending" }[d] || "");
 const coarseHeur = (o) => ({ violation_remedy: "violation", no_violation: "no_violation", terminated_settlement: "settled", terminated_other: "terminated", pending: "pending", unknown: "" }[o] || "");
 // Effective coarse outcome category as SHOWN to the user (AI disposition preferred
 // over the caption heuristic) — the basis for both the filter chips and the KPI tiles.
@@ -493,8 +496,14 @@ function switchStat(t) {
 
 // Analytics view — aggregates computed client-side from the loaded projection.
 function renderAnalytics() {
-  const inv = state.all;                          // instituted 337-TA rows
-  const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset (primary phase)
+  // ONE row per investigation number — an investigation has several phase rows
+  // (Violation / Remand / Enforcement…) and the AI outcome is now attached to all
+  // of them, so counting raw rows would multi-count. Prefer the row carrying the
+  // AI disposition (same investigation-level value on each), else the first.
+  const invByNum = new Map();
+  for (const r of state.all) { if (r.ai_disposition || !invByNum.has(r.investigation_number)) invByNum.set(r.investigation_number, r); }
+  const inv = [...invByNum.values()];             // unique instituted 337-TA investigations
+  const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset
   const bars = (entries) => {
     const max = Math.max(1, ...entries.map((e) => e.value));
     return entries.map((e) => `<div class="barrow"><span class="bl" title="${esc(e.label)}">${esc(e.label)}</span><span class="bartrack"><span class="barfill ${e.cls || ""}" style="width:${Math.round(e.value / max * 100)}%"></span></span><span class="bv">${e.value}</span></div>`).join("");
@@ -502,7 +511,7 @@ function renderAnalytics() {
   const card = (title, sub, inner) => `<div class="chart"><h3>${title}</h3>${sub ? `<div class="csub">${sub}</div>` : ""}${inner}</div>`;
 
   const DISP_ORDER = ["violation_found", "no_violation", "terminated_default", "terminated_consent", "terminated_settlement", "terminated_withdrawal", "terminated_arbitration", "terminated_other", "pending"];
-  const DISP_CLS = { violation_found: "bf-violation", terminated_default: "bf-violation", no_violation: "bf-noviol", terminated_settlement: "bf-settled", terminated_consent: "bf-settled", terminated_withdrawal: "bf-terminated", terminated_arbitration: "bf-terminated", terminated_other: "bf-terminated", pending: "bf-pending" };
+  const DISP_CLS = { violation_found: "bf-violation", terminated_default: "bf-violation", no_violation: "bf-noviol", terminated_settlement: "bf-settled", terminated_consent: "bf-settled", terminated_withdrawal: "bf-settled", terminated_arbitration: "bf-terminated", terminated_other: "bf-terminated", pending: "bf-pending" };
   const dcount = {};
   for (const r of cls) dcount[r.ai_disposition] = (dcount[r.ai_disposition] || 0) + 1;
   const dispEntries = DISP_ORDER.filter((k) => dcount[k]).map((k) => ({ label: AI_LABEL[k] || k, value: dcount[k], cls: DISP_CLS[k] }));
@@ -515,14 +524,14 @@ function renderAnalytics() {
   for (const r of cls) { const d = r.ai_disposition;
     if (d === "violation_found" || d === "terminated_default") g.adjV++;
     else if (d === "no_violation") g.adjN++;
-    else if (["terminated_settlement", "terminated_consent", "terminated_withdrawal", "terminated_arbitration"].includes(d)) g.settled++;
+    else if (["terminated_settlement", "terminated_consent", "terminated_withdrawal"].includes(d)) g.settled++;
     else if (d === "pending") g.pending++;
     else g.other++;
   }
   const groupEntries = [
     { label: "Violation / remedy", value: g.adjV, cls: "bf-violation" },
     { label: "No violation", value: g.adjN, cls: "bf-noviol" },
-    { label: "Settled / consent", value: g.settled, cls: "bf-settled" },
+    { label: "Settled / consent / withdrawn", value: g.settled, cls: "bf-settled" },
     { label: "Other termination", value: g.other, cls: "bf-terminated" },
     { label: "Pending", value: g.pending, cls: "bf-pending" },
   ];
@@ -565,7 +574,7 @@ function renderAnalytics() {
   const cards = [
     card("Outcome distribution", `${cls.length} investigations with an AI-classified outcome`, bars(dispEntries)),
     card("Violation rate", "Share of adjudicated matters (violation/remedy or default vs. no violation) finding a violation", `<div class="stat">${violRate}%</div><div class="csub">${g.adjV} of ${adjudicated} adjudicated matters</div>`),
-    card("Settled / consent rate", "Share of classified investigations resolved by settlement, consent, or withdrawal", `<div class="stat">${settleRate}%</div><div class="csub">${g.settled} of ${cls.length} classified</div>`),
+    card("Settled / withdrawn rate", "Share of classified investigations resolved by settlement, consent order, or withdrawal (the USITC's combined figure)", `<div class="stat">${settleRate}%</div><div class="csub">${g.settled} of ${cls.length} classified</div>`),
     card("Remedy mix", "Remedies issued (an investigation may carry several)", bars(remEntries)),
     card("Disposition category", "How instituted investigations resolve", bars(groupEntries)),
     card("Filings by institution year", "Instituted 337-TA investigations per year (heuristic institution date)", bars(yearEntries)),

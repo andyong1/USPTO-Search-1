@@ -26,20 +26,27 @@ const pByNum = new Map(parties.map((p) => [p.investigation_number, { comp: (p.co
 const nums = [...pByNum.keys()];
 console.log(`${nums.length} investigations with roled parties.`);
 
-// Distinct (investigation, firm, on_behalf_of) for those investigations.
+// (investigation, firm, on_behalf_of) with filing counts for those investigations.
 const rows = [];
 for (let i = 0; i < nums.length; i += 500) {
   const chunk = nums.slice(i, i + 500);
   const { rows: r } = await q(() => sql.query(
-    `SELECT DISTINCT investigation_number, firm_organization, on_behalf_of FROM itc_document
-     WHERE investigation_number = ANY($1) AND firm_organization IS NOT NULL AND on_behalf_of IS NOT NULL`, [chunk]));
+    `SELECT investigation_number, firm_organization, on_behalf_of, count(*)::int AS n FROM itc_document
+     WHERE investigation_number = ANY($1) AND firm_organization IS NOT NULL AND on_behalf_of IS NOT NULL
+     GROUP BY 1, 2, 3`, [chunk]));
   rows.push(...r);
 }
 
-// firm -> { comp:Set<inv>, resp:Set<inv> }
-const byFirm = new Map();
+// Weigh each (firm, investigation) by filings per side, then assign the
+// investigation to the firm's MAJORITY side. EDIS occasionally records a joint
+// or unopposed filing under one firm with an on_behalf_of naming the OTHER
+// party, so per-filing crediting put ~46 firms on both sides of the same
+// investigation; majority-side assignment drops those stray wrong-side credits
+// (a genuine tie — equal filings both ways — keeps both, and stays rare).
+const weights = new Map();   // "firm\tinv" -> { c: filings, r: filings }
 for (const row of rows) {
   const firm = row.firm_organization;
+  if (/^\*?not listed$/i.test(firm.trim())) continue;   // EDIS placeholder for "no firm recorded"
   if (isCommission(firm) || isCommission(row.on_behalf_of)) continue;
   const p = pByNum.get(row.investigation_number); if (!p) continue;
   const obo = norm(row.on_behalf_of);
@@ -47,10 +54,19 @@ for (const row of rows) {
   const forResp = p.resp.some((c) => obo.includes(c));
   if (!forComp && !forResp) continue;
   if (forComp && forResp) continue;   // joint/combined on_behalf_of (names both sides) — ambiguous, skip
+  const key = `${firm}\t${row.investigation_number}`;   // tab-safe: firm names contain spaces
+  if (!weights.has(key)) weights.set(key, { c: 0, r: 0 });
+  weights.get(key)[forComp ? 'c' : 'r'] += row.n;
+}
+
+// firm -> { comp:Set<inv>, resp:Set<inv> }
+const byFirm = new Map();
+for (const [key, w] of weights) {
+  const [firm, inv] = key.split('\t');
   if (!byFirm.has(firm)) byFirm.set(firm, { comp: new Set(), resp: new Set() });
   const f = byFirm.get(firm);
-  if (forComp) f.comp.add(row.investigation_number);
-  if (forResp) f.resp.add(row.investigation_number);
+  if (w.c >= w.r && w.c > 0) f.comp.add(inv);
+  if (w.r >= w.c && w.r > 0) f.resp.add(inv);
 }
 
 const counsel = [...byFirm.entries()].map(([firm, f]) => {

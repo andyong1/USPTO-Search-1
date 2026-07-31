@@ -252,6 +252,31 @@ const coarseHeur = (o) => ({ violation_remedy: "violation", no_violation: "no_vi
 // Effective coarse outcome category as SHOWN to the user (AI disposition preferred
 // over the caption heuristic) — the basis for both the filter chips and the KPI tiles.
 const effCat = (r) => r.ai_disposition ? coarseAi(r.ai_disposition) : coarseHeur(r.outcome);
+
+// ── Statistics MUST count investigations, not phase rows ──────────────────
+// state.all holds one row per (investigation, phase), and investigation-level
+// fields (ai_*, order_links…) are attached to EVERY phase row — so any stat that
+// iterates raw rows multi-counts multi-phase investigations. All stats consume
+// state.invs (built once at load via uniqInvs); raw state.all is for the table.
+function uniqInvs(rows) {
+  const m = new Map();
+  for (const r of rows) if (r.ai_disposition || !m.has(r.investigation_number)) m.set(r.investigation_number, r);
+  return [...m.values()];
+}
+// Remedies per investigation, unioned across its phase rows: the AI remedy list
+// when the investigation is AI-classified, else the heuristic remedy field.
+function remediesByInv(rows) {
+  const ai = new Map(), heur = new Map(), hasAi = new Set(), nums = new Set();
+  const add = (m, n, x) => { if (!m.has(n)) m.set(n, new Set()); m.get(n).add(x); };
+  for (const r of rows) {
+    const n = r.investigation_number; nums.add(n);
+    if (r.ai_disposition) { hasAi.add(n); for (const x of (r.ai_remedies || [])) add(ai, n, x); }
+    if (r.remedy) add(heur, n, r.remedy);
+  }
+  const out = new Map();
+  for (const n of nums) out.set(n, hasAi.has(n) ? (ai.get(n) || new Set()) : (heur.get(n) || new Set()));
+  return out;
+}
 const CONF_MARK = { medium: "~", low: "?" };
 
 // Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip,
@@ -288,7 +313,7 @@ function outcomeCell(r) {
   return `<span class="badge o-${esc(r.outcome || "unknown")}">${esc(OUT_LABEL[r.outcome] || r.outcome || "—")}</span>${remedy}${flag}${opinion}`;
 }
 
-const state = { all: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 100, tab: "inst" };
+const state = { all: [], invs: [], dockets: [], filtered: [], q: "", outcome: "all", sortK: "public_number", sortDir: -1, page: 0, pageSize: 100, tab: "inst" };
 // Pre-institution matters carry an EDIS Docket Number (public_number "Dkt. No. <n>")
 // rather than an instituted 337-TA number — they live in their own table.
 const isDocket = (r) => String(r.public_number || "").startsWith("Dkt. No.");
@@ -496,13 +521,7 @@ function switchStat(t) {
 
 // Analytics view — aggregates computed client-side from the loaded projection.
 function renderAnalytics() {
-  // ONE row per investigation number — an investigation has several phase rows
-  // (Violation / Remand / Enforcement…) and the AI outcome is now attached to all
-  // of them, so counting raw rows would multi-count. Prefer the row carrying the
-  // AI disposition (same investigation-level value on each), else the first.
-  const invByNum = new Map();
-  for (const r of state.all) { if (r.ai_disposition || !invByNum.has(r.investigation_number)) invByNum.set(r.investigation_number, r); }
-  const inv = [...invByNum.values()];             // unique instituted 337-TA investigations
+  const inv = state.invs;                          // unique investigations (uniqInvs — never count raw phase rows)
   const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset
   const bars = (entries) => {
     const max = Math.max(1, ...entries.map((e) => e.value));
@@ -649,19 +668,30 @@ async function load() {
     // Count UNIQUE investigation numbers, not phase rows (one investigation can have
     // several phase rows — Violation / Remand / Enforcement — kept separate in the table).
     const uniq = (rows) => new Set(rows.map((r) => r.investigation_number)).size;
-    const instCount = uniq(state.all), docketCount = uniq(state.dockets);
+    state.invs = uniqInvs(state.all);   // canonical per-investigation view for ALL stats
+    const instCount = state.invs.length, docketCount = uniq(state.dockets);
     const summary = Object.assign({}, data.summary || {});
     summary.total = instCount;
     summary.active = uniq(state.all.filter((r) => r.status === "Active"));
     summary.dockets = docketCount;
     // Outcome-category KPI tiles by EFFECTIVE category (AI preferred), counted per
     // unique investigation, so the tiles match the filter chips exactly.
-    const catByInv = new Map();
-    for (const r of state.all) { const c = effCat(r); if (!c) continue; if (r.ai_disposition || !catByInv.has(r.investigation_number)) catByInv.set(r.investigation_number, c); }
-    const cc = {}; for (const c of catByInv.values()) cc[c] = (cc[c] || 0) + 1;
+    const cc = {};
+    for (const r of state.invs) { const c = effCat(r); if (c) cc[c] = (cc[c] || 0) + 1; }
     summary.violation_remedy = cc.violation || 0;
     summary.no_violation = cc.no_violation || 0;
     summary.terminated_settlement = cc.settled || 0;
+    // GEO/LEO per unique investigation (the server summary counts phase rows and
+    // overcounts — e.g. an investigation with remedy on both its Violation and
+    // Rescission rows). AI remedies preferred, heuristic remedy as fallback.
+    const remByInv = remediesByInv(state.all);
+    summary.geo = 0; summary.leo = 0;
+    for (const s of remByInv.values()) { if (s.has("GEO")) summary.geo++; if (s.has("LEO")) summary.leo++; }
+    // Self-check: every per-investigation stat is bounded by the unique-investigation
+    // count; a violation means something is counting phase rows again.
+    for (const [lbl, v] of [["Violation", summary.violation_remedy], ["Settled", summary.terminated_settlement], ["No violation", summary.no_violation], ["GEO", summary.geo], ["LEO", summary.leo], ["AI outcomes", summary.ai_classified]]) {
+      if (v > instCount) console.warn(`ITC stats self-check: "${lbl}" (${v}) exceeds unique investigations (${instCount}) — phase-row overcount?`);
+    }
     renderKpis(summary);
     $("cntInst").textContent = instCount;
     $("cntDkt").textContent = docketCount;

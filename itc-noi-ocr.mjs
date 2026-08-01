@@ -67,5 +67,5 @@ if (MODE === 'harvest') {
   console.log(`harvested ${wrote} OCR'd NOI(s) into ${PARTIES}; ${blank} blank/too-short skipped; manifest now ${manifest.length}`);
   process.exit(0);
 }
-console.log('usage: node itc-work/_noi_ocr.mjs download|harvest');
+console.log('usage: node itc-noi-ocr.mjs download|harvest');
 process.exit(1);

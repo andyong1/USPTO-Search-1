@@ -127,7 +127,7 @@ function deriveOne(docs, status) {
   const assigns = docs.filter((d) => /assignment/i.test(d.document_title || ''))
     .sort((a, b) => String(b.received_date || '').localeCompare(String(a.received_date || '')));
   for (const d of assigns) {
-    const m = String(d.document_title || '').match(/(?:re)?assignment (?:of|to)\s+(?:the presiding\s+)?(?:chief\s+)?(?:administrative law judge|alj|calj)\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+)?)/i);
+    const m = String(d.document_title || '').match(/(?:re)?assignment (?:of|to)\s+(?:the presiding\s+)?(?:(?:acting\s+)?chief\s+)?(?:a?c?alj|administrative law judge)\s+([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,2})/i);
     if (m) { alj = m[1].trim().replace(/\s+/g, ' '); break; }
   }
   // Decision date = latest dispositive-document date (final-determination proxy for pendency).

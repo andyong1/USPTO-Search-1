@@ -28,6 +28,20 @@ function fromText(text) {
   return null;
 }
 
+// Canonical ITC ALJ surnames with tolerant (OCR-aware) matchers, incl. the unique
+// first-name+initial truncations the caption parse sometimes yields. Names matching
+// none are DROPPED (garbage like "Returned", "Would Find") so this stays nightly-safe.
+const ROSTER = [
+  ['Luckern', /luc[gk]e[a-z]{0,3}|luckern|paul j/i], ['Harris', /harris|hafis|s[fi]dne[vy]|harf\b|hqdris/i],
+  ['Morriss', /morris|debra/i], ['Bullock', /bullock|charles e/i], ['Charneski', /cha[mr]e?neski|carl c/i],
+  ['Essex', /essex|theodore [re]/i], ['Gildea', /gildea|james g/i], ['Rogers', /rogers|robert k/i],
+  ['Pender', /pender|thomas b/i], ['Shaw', /\bshaw\b|david p/i], ['Lord', /\blord\b|dee lord/i],
+  ['Saxon', /saxon|janet d/i], ['Cheney', /cheney|clark s/i], ['McNamara', /mc ?namara|mary ?joan/i],
+  ['Elliott', /elliott?\b|cameron [re]?/i], ['Moore', /\bmoore\b/i], ['Bhattacharyya', /bhattacharyya|monica/i],
+  ['Johnson Hines', /johnson hines|\bhines\b/i], ['Lockhart', /lockhart/i], ['Barton', /barton/i], ['Stein', /\bstein\b/i],
+];
+const canon = (raw) => { for (const [name, re] of ROSTER) if (re.test(raw || '')) return name; return null; };
+
 const noAlj = (await q(() => sql`SELECT DISTINCT investigation_number FROM itc_investigation WHERE alj IS NULL AND public_number LIKE '337-TA-%'`)).rows.map((r) => r.investigation_number);
 console.log(`${noAlj.length} investigation(s) without an ALJ.`);
 
@@ -48,8 +62,10 @@ for (let i = 0; i < rest.length; i += 300) {
   for (const r of rows) { const name = fromText(r.text); if (name) found.set(r.investigation_number, { name, src: 'text' }); }
 }
 
+// Canonicalize; drop names that match no ITC judge (OCR garbage).
+for (const [k, v] of found) { const c = canon(v.name); if (c) v.name = c; else found.delete(k); }
 const byTitle = [...found.values()].filter((v) => v.src === 'title').length;
-console.log(`Resolved ${found.size} ALJ(s): ${byTitle} from titles, ${found.size - byTitle} from text captions.`);
+console.log(`Resolved ${found.size} canonical ALJ(s): ${byTitle} from titles, ${found.size - byTitle} from text captions.`);
 if (DRY) { console.log('(dry run — no writes)\nSamples:', [...found.entries()].slice(0, 12).map(([k, v]) => `${k}=${v.name}[${v.src}]`).join(', ')); process.exit(0); }
 
 let n = 0;

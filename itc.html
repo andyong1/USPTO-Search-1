@@ -77,7 +77,6 @@
     .ai-terminated_settlement, .ai-terminated_consent, .ai-terminated_arbitration { background: var(--accent2-bg); color: var(--accent2-fg); }
     .ai-terminated_withdrawal, .ai-terminated_other { background: var(--warn-bg); color: var(--warn-fg); }
     .ai-pending { background: var(--surface-3); color: var(--text-2); }
-    .aitag { font-size: 0.6rem; font-weight: 700; color: var(--text-5); margin-left: 4px; letter-spacing: 0.04em; }
     .conf { font-size: 0.68rem; margin-left: 2px; color: var(--text-5); cursor: help; }
     .disagree { color: var(--warn-fg); font-weight: 700; cursor: help; margin-left: 3px; }
     .rem { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: var(--brand); color: #fff; }
@@ -279,8 +278,8 @@ function remediesByInv(rows) {
 }
 const CONF_MARK = { medium: "~", low: "?" };
 
-// Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip,
-// and an "AI" tag) when present; else the caption heuristic. Flags disagreement.
+// Outcome cell: prefer the AI outcome (with remedies, confidence, note tooltip)
+// when present; else the caption heuristic. Flags AI-vs-heuristic disagreement.
 // A remedy chip (GEO/LEO/CDO). When the matching order PDF is mirrored to our
 // site, render it as a direct-download link; otherwise plain text. GEO & LEO map
 // to the exclusion order, CDO to the cease-and-desist order.
@@ -306,7 +305,7 @@ function outcomeCell(r) {
     const conf = CONF_MARK[r.ai_confidence] ? `<span class="conf" title="AI confidence: ${esc(r.ai_confidence)}">${CONF_MARK[r.ai_confidence]}</span>` : "";
     const ca = coarseAi(r.ai_disposition), ch = coarseHeur(r.outcome);
     const disagree = (ca && ch && ca !== ch) ? `<span class="disagree" title="AI: ${esc(AI_LABEL[r.ai_disposition])} · caption heuristic: ${esc(OUT_LABEL[r.outcome] || r.outcome)}">≠</span>` : "";
-    return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}<span class="aitag" title="Classified by AI from the Commission opinion/decision text">AI</span>${disagree}${opinion}`;
+    return `<span class="badge ai-${esc(r.ai_disposition)}" title="${esc(r.ai_note || "")}">${esc(AI_LABEL[r.ai_disposition] || r.ai_disposition)}</span>${rems}${conf}${disagree}${opinion}`;
   }
   const remedy = r.remedy ? remChip(r.remedy, links) : "";
   const flag = r.review_flag ? ` <span class="flag" title="Outcome heuristic was ambiguous — verify in EDIS">⚑</span>` : "";
@@ -696,7 +695,7 @@ async function load() {
     $("cntInst").textContent = instCount;
     $("cntDkt").textContent = docketCount;
     if (data.generatedAt) $("genat").textContent = "· updated " + new Date(data.generatedAt).toLocaleString();
-    $("disclaimer").innerHTML = `Source: USITC EDIS. Rows marked <b>AI</b> have an outcome read by AI from the Commission's opinion/decision text (hover for the summary; <b>≠</b> flags disagreement with the caption heuristic). Unmarked rows show a <b>heuristic</b> outcome derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
+    $("disclaimer").innerHTML = `Source: USITC EDIS. Outcomes are read from the Commission's opinion/decision text where available (hover an outcome for the summary; <b>≠</b> flags disagreement with the document-caption heuristic); the rest are derived from document types/titles, not decision text. Institution date and firm/party data are metadata heuristics; precise complainant/respondent roles are not yet resolved. Confidential filings appear as metadata only. Verify anything material against EDIS and the Commission's official documents. Not legal advice.`;
     wire(); renderDockets(); renderAnalytics(); apply();
   } catch (e) {
     $("rows").innerHTML = `<tr><td colspan="10" class="state">Could not load data (${esc(e.message)}). If this just deployed, check ITC_DATA_URL and the CSP connect-src.</td></tr>`;

@@ -522,9 +522,9 @@ function switchStat(t) {
 function renderAnalytics() {
   const inv = state.invs;                          // unique investigations (uniqInvs — never count raw phase rows)
   const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset
-  const bars = (entries) => {
+  const bars = (entries, suffix = "") => {
     const max = Math.max(1, ...entries.map((e) => e.value));
-    return entries.map((e) => `<div class="barrow"><span class="bl" title="${esc(e.label)}">${esc(e.label)}</span><span class="bartrack"><span class="barfill ${e.cls || ""}" style="width:${Math.round(e.value / max * 100)}%"></span></span><span class="bv">${e.value}</span></div>`).join("");
+    return entries.map((e) => `<div class="barrow"><span class="bl" title="${esc(e.label)}">${esc(e.label)}</span><span class="bartrack"><span class="barfill ${e.cls || ""}" style="width:${Math.round(e.value / max * 100)}%"></span></span><span class="bv">${e.value}${suffix}${e.note ? ` <span class="muted" style="font-weight:400">${esc(e.note)}</span>` : ""}</span></div>`).join("");
   };
   const card = (title, sub, inner) => `<div class="chart"><h3>${title}</h3>${sub ? `<div class="csub">${sub}</div>` : ""}${inner}</div>`;
 
@@ -572,14 +572,17 @@ function renderAnalytics() {
     const cur = pend.get(r.investigation_number);
     if (!cur || r.institution_date < cur.inst) pend.set(r.investigation_number, { inst: r.institution_date, dec: r.decision_date });
   }
-  const months = [];
+  // decision_date is the LAST dispositive document, so remand/enforcement/advisory
+  // sub-proceedings years later inflate it. Cap "typical pendency" at 60 months and
+  // count the long tail separately (those are extended matters, not original pendency).
+  const months = []; let pendTail = 0;
   for (const { inst, dec } of pend.values()) {
     const m = (new Date(dec) - new Date(inst)) / (1000 * 60 * 60 * 24 * 30.44);
-    if (m > 0 && m < 120) months.push(m);
+    if (m > 0 && m < 60) months.push(m); else if (m >= 60 && m < 600) pendTail++;
   }
   months.sort((a, b) => a - b);
   const median = months.length ? months[Math.floor(months.length / 2)] : 0;
-  const pendBuckets = [["< 12 mo", 0, 12], ["12–18 mo", 12, 18], ["18–24 mo", 18, 24], ["24–36 mo", 24, 36], ["36+ mo", 36, 999]];
+  const pendBuckets = [["< 12 mo", 0, 12], ["12–18 mo", 12, 18], ["18–24 mo", 18, 24], ["24–36 mo", 24, 36], ["36–60 mo", 36, 60]];
   const pendHist = pendBuckets.map(([label, lo, hi]) => ({ label, value: months.filter((m) => m >= lo && m < hi).length }));
 
   // Investigations by presiding ALJ (one per investigation; partial coverage).
@@ -589,6 +592,34 @@ function renderAnalytics() {
   for (const a of aljByInv.values()) aljCount[a] = (aljCount[a] || 0) + 1;
   const aljEntries = Object.entries(aljCount).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([label, value]) => ({ label, value }));
 
+  // ── Trends by institution year (2005+, to match the USITC's published FY table) ──
+  const ys = new Map();   // year -> {adjV, adjN, settled, cls, months:[]}
+  for (const r of cls) {
+    const y = String(r.institution_date || "").slice(0, 4);
+    if (!/^\d{4}$/.test(y) || y < "2005") continue;
+    if (!ys.has(y)) ys.set(y, { adjV: 0, adjN: 0, settled: 0, cls: 0, months: [] });
+    const s = ys.get(y); s.cls++;
+    const d = r.ai_disposition;
+    if (d === "violation_found" || d === "terminated_default") s.adjV++;
+    else if (d === "no_violation") s.adjN++;
+    else if (["terminated_settlement", "terminated_consent", "terminated_withdrawal"].includes(d)) s.settled++;
+    if (r.institution_date && r.decision_date) { const m = (new Date(r.decision_date) - new Date(r.institution_date)) / (1000 * 60 * 60 * 24 * 30.44); if (m > 0 && m < 60) s.months.push(m); }
+  }
+  const years = [...ys.keys()].sort();
+  const violTrend = years.map((y) => { const s = ys.get(y), adj = s.adjV + s.adjN; return { label: y, value: adj ? Math.round(s.adjV / adj * 100) : 0, cls: "bf-violation", note: `n=${adj}` }; });
+  const settleTrend = years.map((y) => { const s = ys.get(y); return { label: y, value: s.cls ? Math.round(s.settled / s.cls * 100) : 0, cls: "bf-settled", note: `n=${s.cls}` }; });
+  const pendTrend = years.map((y) => { const m = [...ys.get(y).months].sort((a, b) => a - b); return { label: y, value: m.length ? Math.round(m[Math.floor(m.length / 2)]) : 0, note: m.length ? `n=${m.length}` : "—" }; });
+
+  // ── Violation rate by ALJ (adjudicated matters only; ≥5 to avoid noise) ──
+  const aljAdj = new Map();
+  for (const r of cls) {
+    const d = r.ai_disposition;
+    if (!r.alj || !(d === "violation_found" || d === "terminated_default" || d === "no_violation")) continue;
+    if (!aljAdj.has(r.alj)) aljAdj.set(r.alj, { v: 0, tot: 0 });
+    const a = aljAdj.get(r.alj); a.tot++; if (d !== "no_violation") a.v++;
+  }
+  const aljViol = [...aljAdj.entries()].filter(([, a]) => a.tot >= 5).map(([alj, a]) => ({ label: alj, value: Math.round(a.v / a.tot * 100), cls: "bf-violation", note: `${a.v}/${a.tot}` })).sort((x, y) => y.value - x.value);
+
   const cards = [
     card("Outcome distribution", `${cls.length} investigations with an AI-classified outcome`, bars(dispEntries)),
     card("Violation rate", "Share of adjudicated matters (violation/remedy or default vs. no violation) finding a violation", `<div class="stat">${violRate}%</div><div class="csub">${g.adjV} of ${adjudicated} adjudicated matters</div>`),
@@ -596,8 +627,12 @@ function renderAnalytics() {
     card("Remedy mix", "Remedies issued (an investigation may carry several)", bars(remEntries)),
     card("Disposition category", "How instituted investigations resolve", bars(groupEntries)),
     card("Filings by institution year", "Instituted 337-TA investigations per year (heuristic institution date)", bars(yearEntries)),
-    card("Median pendency", "Institution → last dispositive document (approximate; investigations with a decision date)", `<div class="stat">${median.toFixed(1)} mo</div><div class="csub">median across ${months.length} investigations</div>${bars(pendHist)}`),
-    card("Investigations by ALJ", "Presiding judge, from assignment notices (partial coverage — ~⅓ of notices don't name the judge)", aljEntries.length ? bars(aljEntries) : `<div class="csub">No ALJ data yet.</div>`),
+    card("Median pendency", "Institution → last dispositive document (approximate; capped at 60 mo)", `<div class="stat">${median.toFixed(1)} mo</div><div class="csub">median across ${months.length} investigations${pendTail ? ` · ${pendTail} extended (remand/enforcement) excluded` : ""}</div>${bars(pendHist)}`),
+    card("Violation rate by year", "Share of that year's adjudicated matters finding a violation (institution year, 2005+)", years.length ? bars(violTrend, "%") : `<div class="csub">No data.</div>`),
+    card("Settled / withdrawn rate by year", "Share of that year's classified investigations resolved by settlement, consent, or withdrawal", years.length ? bars(settleTrend, "%") : `<div class="csub">No data.</div>`),
+    card("Median pendency by year", "Median institution → last dispositive document, by institution year (months, capped at 60)", years.length ? bars(pendTrend) : `<div class="csub">No data.</div>`),
+    card("Investigations by ALJ", "Presiding judge, from assignment notices + decision captions (partial coverage)", aljEntries.length ? bars(aljEntries) : `<div class="csub">No ALJ data yet.</div>`),
+    card("Violation rate by ALJ", "Share of a judge's adjudicated matters finding a violation (≥5 adjudicated)", aljViol.length ? bars(aljViol, "%") : `<div class="csub">Not enough ALJ data.</div>`),
   ];
   $("charts").innerHTML = `<div class="charts-grid">${cards.join("")}</div>`;
 }

@@ -253,6 +253,12 @@ async function publish() {
       primaryByNumber.set(r.investigation_number, r);
     }
   }
+  // The presiding ALJ is derived per phase-row (the assignment notice lives in one
+  // phase), so sub-proceeding rows carry a null alj. Propagate the investigation's
+  // ALJ to EVERY phase row so per-investigation stats (which pick one row) don't
+  // miss it.
+  const aljByNumber = new Map();
+  for (const r of rows) { if (r.alj && !aljByNumber.has(r.investigation_number)) aljByNumber.set(r.investigation_number, r.alj); }
   const summary = { total: rows.length, active: 0, violation_remedy: 0, no_violation: 0,
     terminated_settlement: 0, terminated_other: 0, pending: 0, unknown: 0, geo: 0, leo: 0, cdo: 0,
     ai_classified: oMap.size };
@@ -260,6 +266,7 @@ async function publish() {
     if (r.status === 'Active') summary.active++;
     if (r.outcome && summary[r.outcome] != null) summary[r.outcome]++;
     if (r.remedy === 'GEO') summary.geo++; else if (r.remedy === 'LEO') summary.leo++; else if (r.remedy === 'CDO') summary.cdo++;
+    if (!r.alj && aljByNumber.has(r.investigation_number)) r.alj = aljByNumber.get(r.investigation_number);
     const o = oMap.get(r.investigation_number);
     if (o) {
       r.ai_disposition = o.ai_disposition; r.ai_violation = o.ai_violation; r.ai_remedies = o.ai_remedies;

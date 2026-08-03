@@ -41,7 +41,6 @@
     .denied { background: var(--bad-bg); color: var(--bad-fg); }
     .badge.concluded { background: var(--border); color: var(--text); }
     .badge.po { background: var(--info-bg); color: var(--info-fg); }
-    .badge.tp { background: var(--warn-bg); color: var(--warn-fg); }
     .badge.dir { background: var(--info-bg); color: var(--info-fg); }
     .badge.b-den { background: var(--bad-bg); color: var(--bad-fg); }
     .badge.b-fwd { background: var(--accent2-bg); color: var(--accent2-fg); }
@@ -642,9 +641,10 @@ function requesterCell(d) {
   const k = requesterKey(d);
   if (k === 'patent_owner') return '<span class="badge po">Patent owner</span>';
   if (k === 'third_party') {
-    // Authoritative requester name from the request document, when extracted.
-    const name = d.requester_name ? `<div class="note">${esc(titleCaseName(d.requester_name))}</div>` : '';
-    return `<span class="badge tp">Third party</span>${name}`;
+    // The third-party TYPE still feeds the KPI strip above (requesterKey); in the
+    // cell we show only the authoritative requester name from the request document.
+    // Unknown → dash; "Anonymous" is a real answer and is kept verbatim.
+    return d.requester_name ? esc(titleCaseName(d.requester_name)) : '<span class="ext">—</span>';
   }
   if (k === 'director') return '<span class="badge dir">Director</span>';
   return '<span class="ext">—</span>';

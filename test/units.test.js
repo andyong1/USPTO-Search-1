@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { detect325d, parseReexamOutcome, certCitesProceeding } from '../lib/reexamOutcome.js';
-import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape } from '../lib/uspto.js';
+import { analyzePetition, classifyRequester, determinationLabel, validateSearchShape, pickAssignmentOwner } from '../lib/uspto.js';
 import { safeEqual, unsubToken, unsubTokenOk } from '../lib/secure.js';
 import { classifyFwd, detectDdDecision } from '../lib/ptab-classify.js';
 import { extractReferences, extractReferenceNames, extractAllRefs, extractTrialNumbers, canonTrial, compareGrounds, isPetitionDoc, classify325d } from '../lib/grounds.js';
@@ -741,4 +741,24 @@ test('classifyFwd — caption disposition: "All Challenged Claims Patentable" is
   assert.equal(classifyFwd('Final Written Decision Determining All Challenged Claims Unpatentable 35 U.S.C. 318(a)').outcome, 'petitioner_all');
   assert.equal(classifyFwd('Final Written Decision Determining No Challenged Claims Unpatentable').outcome, 'po_none');
   assert.equal(classifyFwd('Determining Some Challenged Claims Unpatentable and Some Not Unpatentable').outcome, 'partial');
+});
+
+test('pickAssignmentOwner — latest ownership transfer wins; security interests skipped', () => {
+  // Real chain from app 16413466: one real assignment + three security interests.
+  const bag = [
+    { conveyanceText: "ASSIGNMENT OF ASSIGNOR'S INTEREST", assignmentRecordedDate: '2019-05-15', assigneeBag: [{ assigneeNameText: 'SIGHT SCIENCES, INC.' }] },
+    { conveyanceText: 'REAFFIRMED AND AMENDED SECURITY INTEREST (REVOLVING)', assignmentRecordedDate: '2020-11-25', assigneeBag: [{ assigneeNameText: 'MIDCAP FUNDING IV TRUST, AS AGENT' }] },
+    { conveyanceText: 'SECURITY INTEREST', assignmentRecordedDate: '2024-01-23', assigneeBag: [{ assigneeNameText: 'HERCULES CAPITAL, INC., AS AGENT' }] },
+  ];
+  assert.equal(pickAssignmentOwner(bag), 'SIGHT SCIENCES, INC.');
+  // Single real assignment.
+  assert.equal(pickAssignmentOwner([{ conveyanceText: "ASSIGNMENT OF ASSIGNOR'S INTEREST", assigneeBag: [{ assigneeNameText: 'MASSIVELY BROADBAND LLC' }] }]), 'MASSIVELY BROADBAND LLC');
+  // Two ownership transfers -> the later-recorded one is the current owner.
+  assert.equal(pickAssignmentOwner([
+    { conveyanceText: 'ASSIGNMENT OF ASSIGNORS INTEREST', assignmentRecordedDate: '2015-01-01', assigneeBag: [{ assigneeNameText: 'OLD OWNER LLC' }] },
+    { conveyanceText: 'ASSIGNMENT OF ASSIGNORS INTEREST', assignmentRecordedDate: '2022-06-01', assigneeBag: [{ assigneeNameText: 'NEW OWNER INC.' }] },
+  ]), 'NEW OWNER INC.');
+  // Only security interests / releases -> no owner.
+  assert.equal(pickAssignmentOwner([{ conveyanceText: 'RELEASE OF SECURITY INTEREST', assigneeBag: [{ assigneeNameText: 'A BANK' }] }]), '');
+  assert.equal(pickAssignmentOwner([]), '');
 });

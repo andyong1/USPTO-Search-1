@@ -9,6 +9,7 @@
 //     node owner-backfill.mjs --limit 300   (re-run until "0 still needing owner")
 import { sql } from '@vercel/postgres';
 import { getDeterminationsNeedingOwner, recordOwner, countDeterminationsNeedingOwner } from './lib/db.js';
+import { pickAssignmentOwner } from './lib/uspto.js';
 
 if (!process.env.POSTGRES_URL) {
   console.error('POSTGRES_URL is not set. Load it from grounds-secrets.env first.');
@@ -25,7 +26,8 @@ for (const r of rows) {
   try {
     let owner = null;
     if (r.underlying_application) {
-      const res = await fetch(`${SITE}/api/application?appNum=${encodeURIComponent(r.underlying_application)}&section=meta-data`);
+      const app = encodeURIComponent(r.underlying_application);
+      const res = await fetch(`${SITE}/api/application?appNum=${app}&section=meta-data`);
       if (res.ok) {
         const j = await res.json();
         const rec = (j.patentFileWrapperDataBag && j.patentFileWrapperDataBag[0]) || j;
@@ -33,6 +35,15 @@ for (const r of rows) {
         owner = md.firstApplicantName
           || (Array.isArray(md.applicantBag) && md.applicantBag[0] && md.applicantBag[0].applicantNameText)
           || null;
+      }
+      // Fallback: latest ownership-transfer assignee (skips security interests).
+      if (!owner) {
+        const ar = await fetch(`${SITE}/api/application?appNum=${app}&section=assignment`);
+        if (ar.ok) {
+          const aj = await ar.json();
+          const arec = (aj.patentFileWrapperDataBag && aj.patentFileWrapperDataBag[0]) || aj;
+          owner = pickAssignmentOwner(arec.assignmentBag || arec.patentAssignmentBag || []) || null;
+        }
       }
     } else { noParent++; }
     await recordOwner(r.application_number, owner);

@@ -558,7 +558,7 @@ function filteredSorted() {
   let items = allDeterminations;
   if (ptabOnly) items = items.filter((d) => linkByApp.has(d.application_number));
   if (q) {
-    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.patent_owner, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.patent_owner, d.requester_name, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const { key, dir } = tableSort;
@@ -581,13 +581,13 @@ function litText(d) {
   }).join('; ');
 }
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Patent Owner', 'Requester', 'Related Litigation'];
+  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Patent Owner', 'Requester', 'Requester Name', 'Related Litigation'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
       v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
-      d.examiner_name, d.group_art_unit, d.patent_owner || '', REQUESTER_LABEL[requesterKey(d)], litText(d)];
+      d.examiner_name, d.group_art_unit, d.patent_owner || '', REQUESTER_LABEL[requesterKey(d)], d.requester_name || '', litText(d)];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
@@ -640,7 +640,11 @@ function requesterKey(d) {
 function requesterCell(d) {
   const k = requesterKey(d);
   if (k === 'patent_owner') return '<span class="badge po">Patent owner</span>';
-  if (k === 'third_party') return '<span class="badge tp">Third party</span>';
+  if (k === 'third_party') {
+    // Authoritative requester name from the request document, when extracted.
+    const name = d.requester_name ? `<div class="note">${esc(d.requester_name)}</div>` : '';
+    return `<span class="badge tp">Third party</span>${name}`;
+  }
   if (k === 'director') return '<span class="badge dir">Director</span>';
   return '<span class="ext">—</span>';
 }

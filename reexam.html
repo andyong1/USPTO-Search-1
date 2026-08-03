@@ -558,7 +558,7 @@ function filteredSorted() {
   let items = allDeterminations;
   if (ptabOnly) items = items.filter((d) => linkByApp.has(d.application_number));
   if (q) {
-    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
+    items = items.filter((d) => [d.application_number, d.examiner_name, d.group_art_unit, d.patent_owner, d.tech_center, d.determination_type, REQUESTER_LABEL[requesterKey(d)]]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const { key, dir } = tableSort;
@@ -581,13 +581,13 @@ function litText(d) {
   }).join('; ');
 }
 function exportCsv() {
-  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Technology Area', 'Requester', 'Related Litigation'];
+  const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Patent Owner', 'Requester', 'Related Litigation'];
   const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const rows = filteredSorted().map((d) => {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
       v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
-      d.examiner_name, d.group_art_unit, d.tech_center || '', REQUESTER_LABEL[requesterKey(d)], litText(d)];
+      d.examiner_name, d.group_art_unit, d.patent_owner || '', REQUESTER_LABEL[requesterKey(d)], litText(d)];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
@@ -773,7 +773,7 @@ function renderTable() {
       <td>${d325Cell(d)}</td>
       <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
-      <td>${tcCell(d.tech_center)}</td>
+      <td>${d.patent_owner ? esc(d.patent_owner) : '<span class="ext">—</span>'}</td>
       <td>${requesterCell(d)}</td>
       <td>${ptabCell(d)}</td>
       <td>${litCell(d)}</td>
@@ -788,7 +788,7 @@ function renderTable() {
       <th title="Does the determination discuss 35 U.S.C. §325(d) (prior Office consideration of the art)? Click a Y to read an AI-generated summary of that discussion.">325(d) Discussion</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('examiner_name')}" onclick="sortReexam('examiner_name')">Examiner Name${arrow('examiner_name')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('group_art_unit')}" onclick="sortReexam('group_art_unit')">Group Art Unit${arrow('group_art_unit')}</th>
-      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('tech_center')}" onclick="sortReexam('tech_center')">Technology Area${arrow('tech_center')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('patent_owner')}" onclick="sortReexam('patent_owner')">Patent Owner${arrow('patent_owner')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester_type')}" onclick="sortReexam('requester_type')">Requester${arrow('requester_type')}</th>
       <th>Prior / parallel proceedings</th>
       <th title="District-court litigation from the examiner's RXLITSR search report. Open/closed status is the examiner's snapshot as of the search date, not a live docket. Blank when no search report is on file; court may be blank when the report gave only a docket number.">Related Litigation</th>
@@ -832,7 +832,7 @@ let fRequester = '';         // '' = all requesters ('third_party'|'patent_owner
 // Deep-linkable filter state: reflect the period / art-unit / TC / text filter /
 // sort into the URL query so a filtered view can be shared or bookmarked.
 const URL_PERIODS = ['since2025', 'since2026', 'last60', 'last30'];
-const URL_SORT_KEYS = ['application_number', 'official_date', 'examiner_name', 'group_art_unit', 'tech_center', 'requester_type'];
+const URL_SORT_KEYS = ['application_number', 'official_date', 'examiner_name', 'group_art_unit', 'patent_owner', 'tech_center', 'requester_type'];
 const URL_REQUESTERS = ['third_party', 'patent_owner', 'director', 'unknown'];
 function writeFiltersToUrl() {
   const p = new URLSearchParams();

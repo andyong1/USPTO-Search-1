@@ -18,6 +18,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { sql } from '@vercel/postgres';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import { getReexamsNeedingRequester, cacheRequesterText, markNoRequestDoc, countReexamsNeedingRequester } from './lib/db.js';
+import { fetchDocuments, fetchDocumentBytes } from './lib/uspto.js';
 
 if (!process.env.POSTGRES_URL) {
   console.error('POSTGRES_URL is not set. Load it from grounds-secrets.env first.');
@@ -28,15 +29,34 @@ const args = process.argv.slice(2);
 const limitIdx = args.indexOf('--limit');
 const LIMIT = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 25;
 
+// DIRECT mode (USPTO_API_KEY present): download straight from USPTO to this
+// machine — no Vercel Fast Origin Transfer, and we can read more pages freely.
+// Otherwise fall back to the public /api/document proxy.
+const DIRECT = !!process.env.USPTO_API_KEY;
 const SITE = 'https://andy-ong.com';
 const DIR = 'snq-cumulative/reqid-work';
 const NUL = new RegExp(String.fromCharCode(0), 'g');
-const CHARS = 14000, PAGES = 8; // requester statement is in the opening pages
+const CHARS = 30000, PAGES = 20; // read well into the request (requester may sit past the cover / in a later signature block)
 const parseISO = (s) => { const m = String(s || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };
+
+// Documents feed + document PDF, either direct from USPTO (local key) or via the proxy.
+async function docsBag(appNum) {
+  if (DIRECT) return fetchDocuments(appNum); // normalized {documentIdentifier, documentCode, officialDate, …}
+  const r = await fetch(`${SITE}/api/application?appNum=${appNum}&section=documents`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return (await r.json()).documentBag || [];
+}
+async function pdfBuffer(appNum, docId) {
+  if (DIRECT) { const b = await fetchDocumentBytes(appNum, docId, 'PDF').catch(() => null); return b ? b.buffer : null; }
+  const r = await fetch(`${SITE}/api/document?appNum=${appNum}&documentId=${encodeURIComponent(docId)}&format=PDF&disposition=inline`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return Buffer.from(await r.arrayBuffer());
+}
 
 await rm(DIR, { recursive: true, force: true });
 await mkdir(DIR, { recursive: true });
 
+console.log(`Fetch mode: ${DIRECT ? 'DIRECT from USPTO (no Vercel transfer)' : 'via /api proxy'} — reading up to ${PAGES} pages.`);
 const rows = await getReexamsNeedingRequester(LIMIT);
 
 // The third-party request document: RXOSUB.R / RXOSUB.R.40 / RXO_40.R. Pick the
@@ -54,9 +74,8 @@ async function reqText(appNum, doc, cached) {
   if (cached && cached.trim()) return cached.trim().slice(0, CHARS);
   let txt = '';
   try {
-    const r = await fetch(`${SITE}/api/document?appNum=${appNum}&documentId=${encodeURIComponent(doc.id)}&format=PDF&disposition=inline`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const buf = Buffer.from(await r.arrayBuffer());
+    const buf = await pdfBuffer(appNum, doc.id);
+    if (!buf) throw new Error('download failed');
     const parsed = await pdfParse(buf, { max: PAGES });
     txt = (parsed.text || '').replace(NUL, '').trim().slice(0, CHARS);
     if (txt.length < 120) { // image-only scan → hand the first pages to preorder-ocr.py
@@ -75,9 +94,7 @@ for (const row of rows) {
   const app = row.application_number;
   let bag = [];
   try {
-    const r = await fetch(`${SITE}/api/application?appNum=${app}&section=documents`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    bag = (await r.json()).documentBag || [];
+    bag = await docsBag(app);
   } catch (e) { console.error(`${app}: documents feed failed (${e.message}) — skipped`); continue; }
 
   const docs = bag.map((d) => ({ id: d.documentIdentifier, code: (d.documentCode || '').toUpperCase(), date: (d.officialDate || '').slice(0, 10) }));

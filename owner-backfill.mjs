@@ -27,22 +27,23 @@ for (const r of rows) {
     let owner = null;
     if (r.underlying_application) {
       const app = encodeURIComponent(r.underlying_application);
-      const res = await fetch(`${SITE}/api/application?appNum=${app}&section=meta-data`);
-      if (res.ok) {
-        const j = await res.json();
-        const rec = (j.patentFileWrapperDataBag && j.patentFileWrapperDataBag[0]) || j;
-        const md = rec.applicationMetaData || {};
-        owner = md.firstApplicantName
-          || (Array.isArray(md.applicantBag) && md.applicantBag[0] && md.applicantBag[0].applicantNameText)
-          || null;
+      // Primary: current owner = latest ownership-transfer assignee (skips liens).
+      const ar = await fetch(`${SITE}/api/application?appNum=${app}&section=assignment`);
+      if (ar.ok) {
+        const aj = await ar.json();
+        const arec = (aj.patentFileWrapperDataBag && aj.patentFileWrapperDataBag[0]) || aj;
+        owner = pickAssignmentOwner(arec.assignmentBag || arec.patentAssignmentBag || []) || null;
       }
-      // Fallback: latest ownership-transfer assignee (skips security interests).
+      // Fallback: applicant of record (owner at filing).
       if (!owner) {
-        const ar = await fetch(`${SITE}/api/application?appNum=${app}&section=assignment`);
-        if (ar.ok) {
-          const aj = await ar.json();
-          const arec = (aj.patentFileWrapperDataBag && aj.patentFileWrapperDataBag[0]) || aj;
-          owner = pickAssignmentOwner(arec.assignmentBag || arec.patentAssignmentBag || []) || null;
+        const res = await fetch(`${SITE}/api/application?appNum=${app}&section=meta-data`);
+        if (res.ok) {
+          const j = await res.json();
+          const rec = (j.patentFileWrapperDataBag && j.patentFileWrapperDataBag[0]) || j;
+          const md = rec.applicationMetaData || {};
+          owner = md.firstApplicantName
+            || (Array.isArray(md.applicantBag) && md.applicantBag[0] && md.applicantBag[0].applicantNameText)
+            || null;
         }
       }
     } else { noParent++; }

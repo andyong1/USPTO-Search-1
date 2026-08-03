@@ -12,6 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
   <script src="/theme.js"></script>
+  <script src="/names.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
@@ -284,7 +285,7 @@ function buildExaminerSection(rows) {
   if (!names.length) { card.style.display = 'none'; pendingExaminer = null; return; }
   const sel = document.getElementById('examiner-select');
   sel.innerHTML = ['<option value="">Select an examiner…</option>']
-    .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
+    .concat(names.map((n) => `<option value="${esc(n)}">${esc(titleCaseName(n))}</option>`)).join('');
   card.style.display = '';
   sel.onchange = (e) => {
     const name = e.target.value;
@@ -327,7 +328,7 @@ function exportCsv() {
     p.application_number, fmtDate(p.order_date),
     p.nonf_date ? fmtDate(p.nonf_date) : '', daysBetween(p.order_date, p.nonf_date) ?? '',
     p.finl_date ? fmtDate(p.finl_date) : '', daysBetween(p.order_date, p.finl_date) ?? '',
-    p.examiner_name || '', p.group_art_unit || '', p.tech_center || '',
+    titleCaseName(p.examiner_name || ''), p.group_art_unit || '', p.tech_center || '',
   ]);
   window.exportXlsx('reexam-office-action-timing.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
@@ -380,7 +381,7 @@ function render() {
   writeFiltersToUrl();
   const body = document.getElementById('body');
   const items = sortedItems(filtered());
-  document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${items.length})` + (aExaminer ? ` · Examiner: ${aExaminer}` : '');
+  document.getElementById('list-heading').textContent = `Proceedings With at Least One Office Action (Total: ${items.length})` + (aExaminer ? ` · Examiner: ${titleCaseName(aExaminer)}` : '');
   const resetBtn = document.getElementById('examiner-reset'); if (resetBtn) resetBtn.style.display = aExaminer ? '' : 'none';
   if (!items.length) { body.innerHTML = '<div class="state">No matching proceedings.</div>'; return; }
   // Client-side pagination: clamp the current page, then render only that slice.
@@ -405,7 +406,7 @@ function render() {
       <td>${fmtDate(p.order_date)}</td>
       <td>${p.review_flag ? '<span class="badge" style="background:var(--warn-bg);color:var(--warn-fg)" title="Outlier flagged for review (same-day non-final/final dates or implausible action count) — excluded from the timing statistics above.">⚠ review</span> ' : ''}${cell(num, p.nonf_date, daysBetween(p.order_date, p.nonf_date), p.nonf_doc_id, 'First Office Action')}</td>
       <td>${cell(num, p.finl_date, daysBetween(p.order_date, p.finl_date), p.finl_doc_id, 'Final Office Action')}</td>
-      <td>${p.examiner_name ? esc(p.examiner_name) : '<span class="ext">—</span>'}</td>
+      <td>${p.examiner_name ? esc(titleCaseName(p.examiner_name)) : '<span class="ext">—</span>'}</td>
       <td>${p.group_art_unit ? esc(p.group_art_unit) : '<span class="ext">—</span>'}</td>
       <td>${tcCell(p.tech_center)}</td>
     </tr>`;

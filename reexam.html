@@ -12,6 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
   <script src="/theme.js"></script>
+  <script src="/names.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
@@ -364,7 +365,7 @@ function buildExaminerSection(list) {
   if (!names.length) { el.innerHTML = ''; return; }
 
   const options = ['<option value="">Select an examiner…</option>']
-    .concat(names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`)).join('');
+    .concat(names.map((n) => `<option value="${esc(n)}">${esc(titleCaseName(n))}</option>`)).join('');
 
   // Leaderboard: examiners ranked by determination volume, with grant rate.
   const map = new Map();
@@ -381,7 +382,7 @@ function buildExaminerSection(list) {
     .sort((a, b) => (b.denied / b.total) - (a.denied / a.total) || b.total - a.total || a.n.localeCompare(b.n))
     .slice(0, 10);
   const dRows = byDenial.map((r, i) =>
-    `<tr><td>${i + 1}</td><td>${esc(r.n)}</td><td>${r.ordered}</td><td>${r.denied}</td><td>${r.total}</td><td>${(r.denied / r.total * 100).toFixed(1)}%</td></tr>`).join('');
+    `<tr><td>${i + 1}</td><td>${esc(titleCaseName(r.n))}</td><td>${r.ordered}</td><td>${r.denied}</td><td>${r.total}</td><td>${(r.denied / r.total * 100).toFixed(1)}%</td></tr>`).join('');
 
   el.innerHTML = `<div class="stats-title">By Examiner</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -399,7 +400,7 @@ function buildExaminerSection(list) {
     const target = document.getElementById('examiner-stats');
     if (!name) { target.innerHTML = ''; return; }
     const subset = list.filter((d) => (d.examiner_name || '').trim() === name);
-    target.innerHTML = statsHtml('Examiner: ' + name, subset);
+    target.innerHTML = statsHtml('Examiner: ' + titleCaseName(name), subset);
   });
 }
 
@@ -587,7 +588,7 @@ function exportCsv() {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
       v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
-      d.examiner_name, d.group_art_unit, d.patent_owner || '', REQUESTER_LABEL[requesterKey(d)], d.requester_name || '', litText(d)];
+      titleCaseName(d.examiner_name || ''), d.group_art_unit, titleCaseName(d.patent_owner || ''), REQUESTER_LABEL[requesterKey(d)], titleCaseName(d.requester_name || ''), litText(d)];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
@@ -642,7 +643,7 @@ function requesterCell(d) {
   if (k === 'patent_owner') return '<span class="badge po">Patent owner</span>';
   if (k === 'third_party') {
     // Authoritative requester name from the request document, when extracted.
-    const name = d.requester_name ? `<div class="note">${esc(d.requester_name)}</div>` : '';
+    const name = d.requester_name ? `<div class="note">${esc(titleCaseName(d.requester_name))}</div>` : '';
     return `<span class="badge tp">Third party</span>${name}`;
   }
   if (k === 'director') return '<span class="badge dir">Director</span>';
@@ -775,9 +776,9 @@ function renderTable() {
       <td><span class="badge ${denied ? 'denied' : 'ordered'}">${esc(d.determination_type || '')}</span>${d.doc_count > 1 ? `<span class="ext" style="margin-left:6px" title="This proceeding has ${d.doc_count} determination documents on file; the latest is shown and counted.">${d.doc_count} docs</span>` : ''}${pdf}</td>
       <td>${fmtDate(d.official_date)}</td>
       <td>${d325Cell(d)}</td>
-      <td>${d.examiner_name ? esc(d.examiner_name) : '<span class="ext">—</span>'}</td>
+      <td>${d.examiner_name ? esc(titleCaseName(d.examiner_name)) : '<span class="ext">—</span>'}</td>
       <td>${d.group_art_unit ? esc(d.group_art_unit) : '<span class="ext">—</span>'}</td>
-      <td>${d.patent_owner ? esc(d.patent_owner) : '<span class="ext">—</span>'}</td>
+      <td>${d.patent_owner ? esc(titleCaseName(d.patent_owner)) : '<span class="ext">—</span>'}</td>
       <td>${requesterCell(d)}</td>
       <td>${ptabCell(d)}</td>
       <td>${litCell(d)}</td>

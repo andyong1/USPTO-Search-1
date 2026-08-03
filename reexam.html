@@ -42,6 +42,9 @@
     .badge.concluded { background: var(--border); color: var(--text); }
     .badge.po { background: var(--info-bg); color: var(--info-fg); }
     .badge.dir { background: var(--info-bg); color: var(--info-fg); }
+    /* Requester inferred from litigation (low confidence) — dotted underline + a ~ marker. */
+    .req-inferred { border-bottom: 1px dotted var(--text-3); cursor: help; }
+    .req-inferred sup { color: var(--text-3); font-weight: 700; }
     .badge.b-den { background: var(--bad-bg); color: var(--bad-fg); }
     .badge.b-fwd { background: var(--accent2-bg); color: var(--accent2-fg); }
     .badge.b-inst { background: var(--warn-bg); color: var(--warn-fg); }
@@ -643,8 +646,14 @@ function requesterCell(d) {
   if (k === 'third_party') {
     // The third-party TYPE still feeds the KPI strip above (requesterKey); in the
     // cell we show only the authoritative requester name from the request document.
-    // Unknown → dash; "Anonymous" is a real answer and is kept verbatim.
-    return d.requester_name ? esc(titleCaseName(d.requester_name)) : '<span class="ext">—</span>';
+    // Unknown → dash; "Anonymous" is a real answer and is kept verbatim. Names that
+    // were INFERRED from the co-pending litigation (low confidence) rather than
+    // stated in the request are flagged so they don't read as authoritative.
+    if (!d.requester_name) return '<span class="ext">—</span>';
+    const name = esc(titleCaseName(d.requester_name));
+    return String(d.requester_confidence || '').toLowerCase() === 'low'
+      ? `<span class="req-inferred" title="Inferred from the co-pending litigation, not stated in the request document">${name}<sup>~</sup></span>`
+      : name;
   }
   if (k === 'director') return '<span class="badge dir">Director</span>';
   return '<span class="ext">—</span>';

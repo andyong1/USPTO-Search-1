@@ -28,13 +28,17 @@ if (!process.env.POSTGRES_URL) {
 const args = process.argv.slice(2);
 const limitIdx = args.indexOf('--limit');
 const LIMIT = limitIdx >= 0 ? Number(args[limitIdx + 1]) : 25;
+// --dir lets a manual bulk backfill use its own work folder so it can't collide
+// with the nightly step's reqid-work (whose rm -rf would clobber it mid-run).
+const dirIdx = args.indexOf('--dir');
+const WORKNAME = dirIdx >= 0 ? args[dirIdx + 1] : 'reqid-work';
 
 // DIRECT mode (USPTO_API_KEY present): download straight from USPTO to this
 // machine — no Vercel Fast Origin Transfer, and we can read more pages freely.
 // Otherwise fall back to the public /api/document proxy.
 const DIRECT = !!process.env.USPTO_API_KEY;
 const SITE = 'https://andy-ong.com';
-const DIR = 'snq-cumulative/reqid-work';
+const DIR = `snq-cumulative/${WORKNAME}`;
 const NUL = new RegExp(String.fromCharCode(0), 'g');
 const CHARS = 30000, PAGES = 20; // read well into the request (requester may sit past the cover / in a later signature block)
 const parseISO = (s) => { const m = String(s || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; };

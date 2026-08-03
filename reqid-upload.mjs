@@ -10,7 +10,9 @@ if (!process.env.POSTGRES_URL) {
   process.exit(1);
 }
 
-const DIR = 'snq-cumulative/reqid-work';
+const args = process.argv.slice(2);
+const dirIdx = args.indexOf('--dir');
+const DIR = `snq-cumulative/${dirIdx >= 0 ? args[dirIdx + 1] : 'reqid-work'}`;
 const IN = `${DIR}/reqid-out.jsonl`;
 const clean = (v) => v == null ? '' : String(v).replace(/\s+/g, ' ').trim();
 

@@ -564,6 +564,10 @@ export default async function handler(req, res) {
       const key = KEYS[String(q.bump)];
       if (!key) { res.status(400).json({ error: 'unknown counter' }); return; }
       const count = await bumpPtabKv(key);
+      // Also bump a per-day bucket so /status can show a 7-day daily breakdown.
+      // PT day (YYYY-MM-DD) to match the site's daily-digest "day" convention.
+      const day = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+      await bumpPtabKv(`${key}_${day}`);
       res.status(200).json({ ok: true, counter: String(q.bump), count });
       return;
     }

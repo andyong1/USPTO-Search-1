@@ -165,6 +165,18 @@ function dueCard(n, label) {
   return `<div class="kpi"><div class="num ${cls}">${v}</div><div class="lbl">${label}</div></div>`;
 }
 
+// Compact 7-day daily breakdown for a PDF export counter (oldest→newest, ending
+// today, PT). Days with activity are emphasized. Buckets accrue going forward.
+function pdfDailyHtml(daily) {
+  if (!Array.isArray(daily) || !daily.length) return '';
+  const cells = daily.map((x) => {
+    const md = String(x.d).slice(5); // MM-DD
+    const on = x.count > 0;
+    return `<span style="display:inline-block;min-width:56px;text-align:center;color:${on ? 'var(--text)' : 'var(--text-3)'}">${md}<br><b style="font-size:1.05em">${x.count}</b></span>`;
+  }).join('');
+  return `<div class="sub" style="margin-top:4px">Last 7 days (PT): ${cells}</div>`;
+}
+
 // PTAB FWD pipeline card: daily-maintain heartbeat + per-pass backlog (moved here
 // from the /ptab page). Amber = work waiting; green = caught up.
 function ptabCardHtml(p) {
@@ -282,10 +294,10 @@ function render(s) {
     ${ptabCardHtml(s._ptab)}
     <div class="card">
       <h2>PDF export usage</h2>
-      <div class="sub">Lifetime counts of PDF exports since counting began.</div>
+      <div class="sub">Lifetime counts of PDF exports since counting began, with the last 7 days broken out by day.</div>
       <table>
-        <tr><td>File History Print to PDF</td><td>${s.pdf_filehistory_count ?? 0}</td></tr>
-        <tr><td>Documents tab — "Download selected as single PDF"</td><td>${s.pdf_docmerge_count ?? 0}</td></tr>
+        <tr><td>File History Print to PDF<br>${pdfDailyHtml(s.pdf_filehistory_daily)}</td><td>${s.pdf_filehistory_count ?? 0}</td></tr>
+        <tr><td>Documents tab — "Download selected as single PDF"<br>${pdfDailyHtml(s.pdf_docmerge_daily)}</td><td>${s.pdf_docmerge_count ?? 0}</td></tr>
       </table>
     </div>
     <div class="card">

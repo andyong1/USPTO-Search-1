@@ -72,6 +72,28 @@ console.log(`Federal Register ${MODE}: ${targets.length} investigation(s) to fet
 const isNoi = (t) => /notice of investigation|institution of (an )?investigation/i.test(t || '');
 const isDisp = (t) => /final determination|determination.*(violation|terminat|no violation|review|rescind|consent)|termination of (the )?investigation|commission determination|issuance of/i.test(t || '');
 
+// A FR 337 notice declares its subject investigation(s) in a bracketed docket header
+// near the top, e.g. "[Investigation No. 337-TA-1128]" or "[Investigation Nos.
+// 337-TA-1128 and 337-TA-1129]". A bare 337-TA-N elsewhere in the body — a
+// "consolidate ... with Inv. No. ..." clause or a "see ..., Inv. No. ..." case
+// citation — does NOT make the notice about that investigation. That is the guard:
+// match on the declared subject, not on any mention.
+const declaredInvs = (t) => {
+  const set = new Set();
+  const re = /\[\s*investigation\s+nos?\.?\s*([^\]]*?)\]/gi;
+  let m;
+  while ((m = re.exec(String(t || '')))) for (const n of m[1].match(/337-TA-\d+/gi) || []) set.add(n.toUpperCase());
+  return set;
+};
+const declaresInv = (t, ta) => {
+  const declared = declaredInvs(t);
+  // With bracketed headers present, require THIS investigation to be one of them. Only
+  // when a notice has no bracket header at all (rare cross-investigation notices, e.g. a
+  // URAA term-extension list) fall back to the weaker "names it anywhere" test.
+  return declared.size ? declared.has(ta.toUpperCase())
+    : new RegExp(ta.replace(/[- ]/g, '[- ]?'), 'i').test(String(t || ''));
+};
+
 const manifest = [];
 let ok = 0, none = 0, failed = 0; const errs = [];
 for (const num of targets) {
@@ -80,27 +102,37 @@ for (const num of targets) {
     const notices = await frNotices(ta);
     if (!notices.length) { none++; continue; }
     let staged = null;
-    // Wrong-doc guard: staged text must name THIS investigation (a search can surface
-    // a consolidated/neighboring notice about a different 337-TA number).
-    const namesInv = (t) => new RegExp(ta.replace(/[- ]/g, '[- ]?'), 'i').test(t || '');
     if (MODE === 'parties') {
-      const noi = notices.find((d) => isNoi(d.title)) || notices[0];   // oldest = institution
+      // Institution ("notice of investigation") notices first, oldest first, then any
+      // other notice — stage the FIRST whose own docket header declares THIS
+      // investigation. Drops wrong-doc hits (a neighbor's consolidation notice or a
+      // case citation) AND, when the real notice is among the hits, picks it over one.
+      const candidates = [...notices.filter((d) => isNoi(d.title)), ...notices.filter((d) => !isNoi(d.title))];
+      for (const noi of candidates.slice(0, 6)) {
       const text = (await rawText(noi.raw_text_url)).replace(/ /g, ' ');
-      if (text && text.length > 300 && namesInv(text)) {
-        await writeFile(`${DIR}/${num}.txt`, `INVESTIGATION: ${num}\nNOI docId: FR-${noi.document_number}\n\n${text}\n`, 'utf-8');
-        manifest.push({ investigation_number: num, noiDocId: `FR-${noi.document_number}`, chars: text.length });
-        staged = true;
+        if (text && text.length > 300 && declaresInv(text, ta)) {
+          await writeFile(`${DIR}/${num}.txt`, `INVESTIGATION: ${num}\nNOI docId: FR-${noi.document_number}\n\n${text}\n`, 'utf-8');
+          manifest.push({ investigation_number: num, noiDocId: `FR-${noi.document_number}`, chars: text.length });
+          staged = true;
+          break;
+        }
+        await sleep(120);
       }
     } else {
-      // Concatenate the dispositive determination notices (newest first), capped.
+      // Concatenate the dispositive determination notices that actually declare THIS
+      // investigation (newest first), capped — skipping ones that only mention it.
       const disp = notices.filter((d) => isDisp(d.title)).reverse();
       if (disp.length) {
-        let body = '';
-        for (const d of disp.slice(0, 4)) { const t = await rawText(d.raw_text_url); body += `\n=== FR ${d.publication_date} · ${d.title} (FR-${d.document_number}) ===\n${t}\n`; await sleep(150); }
+        let body = ''; const used = [];
+        for (const d of disp.slice(0, 6)) {
+          const t = await rawText(d.raw_text_url);
+          if (declaresInv(t, ta)) { body += `\n=== FR ${d.publication_date} · ${d.title} (FR-${d.document_number}) ===\n${t}\n`; used.push(d); if (used.length >= 4) break; }
+          await sleep(150);
+        }
         body = body.slice(0, 90000);
-        if (body.length > 300 && namesInv(body)) {
+        if (body.length > 300) {
           await writeFile(`${DIR}/${num}.txt`, `INVESTIGATION: ${num}\n\n${body}\n`, 'utf-8');
-          manifest.push({ investigation_number: num, docs: disp.slice(0, 4).map((d) => ({ docId: `FR-${d.document_number}`, title: d.title, date: d.publication_date })), chars: body.length });
+          manifest.push({ investigation_number: num, docs: used.map((d) => ({ docId: `FR-${d.document_number}`, title: d.title, date: d.publication_date })), chars: body.length });
           staged = true;
         }
       }

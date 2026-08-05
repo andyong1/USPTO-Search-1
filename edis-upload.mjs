@@ -16,15 +16,23 @@
 //                             of trusted roots (incl. the interception CA) so
 //                             Node's fetch can reach Neon/Blob over TLS.
 //
-//   node edis-upload.mjs                # ingest + derive + publish
-//   node edis-upload.mjs --derive-only  # skip ingest; re-derive from DB + publish
-//                                         (use when documents are already in Neon)
-//   node edis-upload.mjs --publish-only # ONLY rebuild the main projection blob
-//                                         (fast; use after new AI outcomes — no
-//                                         re-derive, no per-investigation blobs)
-//   node edis-upload.mjs --no-blob      # ingest + derive only (skip publish)
+//   node edis-upload.mjs                  # ingest + derive + publish. Per-investigation
+//                                           detail blobs are republished INCREMENTALLY:
+//                                           only investigations whose documents or catalog
+//                                           meta (status/title/docket) changed this run,
+//                                           plus a full sweep every Sunday (UTC). The main
+//                                           projection blob is always rebuilt in full.
+//   node edis-upload.mjs --full-republish # force a full detail-blob republish this run
+//                                           (also automatic on a PUBLISH_FMT_V bump)
+//   node edis-upload.mjs --derive-only    # skip ingest; re-derive from DB + publish ALL
+//                                           (use when documents are already in Neon)
+//   node edis-upload.mjs --publish-only   # ONLY rebuild the main projection blob
+//                                           (fast; use after new AI outcomes — no
+//                                           re-derive, no per-investigation blobs)
+//   node edis-upload.mjs --no-blob        # ingest + derive only (skip publish)
 
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
@@ -43,6 +51,14 @@ const DIR = 'itc-work';
 const DOC_DIR = `${DIR}/documents`;
 const DERIVED_V = 1;          // bump to force re-derivation of every investigation
 const BLOB_PATH = 'itc/itc-data.json';
+// Detail-blob format/derivation version. Bump this whenever the per-investigation
+// blob shape (publishInvestigationDocs) or deriveOne changes, so the next run does a
+// FULL republish and every blob adopts the new format instead of waiting to change.
+const PUBLISH_FMT_V = 1;
+const STATE_FILE = `${DIR}/.publish-state.json`;   // per-run signatures for incremental republish (gitignored)
+// How many investigations to derive+publish at once. Each is a Neon write + a Vercel
+// Blob PUT (network-bound), so a pool is a large win over the old sequential loop.
+const CONCURRENCY = Math.max(1, Number(process.env.ITC_PUBLISH_CONCURRENCY) || 10);
 const args = process.argv.slice(2);
 const PUBLISH = !args.includes('--no-blob') && !!process.env.BLOB_READ_WRITE_TOKEN;
 
@@ -57,6 +73,39 @@ async function retry(fn, tries = 5) {
       await new Promise((r) => setTimeout(r, 700 * i));
     }
   }
+}
+
+// Run `worker` over `items` with at most `limit` in flight at once. Preserves the
+// per-item isolation of the old sequential loop (the worker swallows its own errors)
+// while collapsing wall-clock from sum-of-PUTs to slowest-lane.
+async function mapPool(items, limit, worker) {
+  let next = 0;
+  const lanes = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (let i = next++; i < items.length; i = next++) await worker(items[i], i);
+  });
+  await Promise.all(lanes);
+}
+
+const sha1 = (s) => createHash('sha1').update(String(s)).digest('hex');
+// Signature of the catalog-derived fields the detail blob embeds (title, public
+// number, and per-phase status/docket). A change here means the blob is stale even
+// with no new documents. Phases are sorted so the hash is order-independent.
+const hashInvMeta = (m) => sha1(JSON.stringify({
+  p: (m && m.publicNumber) || null,
+  t: (m && m.title) || null,
+  ph: (m && m.phases ? [...m.phases] : []).map((x) => [x.phase, x.status, x.docket])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+}));
+
+async function loadPublishState() {
+  try {
+    const s = JSON.parse(await readFile(STATE_FILE, 'utf-8'));
+    return { fmtV: s.fmtV, invHash: s.invHash || {}, docHash: s.docHash || {} };
+  } catch { return null; }   // missing/corrupt → treat as first run (forces a full republish)
+}
+async function savePublishState(state) {
+  try { await writeFile(STATE_FILE, JSON.stringify(state)); }
+  catch (e) { console.log(`  (could not save publish state: ${(e && e.message) || e})`); }
 }
 
 // ── Phase-1 heuristic outcome/remedy classifier (metadata only) ────────
@@ -153,7 +202,7 @@ function deriveOne(docs, status) {
 // connections each time, so a second try clears almost all of them).
 async function deriveNumbers(numbers) {
   const { phasesByNumber, statusByKey, metaByNumber } = await loadCatalogMaps(DIR);
-  let derived = 0, published = 0;
+  let derived = 0, published = 0, done = 0;
 
   // Derive + publish one investigation; throws on failure so the caller isolates it.
   const processNumber = async (number) => {
@@ -174,32 +223,34 @@ async function deriveNumbers(numbers) {
     if (PUBLISH) { await retry(() => publishInvestigationDocs(number, metaByNumber.get(number))); published++; }
   };
 
-  let failedNumbers = [];
-  let i = 0;
-  for (const number of numbers) {
-    i++;
+  // First pass — CONCURRENCY investigations in flight; failures are collected, not fatal.
+  const failedNumbers = [];
+  await mapPool(numbers, CONCURRENCY, async (number) => {
     try { await processNumber(number); }
     catch { failedNumbers.push(number); }
-    if (i % 25 === 0 || i === numbers.length) process.stdout.write(`\r  derived ${i}/${numbers.length}, published ${published} detail blob(s)…`);
-  }
+    finally {
+      done++;
+      if (done % 25 === 0 || done === numbers.length) process.stdout.write(`\r  derived ${done}/${numbers.length} (${CONCURRENCY}-way), published ${published} detail blob(s)…`);
+    }
+  });
   process.stdout.write('\n');
 
-  // Final convergence pass over just the first-pass failures.
+  // Final convergence pass over just the first-pass failures (gentler concurrency,
+  // since these are the connections the proxy already dropped once).
+  const stillFailed = [];
   if (failedNumbers.length) {
     console.log(`  retrying ${failedNumbers.length} investigation(s) that failed on the first pass…`);
-    const stillFailed = [];
-    for (const number of failedNumbers) {
+    await mapPool(failedNumbers, Math.min(CONCURRENCY, 4), async (number) => {
       try { await processNumber(number); }
       catch (e) { stillFailed.push({ number, error: String((e && e.message) || e) }); }
-    }
-    failedNumbers = stillFailed;
-    if (failedNumbers.length) console.log(`  ${failedNumbers.length} still failed after the retry pass:`, failedNumbers.slice(0, 10));
+    });
+    if (stillFailed.length) console.log(`  ${stillFailed.length} still failed after the retry pass:`, stillFailed.slice(0, 10));
     else console.log('  retry pass cleared all failures.');
   }
 
-  await retry(() => logScan('documents', numbers.length, null, `derived ${derived} phase-records; ${failedNumbers.length} failed`));
+  await retry(() => logScan('documents', numbers.length, null, `derived ${derived} phase-records; ${stillFailed.length} failed`));
   console.log(`Derived heuristics for ${derived} (number, phase) record(s) across ${numbers.length} investigation(s).`);
-  return derived;
+  return stillFailed.map((s) => s.number);   // still-failed numbers, so the caller can re-trigger them next run
 }
 
 // ── Ingest ─────────────────────────────────────────────────────────────
@@ -207,7 +258,7 @@ async function ingestInvestigations() {
   let list;
   try { list = JSON.parse(await readFile(`${DIR}/investigations.json`, 'utf-8')); }
   catch { console.log('No investigations.json — skipping catalog ingest.'); return 0; }
-  for (const inv of list) await retry(() => upsertInvestigation(inv));
+  await mapPool(list, CONCURRENCY, (inv) => retry(() => upsertInvestigation(inv)));   // distinct (number,phase) rows — safe to upsert concurrently
   await retry(() => logScan('investigations', list.length, null, 'catalog upsert'));
   console.log(`Upserted ${list.length} investigation records.`);
   return list.length;
@@ -217,14 +268,64 @@ async function ingestDocuments() {
   let files;
   try { files = (await readdir(DOC_DIR)).filter((f) => f.endsWith('.json')); }
   catch { console.log('No documents/ dir — skipping document ingest + derivation.'); return; }
-  let totalDocs = 0;
-  const touched = new Set();
+
+  const prev = await loadPublishState();
+  // A FULL republish (every investigation on disk) happens on: an explicit flag, the
+  // first run / missing state, a format-version bump, or the weekly (Sunday UTC)
+  // sweep — the safety net that heals anything an incremental diff could miss.
+  const fullReason = args.includes('--full-republish') ? 'flag'
+    : !prev ? 'no prior state'
+    : prev.fmtV !== PUBLISH_FMT_V ? 'format bump'
+    : new Date().getUTCDay() === 0 ? 'weekly sweep'
+    : null;
+  const full = fullReason !== null;
+
+  // Walk every document file, but only UPSERT the ones whose content changed since
+  // last run (a content hash per file) — unchanged files are already in Neon, and
+  // re-upserting all ~400k docs nightly was the bulk of the runtime. A full run
+  // re-ingests everything to re-establish DB authority (and heal any drift).
+  let totalDocs = 0, upsertedFiles = 0;
+  const allNumbers = new Set();
+  const changed = new Set();
+  const curDocHash = {};
   for (const f of files) {
-    const docs = JSON.parse(await readFile(`${DOC_DIR}/${f}`, 'utf-8'));
-    if (docs.length) { totalDocs += await retry(() => upsertDocuments(docs)); docs.forEach((d) => touched.add(d.number)); }
+    const raw = await readFile(`${DOC_DIR}/${f}`, 'utf-8');
+    const docs = JSON.parse(raw);
+    if (!docs.length) continue;
+    const h = sha1(raw);
+    curDocHash[f] = h;
+    const nums = docs.map((d) => d.number);
+    nums.forEach((n) => allNumbers.add(n));
+    const fileChanged = !prev || prev.docHash[f] !== h;
+    if (full || fileChanged) { totalDocs += await retry(() => upsertDocuments(docs)); upsertedFiles++; }
+    if (fileChanged) nums.forEach((n) => changed.add(n));
   }
-  console.log(`Upserted ${totalDocs} documents across ${touched.size} investigation(s).`);
-  await deriveNumbers([...touched]);
+  console.log(`Upserted ${totalDocs} documents from ${upsertedFiles} changed file(s) (of ${files.length}); ${allNumbers.size} investigation(s) on disk.`);
+
+  // Catalog-driven change: a title/status/docket/publicNumber shift (from the 17a
+  // catalog crawl) changes the detail blob without any new document, so diff the
+  // crawl meta too and fold those into the republish set.
+  const { metaByNumber } = await loadCatalogMaps(DIR);
+  const curInvHash = {};
+  for (const [number, meta] of metaByNumber) {
+    const hh = hashInvMeta(meta);
+    curInvHash[number] = hh;
+    if (!full && (!prev || prev.invHash[number] !== hh)) changed.add(number);
+  }
+
+  const publishSet = full ? [...allNumbers] : [...changed].filter((n) => allNumbers.has(n));
+  console.log(full
+    ? `Full republish (${fullReason}): ${publishSet.length} investigation(s).`
+    : `Incremental republish: ${publishSet.length} of ${allNumbers.size} investigation(s) changed (documents and/or catalog).`);
+
+  const failed = await deriveNumbers(publishSet);
+
+  // Persist the new signatures so the next run can diff. Record current hashes for
+  // everything, but poison the still-failed numbers' invHash so they re-publish next
+  // run even if their inputs don't move again.
+  const newInvHash = { ...(prev ? prev.invHash : {}), ...curInvHash };
+  for (const n of failed) newInvHash[n] = '__retry__';
+  await savePublishState({ fmtV: PUBLISH_FMT_V, invHash: newInvHash, docHash: { ...(prev ? prev.docHash : {}), ...curDocHash } });
 }
 
 // ── Publish the page projection to Vercel Blob ─────────────────────────

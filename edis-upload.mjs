@@ -126,16 +126,19 @@ function classifyOutcome(docs, status) {
 
   let outcome, reviewFlag = false;
   if (remedy || cdo) {
-    outcome = 'violation_remedy';                            // violation found + remedy issued
+    outcome = 'violation_remedy';                            // a final remedy order = violation found (may still show Active during Presidential review)
     if (!remedy && cdo) remedy = 'CDO';
+  } else if (status === 'Active') {
+    // An Active investigation is ongoing by definition: a partial termination or
+    // settlement of an INDIVIDUAL respondent (common in multi-respondent cases)
+    // does NOT conclude it, so never infer a terminal outcome from doc titles here.
+    outcome = 'pending';
   } else if (any(/consent order/) || any(/settlement agreement/) || any(/motion to terminate.*(settl|license)/)) {
     outcome = 'terminated_settlement';
   } else if (any(/(finding|determination) of no violation/) || any(/no violation/)) {
     outcome = 'no_violation';
   } else if (any(/terminat/)) {
     outcome = 'terminated_other';                            // withdrawn, defaulted-then-terminated, etc.
-  } else if (status === 'Active') {
-    outcome = 'pending';
   } else {
     outcome = 'unknown';
     reviewFlag = true;                                       // inactive but no terminal signal — verify

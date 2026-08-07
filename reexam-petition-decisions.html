@@ -450,25 +450,53 @@ function buildStats() {
     ${reliefTableHtml(vs)}`;
 }
 
-// Relief leaderboard with a merits grant rate per relief type (multi-label, so a
-// petition appears under each relief it requested).
+// Relief leaderboard. Two counts per relief, because they answer different
+// questions: how often a relief was REQUESTED (multi-label — a petition appears
+// under each of its asks) versus how often it was the SUBSTANTIVE ask. The grant
+// rate is computed only over the latter, since merits_outcome describes the
+// substantive relief — quoting it against a relief that was merely the procedural
+// vehicle would be wrong (a 1.183 waiver appears 160 times but is the real ask
+// ~4 times; its own disposition lives in ancillary_waiver, reported below).
 function reliefTableHtml(vs) {
   const t = {};
-  for (const v of vs) for (const r of v.reliefs) {
-    t[r] = t[r] || { n: 0, granted: 0, decided: 0 };
-    t[r].n++;
-    if (v.outcome === 'granted' || v.outcome === 'granted_in_part') { t[r].granted++; t[r].decided++; }
-    else if (v.outcome === 'dismissed' || v.outcome === 'denied') t[r].decided++;
+  for (const v of vs) {
+    for (const r of v.reliefs) {
+      t[r] = t[r] || { requested: 0, primary: 0, granted: 0, decided: 0 };
+      t[r].requested++;
+    }
+    const p = v.primary;
+    if (!p) continue;
+    t[p] = t[p] || { requested: 0, primary: 0, granted: 0, decided: 0 };
+    t[p].primary++;
+    if (v.outcome === 'granted' || v.outcome === 'granted_in_part') { t[p].granted++; t[p].decided++; }
+    else if (v.outcome === 'dismissed' || v.outcome === 'denied') t[p].decided++;
   }
-  const rows = Object.entries(t).sort((a, b) => b[1].n - a[1].n);
+  const rows = Object.entries(t).sort((a, b) => b[1].requested - a[1].requested);
   if (!rows.length) return '<div class="note">Relief types appear once the classification pass has run.</div>';
+
+  // The procedural-waiver leg, which the merits rate deliberately excludes.
+  const wDecided = vs.filter((v) => v.ancillary).length;
+  const wGranted = vs.filter((v) => v.ancillary === 'granted').length;
+  const waiverNote = wDecided
+    ? `<div class="note" style="margin-top:8px">Separately, the procedural rule-waiver leg was itself granted in <strong>${wGranted} of ${wDecided}</strong> petitions that included one (${Math.round(wGranted / wDecided * 100)}%). Procedural vehicles are usually granted; the substantive request usually is not — which is why the two are kept apart.</div>`
+    : '';
+
   return `<div class="table-wrap" style="max-height:none"><table>
-    <thead><tr><th>Relief Requested</th><th>Petitions</th><th>Granted (incl. in part)</th><th>Grant Rate on Merits</th></tr></thead>
+    <thead><tr>
+      <th>Relief Requested</th>
+      <th title="Petitions that asked for this at all (a petition can ask for several)">Times Requested</th>
+      <th title="Petitions where this was the substantive ask rather than a procedural vehicle">As the Substantive Ask</th>
+      <th>Granted (incl. in part)</th>
+      <th title="Computed only over petitions where this was the substantive ask and it was actually decided">Grant Rate on Merits</th>
+    </tr></thead>
     <tbody>${rows.map(([r, x]) => `<tr>
       <td><a class="link" href="#" onclick="setRelief('${r}');return false">${esc(reliefLabel(r))}</a></td>
-      <td>${x.n}</td><td>${x.granted}</td>
-      <td>${x.decided ? Math.round(x.granted / x.decided * 100) + '%' : '—'}<span class="note"> (${x.granted} of ${x.decided})</span></td>
-    </tr>`).join('')}</tbody></table></div>`;
+      <td>${x.requested}</td>
+      <td>${x.primary || '<span class="note">vehicle only</span>'}</td>
+      <td>${x.primary ? x.granted : '<span class="ext" style="margin-left:0">—</span>'}</td>
+      <td>${x.decided ? Math.round(x.granted / x.decided * 100) + '%' + `<span class="note"> (${x.granted} of ${x.decided} decided)</span>`
+        : (x.primary ? '<span class="note">none decided yet</span>' : '<span class="note">n/a</span>')}</td>
+    </tr>`).join('')}</tbody></table>${waiverNote}</div>`;
 }
 function setRelief(r) {
   const sel = document.getElementById('relief-filter');

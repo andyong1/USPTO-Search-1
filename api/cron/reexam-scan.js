@@ -238,6 +238,21 @@ async function enumerate() {
 async function scanOne(appNum, filingDate) {
   const docs = await fetchDocuments(appNum);
 
+  // Petition-trail harvest for proceedings that have no determination yet — this
+  // batch is exactly the `determined = false` pool, which detectConclusionsStep
+  // (ordered reexams only) never reaches. PRE-ORDER petitions live here, so
+  // without this the 1.183-waiver/§ 325(d) petitions filed before the order were
+  // invisible. Same feed, no extra API call.
+  try {
+    const petDocs = [];
+    for (const d of docs) {
+      const code = (d.documentCode || '').toUpperCase();
+      const pet = classifyPetitionDoc(code, d.description);
+      if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
+    }
+    if (petDocs.length) await recordPetitionDocs(appNum, petDocs);
+  } catch { /* never fail the determination scan over petition bookkeeping */ }
+
   // Patent owner pre-order SNQ submissions (for reexams filed on/after cutoff),
   // plus any requestor petition within 20 days and its decision.
   if (filingDate && filingDate >= PREORDER_CUTOFF) {

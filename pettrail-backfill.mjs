@@ -21,10 +21,19 @@ const num = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? Numbe
 const LIMIT = num('--limit', 100000);
 const OFFSET = num('--offset', 0);
 
+// EVERY known proceeding, not just those with a determination on file. The first
+// version of this sweep queried reexam_determinations only, which silently missed
+// proceedings still awaiting an order — exactly where PRE-ORDER petitions live
+// (e.g. 90016272 and 90016411 each had an RXPET. + RXPTDI that never got picked up).
 const { rows } = await sql`
-  SELECT DISTINCT application_number FROM reexam_determinations
+  SELECT application_number FROM (
+    SELECT application_number FROM reexam_watch
+    UNION
+    SELECT application_number FROM reexam_determinations
+  ) s
+  WHERE application_number IS NOT NULL
   ORDER BY application_number LIMIT ${LIMIT} OFFSET ${OFFSET}`;
-console.log(`Sweeping ${rows.length} proceeding(s) (offset ${OFFSET})…`);
+console.log(`Sweeping ${rows.length} proceeding(s) — all known controls (watch ∪ determinations), offset ${OFFSET}…`);
 
 let swept = 0, withPets = 0, docsTotal = 0, failed = 0;
 for (const r of rows) {

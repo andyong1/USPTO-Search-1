@@ -59,9 +59,7 @@
     .btn-csv:hover { background: var(--border-2); }
     .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.9rem; }
     select { padding: 8px 10px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.88rem; background: var(--surface); color: var(--text); }
-    .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; font-size: 0.85rem; color: var(--text-2); }
-    .pager button { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; }
-    .pager button:disabled { opacity: 0.45; cursor: default; }
+    .btn-csv:disabled { opacity: 0.45; cursor: default; }
     .note { font-size: 0.8rem; color: var(--text-4); }
     footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
     footer a { color: var(--heading); text-decoration: none; }
@@ -307,12 +305,33 @@ function render() {
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 
-  const pager = document.getElementById('pager');
-  pager.innerHTML = pageCount > 1 ? `<div class="pager">
-    <button ${page <= 1 ? 'disabled' : ''} onclick="page--;render()">‹ Prev</button>
-    <span>Page ${page} of ${pageCount} (${items.length} petitions)</span>
-    <button ${page >= pageCount ? 'disabled' : ''} onclick="page++;render()">Next ›</button>
-  </div>` : '';
+  const start = (page - 1) * PAGE_SIZE, end = Math.min(start + PAGE_SIZE, items.length);
+  document.getElementById('pager').innerHTML = items.length > PAGE_SIZE ? pagerHtml(page, pageCount, start, end, items.length) : '';
+}
+
+// Same pager as the other tables: "Showing X–Y of Z" + Prev / windowed page numbers / Next.
+function gotoTablePage(delta) { page += delta; render(); }
+function gotoTablePageAbs(n) { page = n; render(); }
+// Windowed page numbers: 1 … (cur-2 … cur+2) … last, with ellipses for gaps.
+function pageNums(cur, total) {
+  const delta = 2, keep = [], out = [];
+  for (let i = 1; i <= total; i++) if (i === 1 || i === total || (i >= cur - delta && i <= cur + delta)) keep.push(i);
+  let prev;
+  for (const i of keep) { if (prev) { if (i - prev === 2) out.push(prev + 1); else if (i - prev > 2) out.push('…'); } out.push(i); prev = i; }
+  return out;
+}
+function pagerHtml(cur, pages, start, end, total) {
+  const nums = pageNums(cur, pages).map((n) => n === '…'
+    ? '<span style="padding:0 4px;color:var(--text-3)">…</span>'
+    : `<button class="btn-csv" onclick="gotoTablePageAbs(${n})" style="padding:5px 10px${n === cur ? ';background:var(--brand);color:#fff' : ''}"${n === cur ? ' aria-current="page"' : ''}>${n}</button>`).join('');
+  return `<div class="table-pager" style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:14px">
+    <span class="sub" style="margin:0">Showing ${start + 1}–${end} of ${total}</span>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <button class="btn-csv" onclick="gotoTablePage(-1)"${cur <= 1 ? ' disabled' : ''}>‹ Prev</button>
+      ${nums}
+      <button class="btn-csv" onclick="gotoTablePage(1)"${cur >= pages ? ' disabled' : ''}>Next ›</button>
+    </div>
+  </div>`;
 }
 
 function buildStats() {

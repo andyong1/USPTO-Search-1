@@ -252,15 +252,24 @@ const coarseHeur = (o) => ({ violation_remedy: "violation", no_violation: "no_vi
 // over the caption heuristic) — the basis for both the filter chips and the KPI tiles.
 const effCat = (r) => r.ai_disposition ? coarseAi(r.ai_disposition) : coarseHeur(r.outcome);
 
-// ── Statistics MUST count investigations, not phase rows ──────────────────
-// state.all holds one row per (investigation, phase), and investigation-level
-// fields (ai_*, order_links…) are attached to EVERY phase row — so any stat that
-// iterates raw rows multi-counts multi-phase investigations. All stats consume
-// state.invs (built once at load via uniqInvs); raw state.all is for the table.
-function uniqInvs(rows) {
-  const m = new Map();
-  for (const r of rows) if (r.ai_disposition || !m.has(r.investigation_number)) m.set(r.investigation_number, r);
-  return [...m.values()];
+// ── One representative row per investigation (for BOTH the table and stats) ──
+// state.all holds one row per (investigation, phase). The instituted table and all
+// stats consume state.invs — ONE row per investigation: the PRIMARY phase ('Violation',
+// else earliest-instituted), which is the row the projection overlays parties onto and
+// which carries the main institution date. The AI outcome, remedies, ALJ, and order
+// links are already on every phase row, so the primary row has everything. Status is
+// shown as Active if ANY phase is active (e.g. a concluded matter with a live
+// enforcement/advisory sub-proceeding), so the collapsed row doesn't read as concluded.
+function primaryInvs(rows) {
+  const m = new Map();   // number -> { rep, anyActive }
+  for (const r of rows) {
+    let e = m.get(r.investigation_number);
+    if (!e) { m.set(r.investigation_number, { rep: r, anyActive: r.status === "Active" }); continue; }
+    if (r.status === "Active") e.anyActive = true;
+    if (e.rep.investigation_phase === "Violation") continue;   // Violation phase wins
+    if (r.investigation_phase === "Violation" || String(r.institution_date || "9999-99-99") < String(e.rep.institution_date || "9999-99-99")) e.rep = r;
+  }
+  return [...m.values()].map(({ rep, anyActive }) => (anyActive && rep.status !== "Active") ? { ...rep, status: "Active" } : rep);
 }
 // Remedies per investigation, unioned across its phase rows: the AI remedy list
 // when the investigation is AI-classified, else the heuristic remedy field.
@@ -375,7 +384,7 @@ function renderChips() {
 
 function applyFilter() {
   const q = state.q.toLowerCase().trim();
-  state.filtered = state.all.filter((r) => {
+  state.filtered = state.invs.filter((r) => {   // one row per investigation (primary phase)
     if (state.outcome === "ai") { if (!r.ai_disposition) return false; }
     else if (state.outcome !== "all") {
       const c = effCat(r);   // AI disposition preferred, matching the displayed badge
@@ -520,7 +529,7 @@ function switchStat(t) {
 
 // Analytics view — aggregates computed client-side from the loaded projection.
 function renderAnalytics() {
-  const inv = state.invs;                          // unique investigations (uniqInvs — never count raw phase rows)
+  const inv = state.invs;                          // one row per investigation (primaryInvs — never count raw phase rows)
   const cls = inv.filter((r) => r.ai_disposition); // AI-classified subset
   const bars = (entries, suffix = "") => {
     const max = Math.max(1, ...entries.map((e) => e.value));
@@ -702,11 +711,11 @@ async function load() {
     // Count UNIQUE investigation numbers, not phase rows (one investigation can have
     // several phase rows — Violation / Remand / Enforcement — kept separate in the table).
     const uniq = (rows) => new Set(rows.map((r) => r.investigation_number)).size;
-    state.invs = uniqInvs(state.all);   // canonical per-investigation view for ALL stats
+    state.invs = primaryInvs(state.all);   // one row per investigation (primary phase) — table + stats
     const instCount = state.invs.length, docketCount = uniq(state.dockets);
     const summary = Object.assign({}, data.summary || {});
     summary.total = instCount;
-    summary.active = uniq(state.all.filter((r) => r.status === "Active"));
+    summary.active = state.invs.filter((r) => r.status === "Active").length;
     summary.dockets = docketCount;
     // Outcome-category KPI tiles by EFFECTIVE category (AI preferred), counted per
     // unique investigation, so the tiles match the filter chips exactly.

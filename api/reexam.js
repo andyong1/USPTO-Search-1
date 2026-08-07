@@ -72,7 +72,22 @@ export default async function handler(req, res) {
             cert_date: ctx.cert_date,
             petition: t.petition && { doc_id: t.petition.doc_id, date: t.petition.official_date, code: t.petition.doc_code },
             opposition: t.opposition && { doc_id: t.opposition.doc_id, date: t.opposition.official_date, code: t.opposition.doc_code },
-            decision: t.decision && { doc_id: t.decision.doc_id, date: t.decision.official_date, code: t.decision.doc_code, outcome: t.decision.outcome },
+            decision: t.decision && {
+              doc_id: t.decision.doc_id, date: t.decision.official_date,
+              code: t.decision.doc_code, outcome: t.decision.outcome,
+              // Subject matter from the OCR + AI pass. reliefs is multi-label;
+              // merits_outcome is the disposition of the SUBSTANTIVE ask (so an
+              // ancillary rule waiver granted en route to a dismissal doesn't
+              // read as a win). ancillary_waiver keeps that procedural leg.
+              reliefs: t.decision.reliefs || null,
+              primary_relief: t.decision.primary_relief || null,
+              merits_outcome: t.decision.merits_outcome || null,
+              ancillary_waiver: t.decision.ancillary_waiver || null,
+              rules: t.decision.rules || null,
+              relief_verbatim: t.decision.relief_verbatim || null,
+              subj_confidence: t.decision.subj_confidence || null,
+              petitioner: t.decision.pet_party || null,
+            },
           });
         }
       }

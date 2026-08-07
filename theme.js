@@ -29,23 +29,45 @@
   window.setTheme = setTheme;
   window.isDarkTheme = isDark;
 
-  var SUN = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>';
-  var MOON = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
-  var btn;
+  var SUN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>';
+  var MOON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  var AUTO = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 20.5h8"/></svg>';
+  // Segmented control: the pressed segment is the stored PREFERENCE (not the
+  // resolved theme), so "Auto" stays selectable after an explicit choice.
+  var MODES = [
+    { key: 'light', label: 'Light', icon: SUN, aria: 'Use the light theme' },
+    { key: 'dark', label: 'Dark', icon: MOON, aria: 'Use the dark theme' },
+    { key: null, label: 'Auto', icon: AUTO, aria: 'Follow the system theme' },
+  ];
+  var group;
+  function storedMode() { var s = getStored(); return (s === 'dark' || s === 'light') ? s : null; }
   function updateButton() {
-    if (!btn) return;
-    var dark = isDark();
-    btn.innerHTML = (dark ? SUN : MOON) + '<span>' + (dark ? 'Light' : 'Dark') + '</span>';
-    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    if (!group) return;
+    var cur = storedMode();
+    var btns = group.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      var isCur = (btns[i].getAttribute('data-mode') || null) === (cur || null);
+      btns[i].setAttribute('aria-pressed', isCur ? 'true' : 'false');
+    }
   }
   function inject() {
     var header = document.querySelector('header');
     if (!header || document.querySelector('.theme-toggle')) return;
-    btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'theme-toggle';
-    btn.addEventListener('click', function () { setTheme(isDark() ? 'light' : 'dark'); });
-    header.appendChild(btn);
+    group = document.createElement('div');
+    group.className = 'theme-toggle';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', 'Color theme');
+    MODES.forEach(function (m) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      if (m.key) b.setAttribute('data-mode', m.key);
+      b.innerHTML = m.icon + '<span class="tt-label">' + m.label + '</span>';
+      b.setAttribute('aria-label', m.aria);
+      b.setAttribute('title', m.aria);
+      b.addEventListener('click', function () { setTheme(m.key); });
+      group.appendChild(b);
+    });
+    header.appendChild(group);
     updateButton();
   }
   // Follow OS changes while on auto (no explicit choice stored).

@@ -84,8 +84,19 @@
 }
 
 /* Theme toggle control (injected into the header by theme.js). */
-.theme-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
-.theme-toggle:hover { background: rgba(255,255,255,0.24); }
+/* Theme control: a segmented Light / Dark / Auto group in the header. "Auto"
+   follows the OS; the selected segment is the stored preference, so Auto is
+   reachable again after an explicit choice. */
+.theme-toggle { margin-left: auto; display: inline-flex; align-items: stretch; border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; overflow: hidden; }
+.theme-toggle button { display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.10); color: #fff; border: none; border-left: 1px solid rgba(255,255,255,0.18); padding: 6px 11px; font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+.theme-toggle button:first-child { border-left: none; }
+.theme-toggle button:hover { background: rgba(255,255,255,0.22); }
+.theme-toggle button[aria-pressed="true"] { background: rgba(255,255,255,0.34); }
+.theme-toggle button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+@media (max-width: 640px) {
+  .theme-toggle button { padding: 6px 9px; font-size: 0.72rem; }
+  .theme-toggle button .tt-label { display: none; }  /* icons only on narrow screens */
+}
 
 /* Shared site-nav component styles. Identical across every page that renders the
    top navigation, so they live here (cached once) instead of being copied into each

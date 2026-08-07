@@ -771,8 +771,13 @@ test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
   assert.deepEqual(classifyPetitionDoc('RXOPPPET', 'Reexam - Opposition filed in response to petition'), { kind: 'opposition' });
   assert.deepEqual(classifyPetitionDoc('RXPTGR', ''), { kind: 'decision', outcome: 'granted' });
   assert.deepEqual(classifyPetitionDoc('RXPTDI', ''), { kind: 'decision', outcome: 'dismissed' });
+  assert.deepEqual(classifyPetitionDoc('RXPTDE', ''), { kind: 'decision', outcome: 'denied' });
+  // RXPTGP is "Granted - in-part" -> its own outcome, never a full grant.
+  assert.deepEqual(classifyPetitionDoc('RXPTGP', 'Reexam Petition Decision - Granted - in-part'), { kind: 'decision', outcome: 'granted_in_part' });
+  assert.deepEqual(classifyPetitionDoc('RXPTGP', ''), { kind: 'decision', outcome: 'granted_in_part' });
   // Unknown RXPT* variant falls back to the description for the outcome.
   assert.deepEqual(classifyPetitionDoc('RXPTDN', 'Reexam Petition Decision - Denied'), { kind: 'decision', outcome: 'denied' });
+  assert.deepEqual(classifyPetitionDoc('RXPTXX', 'Petition Decision - Granted in part'), { kind: 'decision', outcome: 'granted_in_part' });
   // Description fallback for odd decision codes; receipts/oppositions excluded.
   assert.deepEqual(classifyPetitionDoc('MISC', 'Decision on petition - dismissed'), { kind: 'decision', outcome: 'dismissed' });
   assert.equal(classifyPetitionDoc('RXCERT', 'Reexamination Certificate'), null);

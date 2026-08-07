@@ -50,8 +50,11 @@
     .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
     .badge.granted { background: var(--ok-bg); color: var(--ok-fg); }
     .badge.dismissed { background: var(--bad-bg); color: var(--bad-fg); }
+    .badge.partial { background: var(--warn-bg); color: var(--warn-fg); }
     .badge.pending { background: var(--border); color: var(--text-2); }
     .badge.other { background: var(--info-bg); color: var(--info-fg); }
+    .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.74rem; background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); margin: 1px 2px 1px 0; white-space: nowrap; }
+    .chip.primary { background: var(--info-bg); color: var(--info-fg); border-color: transparent; font-weight: 600; }
     .doclinks { margin-top: 3px; font-size: 0.8rem; }
     .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
     .btn-view:hover { background: var(--brand-hover); }
@@ -126,9 +129,10 @@
 
   <div class="card">
     <h2>Petition Decisions in Reexamination Proceedings</h2>
-    <div class="sub">Every petition filed in a tracked ex parte reexamination proceeding — any party, any subject — with the opposing paper (if any) and the Office's decision (granted or dismissed), each linked to the underlying document.</div>
+    <div class="sub">Every petition filed in a tracked ex parte reexamination proceeding — any party, any subject — with the relief requested, the opposing paper (if any), and the Office's decision, each linked to the underlying document. Filter by type of relief.</div>
     <div class="explainer">
-      <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or reconsider the order, strike papers, extend time, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision, whose outcome (granted / dismissed) is taken from the USPTO's own document codes. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates automatically with the same scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
+      <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or terminate the proceeding, reconsider the order, extend time, strike papers, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision (<code>RXPT*</code>). The <strong>relief requested</strong> is read from the decision itself, which conventionally recites what the petition asked for; because a single petition commonly asks for several things, relief is multi-label and the <em>substantive</em> ask is highlighted.</p>
+      <p style="margin-top:10px"><strong>Statistics key on the merits.</strong> The most common shape in this corpus is a combined petition in which the Office grants a procedural waiver (37 CFR 1.183, of rules such as 1.515(a) or 1.540) <em>so that</em> it can reach a request to terminate the reexamination under 35 U.S.C. § 325(d) — and then dismisses that request. Granting the waiver is not a win, so the grant rate here counts only the disposition of the substantive relief; the waiver leg is noted separately as “(waiver granted)”. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
     </div>
     <p id="freshness" class="sub" style="margin:0 0 12px"></p>
     <p style="font-size:0.78rem;color:var(--text-5);margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO document codes — informational only, not legal advice; verify against official USPTO records.</p>
@@ -142,11 +146,18 @@
     </div>
     <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
       <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., patent, party…" oninput="page=1;render()" aria-label="Filter petitions" />
-      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2)">Decision:
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2)">Relief requested:
+        <select id="relief-filter" onchange="page=1;render()" aria-label="Filter by type of relief requested">
+          <option value="">All types</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2)">Decision on the merits:
         <select id="outcome-filter" onchange="page=1;render()" aria-label="Filter by decision outcome">
           <option value="">All</option>
           <option value="granted">Granted</option>
+          <option value="granted_in_part">Granted in part</option>
           <option value="dismissed">Dismissed / denied</option>
+          <option value="undecided">Deferred to the CRU</option>
           <option value="pending">Pending (no decision)</option>
         </select>
       </label>
@@ -185,8 +196,34 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
 });
 
-// Flatten a threaded row for filtering/sorting/CSV.
+// Human labels for the controlled relief vocabulary (see petsubj-verify.md).
+const RELIEF_LABEL = {
+  extension_of_time: 'Extension of time',
+  vacate_or_terminate_proceeding: 'Vacate / terminate proceeding',
+  reconsider_snq_or_order: 'Reconsider SNQ / order',
+  withdraw_finality: 'Withdraw finality',
+  waiver_or_suspension_of_rule: 'Waiver / suspension of a rule',
+  matters_not_provided_for: 'Matters not provided for',
+  supervisory_review: 'Supervisory review',
+  expunge_or_strike_paper: 'Expunge / strike paper',
+  concurrent_proceedings_or_stay: 'Concurrent proceedings / stay',
+  interview_request: 'Interview request',
+  entry_of_papers_or_amendment: 'Entry of papers / amendment',
+  filing_date_or_fee_or_defective_request: 'Filing date / fee / defective request',
+  revival_or_abandonment: 'Revival / abandonment',
+  correct_certificate_or_inventorship: 'Correct certificate / inventorship',
+  withdraw_as_attorney: 'Withdraw as attorney',
+  other: 'Other',
+};
+const reliefLabel = (r) => RELIEF_LABEL[r] || r;
+
+// Flatten a threaded row for filtering/sorting/CSV. `outcome` is the MERITS
+// disposition when the subject-matter pass has classified the decision, falling
+// back to the raw doc-code outcome otherwise — so a decision that merely granted
+// a procedural waiver on the way to dismissing the real ask counts as dismissed.
 function view(t) {
+  const d = t.decision;
+  const merits = d && d.merits_outcome;
   return {
     app: t.application_number,
     patent: t.underlying_patent || '',
@@ -194,22 +231,39 @@ function view(t) {
     requester: t.requester_name || '',
     pet_date: t.petition ? t.petition.date : '',
     opp_date: t.opposition ? t.opposition.date : '',
-    dec_date: t.decision ? t.decision.date : '',
-    outcome: t.decision ? (t.decision.outcome || 'decided') : 'pending',
-    days: (t.petition && t.decision) ? daysBetween(t.petition.date, t.decision.date) : null,
+    dec_date: d ? d.date : '',
+    outcome: d ? (merits || d.outcome || 'decided') : 'pending',
+    code_outcome: d ? (d.outcome || '') : '',
+    classified: !!merits,
+    reliefs: (d && d.reliefs) || [],
+    primary: (d && d.primary_relief) || '',
+    ancillary: (d && d.ancillary_waiver) || '',
+    verbatim: (d && d.relief_verbatim) || '',
+    rules: (d && d.rules) || [],
+    days: (t.petition && d) ? daysBetween(t.petition.date, d.date) : null,
   };
 }
 
 function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   const oc = document.getElementById('outcome-filter').value;
+  const rf = document.getElementById('relief-filter').value;
   return _rows.filter((t) => {
     const v = view(t);
     if (oc === 'pending' && v.outcome !== 'pending') return false;
     if (oc === 'granted' && v.outcome !== 'granted') return false;
+    if (oc === 'granted_in_part' && v.outcome !== 'granted_in_part') return false;
     if (oc === 'dismissed' && v.outcome !== 'dismissed' && v.outcome !== 'denied') return false;
+    if (oc === 'undecided' && v.outcome !== 'undecided') return false;
+    // Relief is multi-label: "contains" semantics. `primary:` restricts to rows
+    // where that relief was the substantive ask, not merely one of several.
+    if (rf) {
+      if (rf.startsWith('primary:')) { if (v.primary !== rf.slice(8)) return false; }
+      else if (!v.reliefs.includes(rf)) return false;
+    }
     if (!q) return true;
-    return [v.app, v.patent, v.owner, v.requester].some((s) => String(s).toLowerCase().includes(q));
+    return [v.app, v.patent, v.owner, v.requester, v.verbatim, ...v.reliefs.map(reliefLabel)]
+      .some((s) => String(s).toLowerCase().includes(q));
   });
 }
 
@@ -246,20 +300,42 @@ function sortedRows(items) {
 
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
-  const header = ['Control No.', 'Patent', 'Patent Owner', 'Requester', 'Petition Date', 'Opposition Date', 'Decision', 'Decision Date', 'Days to Decision'];
+  const header = ['Control No.', 'Patent', 'Patent Owner', 'Requester', 'Relief Requested (all)', 'Primary Relief',
+    'Petition Date', 'Opposition Date', 'Decision on Merits', 'Ancillary Waiver', 'Decision Date', 'Days to Decision',
+    'Rules Cited', 'Relief Quote (from decision)'];
   const rows = sortedRows(filtered()).map((t) => {
     const v = view(t);
-    return [v.app, v.patent, titleCaseName(v.owner), titleCaseName(v.requester), fmtDate(v.pet_date || ''),
-      v.opp_date ? fmtDate(v.opp_date) : '', v.outcome === 'pending' ? '' : v.outcome, v.dec_date ? fmtDate(v.dec_date) : '',
-      v.days == null ? '' : v.days];
+    return [v.app, v.patent, titleCaseName(v.owner), titleCaseName(v.requester),
+      v.reliefs.map(reliefLabel).join('; '), v.primary ? reliefLabel(v.primary) : '',
+      fmtDate(v.pet_date || ''), v.opp_date ? fmtDate(v.opp_date) : '',
+      v.outcome === 'pending' ? '' : (OUTCOME_LABEL[v.outcome] || v.outcome), v.ancillary || '',
+      v.dec_date ? fmtDate(v.dec_date) : '', v.days == null ? '' : v.days,
+      (v.rules || []).join('; '), v.verbatim];
   });
   window.exportXlsx('reexam-petition-decisions.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
 }
 
+const OUTCOME_LABEL = { granted: 'Granted', granted_in_part: 'Granted in part', dismissed: 'Dismissed', denied: 'Denied', undecided: 'Deferred', decided: 'Decided', other: 'Decided', pending: 'Pending' };
 function outcomeBadge(v) {
   if (v.outcome === 'pending') return '<span class="badge pending">Pending</span>';
-  const cls = v.outcome === 'granted' ? 'granted' : (v.outcome === 'dismissed' || v.outcome === 'denied') ? 'dismissed' : 'other';
-  return `<span class="badge ${cls}">${esc(v.outcome.charAt(0).toUpperCase() + v.outcome.slice(1))}</span>`;
+  const o = v.outcome;
+  const cls = o === 'granted' ? 'granted' : o === 'granted_in_part' ? 'partial' : (o === 'dismissed' || o === 'denied') ? 'dismissed' : 'other';
+  let html = `<span class="badge ${cls}">${esc(OUTCOME_LABEL[o] || o)}</span>`;
+  // Where the merits were dismissed but a procedural waiver was granted, say so —
+  // that combination is the single most common shape in this corpus.
+  if (v.ancillary === 'granted' && (o === 'dismissed' || o === 'denied')) {
+    html += ` <span class="note" title="A procedural rule waiver was granted so the Office could reach the substantive request, which was then ${OUTCOME_LABEL[o].toLowerCase()}.">(waiver granted)</span>`;
+  }
+  return html;
+}
+// Relief chips; the substantive ask is emphasized, the rest shown plainly.
+function reliefCell(v) {
+  if (!v.reliefs.length) return '<span class="note">not yet classified</span>';
+  const chips = v.reliefs.map((r) => r === v.primary
+    ? `<span class="chip primary" title="The substantive relief sought">${esc(reliefLabel(r))}</span>`
+    : `<span class="chip">${esc(reliefLabel(r))}</span>`).join(' ');
+  const quote = v.verbatim ? `<div class="note" style="margin-top:3px" title="Quoted from the decision">“${esc(v.verbatim.slice(0, 90))}${v.verbatim.length > 90 ? '…' : ''}”</div>` : '';
+  return chips + quote;
 }
 
 function render() {
@@ -285,6 +361,7 @@ function render() {
       <td>${v.patent ? esc(v.patent) : dash}</td>
       <td>${v.owner ? esc(titleCaseName(v.owner)) : dash}</td>
       <td>${v.requester ? esc(titleCaseName(v.requester)) : dash}</td>
+      <td>${reliefCell(v)}</td>
       <td>${petCell}</td>
       <td>${oppCell}</td>
       <td>${decCell}</td>
@@ -298,6 +375,7 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('patent')}" onclick="sortTrail('patent')">Patent${arrow('patent')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('owner')}" onclick="sortTrail('owner')">Patent Owner${arrow('owner')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester')}" onclick="sortTrail('requester')">Requester${arrow('requester')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('primary')}" onclick="sortTrail('primary')">Relief Requested${arrow('primary')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('pet_date')}" onclick="sortTrail('pet_date')">Petition${arrow('pet_date')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('opp_date')}" onclick="sortTrail('opp_date')">Opposition${arrow('opp_date')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('dec_date')}" onclick="sortTrail('dec_date')">Decision${arrow('dec_date')}</th>
@@ -334,32 +412,79 @@ function pagerHtml(cur, pages, start, end, total) {
   </div>`;
 }
 
+// KPIs key on the MERITS disposition: a rule waiver granted so the Office could
+// reach the real request does not count as a grant. Rows not yet classified fall
+// back to the raw doc-code outcome and are reported separately.
 function buildStats() {
   const el = document.getElementById('stat');
   const vs = _rows.map(view);
   const total = vs.length;
   const withOpp = vs.filter((v) => v.opp_date).length;
   const granted = vs.filter((v) => v.outcome === 'granted').length;
+  const partial = vs.filter((v) => v.outcome === 'granted_in_part').length;
   const dismissed = vs.filter((v) => v.outcome === 'dismissed' || v.outcome === 'denied').length;
-  const decided = vs.filter((v) => v.outcome !== 'pending').length;
-  const pending = total - decided;
-  const grantRate = (granted + dismissed) > 0 ? Math.round(granted / (granted + dismissed) * 100) + '%' : '—';
+  const pending = vs.filter((v) => v.outcome === 'pending').length;
+  const decidedForRate = granted + partial + dismissed;
+  const grantRate = decidedForRate > 0 ? Math.round((granted + partial) / decidedForRate * 100) + '%' : '—';
+  const waiverOnly = vs.filter((v) => v.ancillary === 'granted' && (v.outcome === 'dismissed' || v.outcome === 'denied')).length;
+  const deferred = vs.filter((v) => v.outcome === 'undecided').length;
   const toDec = vs.map((v) => v.days).filter((d) => d != null);
   el.innerHTML = `
     <div class="kpi-strip">
       <div class="kpi"><div class="num">${total}</div><div class="lbl">Petitions Collected</div></div>
-      <div class="kpi"><div class="num">${granted}</div><div class="lbl">Granted</div></div>
+      <div class="kpi"><div class="num">${granted}</div><div class="lbl">Granted on the Merits</div></div>
+      <div class="kpi"><div class="num">${partial}</div><div class="lbl">Granted in Part</div></div>
       <div class="kpi"><div class="num">${dismissed}</div><div class="lbl">Dismissed / Denied</div></div>
-      <div class="kpi"><div class="num">${pending}</div><div class="lbl">Awaiting Decision</div></div>
-      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Grant Rate (Decided)</div></div>
+      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Grant Rate on the Merits</div>${decidedForRate ? `<div class="note" style="margin-top:2px">${granted + partial} of ${decidedForRate} decided</div>` : ''}</div>
     </div>
     <div class="stats-title">Timing &amp; Context</div>
     <div class="kpi-strip four">
       <div class="kpi"><div class="num">${median(toDec) ?? '—'}</div><div class="lbl">Median Days: Petition → Decision</div></div>
-      <div class="kpi"><div class="num">${avg(toDec) ?? '—'}</div><div class="lbl">Avg Days: Petition → Decision</div></div>
-      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Opposition on File</div></div>
-      <div class="kpi"><div class="num">${new Set(vs.map((v) => v.app)).size}</div><div class="lbl">Proceedings With Petitions</div></div>
-    </div>`;
+      <div class="kpi"><div class="num">${pending}</div><div class="lbl">Awaiting Decision</div></div>
+      <div class="kpi"><div class="num">${deferred}</div><div class="lbl">Merits Deferred to the CRU</div><div class="note" style="margin-top:2px">waiver decided, § 325(d) forwarded</div></div>
+      <div class="kpi"><div class="num">${waiverOnly}</div><div class="lbl">Waiver Granted, Merits Denied</div></div>
+    </div>
+    <div class="note" style="margin-top:10px">The grant rate counts only petitions whose substantive request was actually decided — the ${deferred} deferred to the Central Reexamination Unit and ${pending} still pending are excluded. ${withOpp} have an opposition on file.</div>
+    <div class="stats-title">Most-Requested Relief</div>
+    ${reliefTableHtml(vs)}`;
+}
+
+// Relief leaderboard with a merits grant rate per relief type (multi-label, so a
+// petition appears under each relief it requested).
+function reliefTableHtml(vs) {
+  const t = {};
+  for (const v of vs) for (const r of v.reliefs) {
+    t[r] = t[r] || { n: 0, granted: 0, decided: 0 };
+    t[r].n++;
+    if (v.outcome === 'granted' || v.outcome === 'granted_in_part') { t[r].granted++; t[r].decided++; }
+    else if (v.outcome === 'dismissed' || v.outcome === 'denied') t[r].decided++;
+  }
+  const rows = Object.entries(t).sort((a, b) => b[1].n - a[1].n);
+  if (!rows.length) return '<div class="note">Relief types appear once the classification pass has run.</div>';
+  return `<div class="table-wrap" style="max-height:none"><table>
+    <thead><tr><th>Relief Requested</th><th>Petitions</th><th>Granted (incl. in part)</th><th>Grant Rate on Merits</th></tr></thead>
+    <tbody>${rows.map(([r, x]) => `<tr>
+      <td><a class="link" href="#" onclick="setRelief('${r}');return false">${esc(reliefLabel(r))}</a></td>
+      <td>${x.n}</td><td>${x.granted}</td>
+      <td>${x.decided ? Math.round(x.granted / x.decided * 100) + '%' : '—'}<span class="note"> (${x.granted} of ${x.decided})</span></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+function setRelief(r) {
+  const sel = document.getElementById('relief-filter');
+  if (sel) { sel.value = r; page = 1; render(); sel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+}
+// Populate the relief dropdown from the data actually present.
+function buildReliefFilter() {
+  const sel = document.getElementById('relief-filter');
+  if (!sel) return;
+  const seen = new Map();
+  for (const t of _rows) for (const r of view(t).reliefs) seen.set(r, (seen.get(r) || 0) + 1);
+  const opts = [...seen.entries()].sort((a, b) => b[1] - a[1]);
+  sel.innerHTML = ['<option value="">All types</option>']
+    .concat(opts.map(([r, n]) => `<option value="${esc(r)}">${esc(reliefLabel(r))} (${n})</option>`))
+    .concat(opts.length ? ['<option disabled>── where it was the substantive ask ──</option>'] : [])
+    .concat(opts.map(([r]) => `<option value="primary:${esc(r)}">${esc(reliefLabel(r))} — as primary</option>`))
+    .join('');
 }
 
 (async () => {
@@ -378,6 +503,7 @@ function buildStats() {
       }
       fr.textContent = 'Collected automatically from tracked reexamination file wrappers; updates with the daily scan.' + (maxRaw ? ` Most recent petition activity on file: ${fmtDate(maxRaw)}.` : '');
     }
+    buildReliefFilter();
     buildStats();
     if (!_rows.length) {
       body.innerHTML = '<div class="state">No petitions collected yet — the backfill sweep and daily scan populate this page.</div>';

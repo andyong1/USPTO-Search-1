@@ -25,15 +25,39 @@ const OFFSET = num('--offset', 0);
 // version of this sweep queried reexam_determinations only, which silently missed
 // proceedings still awaiting an order — exactly where PRE-ORDER petitions live
 // (e.g. 90016272 and 90016411 each had an RXPET. + RXPTDI that never got picked up).
-const { rows } = await sql`
-  SELECT application_number FROM (
-    SELECT application_number FROM reexam_watch
-    UNION
-    SELECT application_number FROM reexam_determinations
-  ) s
-  WHERE application_number IS NOT NULL
-  ORDER BY application_number LIMIT ${LIMIT} OFFSET ${OFFSET}`;
-console.log(`Sweeping ${rows.length} proceeding(s) — all known controls (watch ∪ determinations), offset ${OFFSET}…`);
+//
+// --gap restricts the sweep to proceedings that NEITHER ongoing harvest reaches:
+// scanOne covers `determined = false` and detectConclusionsStep covers ordered-
+// but-not-concluded, which together leave concluded proceedings, ones denied
+// without ever being ordered, and ones aged out of the 24-month watch window.
+// That's the set worth re-checking on a schedule; it's ~1/4 the full universe.
+const GAP = args.includes('--gap');
+const { rows } = GAP
+  ? await sql`
+      WITH allp AS (
+        SELECT application_number FROM reexam_watch
+        UNION SELECT application_number FROM reexam_determinations
+      ),
+      covered_scan AS (SELECT application_number FROM reexam_watch WHERE NOT determined),
+      covered_cert AS (
+        SELECT DISTINCT d.application_number FROM reexam_determinations d
+        LEFT JOIN reexam_conclusions c ON c.application_number = d.application_number
+        WHERE d.determination_code IN ('RXREXO','RX.SE.ORDER') AND c.cert_doc_id IS NULL
+      )
+      SELECT application_number FROM allp
+      WHERE application_number IS NOT NULL
+        AND application_number NOT IN (SELECT application_number FROM covered_scan)
+        AND application_number NOT IN (SELECT application_number FROM covered_cert)
+      ORDER BY application_number LIMIT ${LIMIT} OFFSET ${OFFSET}`
+  : await sql`
+      SELECT application_number FROM (
+        SELECT application_number FROM reexam_watch
+        UNION
+        SELECT application_number FROM reexam_determinations
+      ) s
+      WHERE application_number IS NOT NULL
+      ORDER BY application_number LIMIT ${LIMIT} OFFSET ${OFFSET}`;
+console.log(`Sweeping ${rows.length} proceeding(s) — ${GAP ? 'GAP set (not covered by either ongoing harvest)' : 'all known controls (watch ∪ determinations)'}, offset ${OFFSET}…`);
 
 let swept = 0, withPets = 0, docsTotal = 0, failed = 0;
 for (const r of rows) {

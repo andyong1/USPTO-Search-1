@@ -762,3 +762,47 @@ test('pickAssignmentOwner — latest ownership transfer wins; security interests
   assert.equal(pickAssignmentOwner([{ conveyanceText: 'RELEASE OF SECURITY INTEREST', assigneeBag: [{ assigneeNameText: 'A BANK' }] }]), '');
   assert.equal(pickAssignmentOwner([]), '');
 });
+
+test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
+  const { classifyPetitionDoc } = await import('../lib/petitions.js');
+  assert.deepEqual(classifyPetitionDoc('RXPET.', 'Receipt of Petition in a Reexam'), { kind: 'petition' });
+  assert.deepEqual(classifyPetitionDoc('PET.OP', ''), { kind: 'petition' });
+  assert.deepEqual(classifyPetitionDoc('SE.PET', ''), { kind: 'petition' });
+  assert.deepEqual(classifyPetitionDoc('RXOPPPET', 'Reexam - Opposition filed in response to petition'), { kind: 'opposition' });
+  assert.deepEqual(classifyPetitionDoc('RXPTGR', ''), { kind: 'decision', outcome: 'granted' });
+  assert.deepEqual(classifyPetitionDoc('RXPTDI', ''), { kind: 'decision', outcome: 'dismissed' });
+  // Unknown RXPT* variant falls back to the description for the outcome.
+  assert.deepEqual(classifyPetitionDoc('RXPTDN', 'Reexam Petition Decision - Denied'), { kind: 'decision', outcome: 'denied' });
+  // Description fallback for odd decision codes; receipts/oppositions excluded.
+  assert.deepEqual(classifyPetitionDoc('MISC', 'Decision on petition - dismissed'), { kind: 'decision', outcome: 'dismissed' });
+  assert.equal(classifyPetitionDoc('RXCERT', 'Reexamination Certificate'), null);
+  assert.equal(classifyPetitionDoc('NOA', 'Notice of Allowance'), null);
+});
+
+test('threadPetitions — FIFO pairing, orphans, pending', async () => {
+  const { threadPetitions } = await import('../lib/petitions.js');
+  const rows = [
+    { doc_id: 'p1', official_date: '2025-01-01', kind: 'petition' },
+    { doc_id: 'o1', official_date: '2025-01-15', kind: 'opposition' },
+    { doc_id: 'd1', official_date: '2025-02-01', kind: 'decision', outcome: 'granted' },
+    { doc_id: 'p2', official_date: '2025-03-01', kind: 'petition' },      // still pending
+    { doc_id: 'd9', official_date: '2020-05-05', kind: 'decision', outcome: 'dismissed' }, // orphan (predates all petitions)
+  ];
+  const t = threadPetitions(rows);
+  assert.equal(t.length, 3);
+  const orphan = t.find((x) => !x.petition);
+  assert.equal(orphan.decision.doc_id, 'd9');
+  const first = t.find((x) => x.petition && x.petition.doc_id === 'p1');
+  assert.equal(first.opposition.doc_id, 'o1');
+  assert.equal(first.decision.doc_id, 'd1');
+  const second = t.find((x) => x.petition && x.petition.doc_id === 'p2');
+  assert.equal(second.decision, null);
+  // Same-day petition + decision: petition is processed first, decision attaches to it.
+  const same = threadPetitions([
+    { doc_id: 'dA', official_date: '2025-04-01', kind: 'decision', outcome: 'granted' },
+    { doc_id: 'pA', official_date: '2025-04-01', kind: 'petition' },
+  ]);
+  assert.equal(same.length, 1);
+  assert.equal(same[0].petition.doc_id, 'pA');
+  assert.equal(same[0].decision.doc_id, 'dA');
+});

@@ -22,7 +22,7 @@ import {
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDocEventsByOfficialDate, getD325SummariesByDocIds,
-  getDeterminationsToCheckConclusion, recordConclusionDocs,
+  getDeterminationsToCheckConclusion, recordConclusionDocs, recordPetitionDocs,
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
   upsertPtabInstitution, upsertPtabDd, upsertPtabFwdMeta, getPtabKv, setPtabKv,
@@ -37,7 +37,7 @@ import { sendComprehensiveDigestTo } from '../../lib/email.js';
 // Metadata-only helpers — import from the light module so this cron's bundle
 // doesn't pull in pdf-lib / pdf-parse / OCR (which live in lib/ptab.js).
 import { fetchFwdPage, fetchInstitutionPage, fetchDdPage, fetchProceedingsByPatent } from '../../lib/ptab-fetch.js';
-import { detectPostOrderPetitionForApp, detectPetition325d } from '../../lib/petitions.js';
+import { detectPostOrderPetitionForApp, detectPetition325d, classifyPetitionDoc } from '../../lib/petitions.js';
 import { detectTechCenterForApp } from '../../lib/techcenter.js';
 import { ocrConfigured, ocrDecision } from '../../lib/ocr.js';
 import { detectActionsForApp } from '../../lib/actions.js';
@@ -169,16 +169,21 @@ async function detectConclusionsStep(maxApps, deadline) {
     const app = r.application_number;
     try {
       const docs = await fetchDocuments(app);
-      let nirc = null; const certs = [];
+      let nirc = null; const certs = [], petDocs = [];
       for (const d of docs) {
         const code = (d.documentCode || '').toUpperCase();
         if (code === 'RXNIRC' && !nirc) nirc = d;
         if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
+        // Petition-trail harvest: same feed, zero extra API calls. Stops with the
+        // cert checks once the proceeding concludes — which is the desired scope.
+        const pet = classifyPetitionDoc(code, d.description);
+        if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
       }
       await recordConclusionDocs(app, {
         nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
         certCandidates: certs,
       });
+      if (petDocs.length) await recordPetitionDocs(app, petDocs);
       if (nirc || certs.length) found++;
     } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
   }

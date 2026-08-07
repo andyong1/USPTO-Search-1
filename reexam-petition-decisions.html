@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reexam Petition Decisions — USPTO Reexam</title>
+  <meta name="description" content="Every petition, opposition, and Office petition decision (granted or dismissed) filed in tracked ex parte reexamination proceedings." />
+  <meta property="og:title" content="Reexam Petition Decisions — USPTO Reexam" />
+  <meta property="og:description" content="All petitions and petition decisions across tracked ex parte reexamination proceedings." />
+  <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/reexam-petition-decisions" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
+  <script src="/names.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1500px; margin: 0 auto; padding: 24px 16px 60px; }
+    .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 24px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
+    .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
+    .explainer p { margin: 0; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .kpi-strip.four { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 700px) { .kpi-strip, .kpi-strip.four { grid-template-columns: repeat(2, 1fr); } }
+    .stats-title { font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin: 20px 0 8px; }
+    .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: var(--border); }
+    td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr:hover td { background: var(--surface-2); }
+    a.link { color: var(--heading); font-weight: 600; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .ext { color: var(--text-3); font-size: 0.8rem; text-decoration: none; margin-left: 8px; }
+    .ext:hover { text-decoration: underline; }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-3); }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge.granted { background: var(--ok-bg); color: var(--ok-fg); }
+    .badge.dismissed { background: var(--bad-bg); color: var(--bad-fg); }
+    .badge.pending { background: var(--border); color: var(--text-2); }
+    .badge.other { background: var(--info-bg); color: var(--info-fg); }
+    .doclinks { margin-top: 3px; font-size: 0.8rem; }
+    .btn-view { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: #fff; background: var(--brand); border: none; padding: 3px 12px; border-radius: 4px; margin-right: 8px; }
+    .btn-view:hover { background: var(--brand-hover); }
+    .btn-csv { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 7px 14px; border-radius: 8px; }
+    .btn-csv:hover { background: var(--border-2); }
+    .table-filter { width: 100%; max-width: 320px; padding: 8px 12px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.9rem; }
+    select { padding: 8px 10px; border: 1px solid var(--border-2); border-radius: 8px; font-size: 0.88rem; background: var(--surface); color: var(--text); }
+    .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; font-size: 0.85rem; color: var(--text-2); }
+    .pager button { cursor: pointer; background: var(--border); color: var(--heading); border: none; font-weight: 600; font-size: 0.82rem; padding: 6px 12px; border-radius: 8px; }
+    .pager button:disabled { opacity: 0.45; cursor: default; }
+    .note { font-size: 0.8rem; color: var(--text-4); }
+    footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
+    footer a { color: var(--heading); text-decoration: none; }
+    @media (max-width: 640px) {
+      .container { padding: 16px 10px 48px; }
+      header { padding: 12px 14px; gap: 12px; }
+      header h1 { font-size: 1.05rem; }
+      .site-nav { gap: 6px; margin-bottom: 18px; }
+      .site-nav a { padding: 8px 11px; font-size: 0.82rem; }
+      .card { padding: 16px 14px; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 8px 9px; }
+      .table-wrap { -webkit-overflow-scrolling: touch; }
+      .table-filter { max-width: none; }
+    }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+  <script src="/export.js" defer></script>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <nav class="site-nav">
+    <div class="nav-section">
+      <span class="nav-section-label">Application Search</span>
+      <div class="nav-section-links">
+        <a href="/uspto-search">Application Search &amp; Tracking</a>
+        <a href="/file-history">File History Print to PDF</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">Reexam Stats</span>
+      <div class="nav-section-links">
+        <a href="/reexam">Reexam Determinations</a>
+        <a href="/reexam-actions">Reexam Office Action Timing</a>
+        <a href="/reexam-nirc">Reexam NIRCs</a>
+        <a href="/reexam-outcomes">Reexam Final Outcomes</a>
+        <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+        <a href="/reexam-petitions">Post-Order Petitions</a>
+        <a href="/reexam-petition-decisions" class="active" aria-current="page">Petition Decisions</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">PTAB Stats</span>
+      <div class="nav-section-links">
+        <a href="/ptab-decisions">PTAB Discretionary / Institution Decisions</a>
+        <a href="/ptab">PTAB FWD Outcomes</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="card">
+    <h2>Petition Decisions in Reexamination Proceedings</h2>
+    <div class="sub">Every petition filed in a tracked ex parte reexamination proceeding — any party, any subject — with the opposing paper (if any) and the Office's decision (granted or dismissed), each linked to the underlying document.</div>
+    <div class="explainer">
+      <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or reconsider the order, strike papers, extend time, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision, whose outcome (granted / dismissed) is taken from the USPTO's own document codes. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates automatically with the same scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
+    </div>
+    <p id="freshness" class="sub" style="margin:0 0 12px"></p>
+    <p style="font-size:0.78rem;color:var(--text-5);margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO document codes — informational only, not legal advice; verify against official USPTO records.</p>
+    <div id="stat"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <h2 id="list-heading" style="margin:0">Petitions</h2>
+      <button class="btn-csv" id="csv-btn" onclick="exportCsv()" style="display:none">Export .xlsx</button>
+    </div>
+    <div id="filter-bar" style="display:none;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px">
+      <input type="text" id="table-filter" class="table-filter" placeholder="Filter by control no., patent, party…" oninput="page=1;render()" aria-label="Filter petitions" />
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2)">Decision:
+        <select id="outcome-filter" onchange="page=1;render()" aria-label="Filter by decision outcome">
+          <option value="">All</option>
+          <option value="granted">Granted</option>
+          <option value="dismissed">Dismissed / denied</option>
+          <option value="pending">Pending (no decision)</option>
+        </select>
+      </label>
+    </div>
+    <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
+    <div id="pager"></div>
+  </div>
+
+  <p style="text-align:center;font-size:0.76rem;color:var(--text-4);margin:18px auto 0;max-width:860px;line-height:1.5">Statistics on this page are compiled automatically from USPTO Open Data Portal records using the Office's document codes — informational only, not legal advice. Verify any figure against the underlying source documents before relying on it.</p>
+  <footer><a href="/privacy">Privacy Policy</a></footer>
+</div>
+
+<script>
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(raw) { if (!raw) return '—'; const m = String(raw).match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : String(raw); }
+function ms(raw) { const m = String(raw || '').match(/(\d{4})-?(\d{2})-?(\d{2})/); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : NaN; }
+function daysBetween(a, b) { const x = ms(a), y = ms(b); return (isNaN(x) || isNaN(y)) ? null : Math.round((y - x) / 86400000); }
+function avg(a) { return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null; }
+function median(a) { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); }
+function openDocViewer(appNum, documentId) {
+  window.open(`/api/document?appNum=${encodeURIComponent(appNum)}&documentId=${encodeURIComponent(documentId)}&format=PDF&disposition=inline`, '_blank', 'noopener');
+}
+const docLinks = (num, docId) => {
+  if (!docId) return '';
+  const base = `/api/document?appNum=${encodeURIComponent(num)}&documentId=${encodeURIComponent(docId)}&format=PDF`;
+  return `<div class="doclinks"><button class="btn-view" onclick="openDocViewer('${num}','${docId}')">View</button>`
+    + `<a class="ext" href="${base}&disposition=attachment" download>Download ⤓</a></div>`;
+};
+const dash = '<span class="ext" style="margin-left:0">—</span>';
+
+let _rows = [];   // one row per threaded petition
+let page = 1;
+const PAGE_SIZE = 100;
+
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('sortable')) { e.preventDefault(); e.target.click(); }
+});
+
+// Flatten a threaded row for filtering/sorting/CSV.
+function view(t) {
+  return {
+    app: t.application_number,
+    patent: t.underlying_patent || '',
+    owner: t.patent_owner || '',
+    requester: t.requester_name || '',
+    pet_date: t.petition ? t.petition.date : '',
+    opp_date: t.opposition ? t.opposition.date : '',
+    dec_date: t.decision ? t.decision.date : '',
+    outcome: t.decision ? (t.decision.outcome || 'decided') : 'pending',
+    days: (t.petition && t.decision) ? daysBetween(t.petition.date, t.decision.date) : null,
+  };
+}
+
+function filtered() {
+  const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
+  const oc = document.getElementById('outcome-filter').value;
+  return _rows.filter((t) => {
+    const v = view(t);
+    if (oc === 'pending' && v.outcome !== 'pending') return false;
+    if (oc === 'granted' && v.outcome !== 'granted') return false;
+    if (oc === 'dismissed' && v.outcome !== 'dismissed' && v.outcome !== 'denied') return false;
+    if (!q) return true;
+    return [v.app, v.patent, v.owner, v.requester].some((s) => String(s).toLowerCase().includes(q));
+  });
+}
+
+// Sortable columns (default: petition date, most recent first).
+let pSort = { key: 'pet_date', dir: 'desc' };
+const DATE_KEYS = new Set(['pet_date', 'opp_date', 'dec_date']);
+function sortTrail(key) {
+  if (pSort.key === key) pSort.dir = pSort.dir === 'asc' ? 'desc' : 'asc';
+  else pSort = { key, dir: key === 'app' ? 'asc' : 'desc' };
+  page = 1;
+  render();
+}
+function sortedRows(items) {
+  const { key, dir } = pSort;
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...items].sort((a, b) => {
+    const av = view(a)[key], bv = view(b)[key];
+    if (DATE_KEYS.has(key)) {
+      const x = ms(av), y = ms(bv);
+      if (isNaN(x) && isNaN(y)) return 0;
+      if (isNaN(x)) return 1;
+      if (isNaN(y)) return -1;
+      return sign * (x - y);
+    }
+    if (key === 'days') {
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return sign * (av - bv);
+    }
+    return sign * String(av || '').localeCompare(String(bv || ''), undefined, { numeric: true });
+  });
+}
+
+function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function exportCsv() {
+  const header = ['Control No.', 'Patent', 'Patent Owner', 'Requester', 'Petition Date', 'Opposition Date', 'Decision', 'Decision Date', 'Days to Decision'];
+  const rows = sortedRows(filtered()).map((t) => {
+    const v = view(t);
+    return [v.app, v.patent, titleCaseName(v.owner), titleCaseName(v.requester), fmtDate(v.pet_date || ''),
+      v.opp_date ? fmtDate(v.opp_date) : '', v.outcome === 'pending' ? '' : v.outcome, v.dec_date ? fmtDate(v.dec_date) : '',
+      v.days == null ? '' : v.days];
+  });
+  window.exportXlsx('reexam-petition-decisions.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
+}
+
+function outcomeBadge(v) {
+  if (v.outcome === 'pending') return '<span class="badge pending">Pending</span>';
+  const cls = v.outcome === 'granted' ? 'granted' : (v.outcome === 'dismissed' || v.outcome === 'denied') ? 'dismissed' : 'other';
+  return `<span class="badge ${cls}">${esc(v.outcome.charAt(0).toUpperCase() + v.outcome.slice(1))}</span>`;
+}
+
+function render() {
+  const body = document.getElementById('body');
+  const items = sortedRows(filtered());
+  document.getElementById('list-heading').textContent = `Petitions (Total: ${items.length})`;
+  if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; document.getElementById('pager').innerHTML = ''; return; }
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  if (page > pageCount) page = pageCount;
+  const slice = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const arrow = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const ariaSort = (k) => (pSort.key === k ? (pSort.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+
+  const rows = slice.map((t) => {
+    const v = view(t);
+    const num = v.app;
+    const petCell = t.petition ? `${fmtDate(v.pet_date)} <span class="note">${esc(t.petition.code || '')}</span>${docLinks(num, t.petition.doc_id)}` : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>';
+    const oppCell = t.opposition ? `${fmtDate(v.opp_date)}${docLinks(num, t.opposition.doc_id)}` : dash;
+    const decCell = t.decision ? `${outcomeBadge(v)} ${fmtDate(v.dec_date)}${docLinks(num, t.decision.doc_id)}` : outcomeBadge(v);
+    return `<tr>
+      <td><a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
+        <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a></td>
+      <td>${v.patent ? esc(v.patent) : dash}</td>
+      <td>${v.owner ? esc(titleCaseName(v.owner)) : dash}</td>
+      <td>${v.requester ? esc(titleCaseName(v.requester)) : dash}</td>
+      <td>${petCell}</td>
+      <td>${oppCell}</td>
+      <td>${decCell}</td>
+      <td>${v.days == null ? dash : v.days}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('app')}" onclick="sortTrail('app')">Control No.${arrow('app')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('patent')}" onclick="sortTrail('patent')">Patent${arrow('patent')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('owner')}" onclick="sortTrail('owner')">Patent Owner${arrow('owner')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester')}" onclick="sortTrail('requester')">Requester${arrow('requester')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('pet_date')}" onclick="sortTrail('pet_date')">Petition${arrow('pet_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('opp_date')}" onclick="sortTrail('opp_date')">Opposition${arrow('opp_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('dec_date')}" onclick="sortTrail('dec_date')">Decision${arrow('dec_date')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('days')}" onclick="sortTrail('days')">Days to Decision${arrow('days')}</th>
+    </tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+
+  const pager = document.getElementById('pager');
+  pager.innerHTML = pageCount > 1 ? `<div class="pager">
+    <button ${page <= 1 ? 'disabled' : ''} onclick="page--;render()">‹ Prev</button>
+    <span>Page ${page} of ${pageCount} (${items.length} petitions)</span>
+    <button ${page >= pageCount ? 'disabled' : ''} onclick="page++;render()">Next ›</button>
+  </div>` : '';
+}
+
+function buildStats() {
+  const el = document.getElementById('stat');
+  const vs = _rows.map(view);
+  const total = vs.length;
+  const withOpp = vs.filter((v) => v.opp_date).length;
+  const granted = vs.filter((v) => v.outcome === 'granted').length;
+  const dismissed = vs.filter((v) => v.outcome === 'dismissed' || v.outcome === 'denied').length;
+  const decided = vs.filter((v) => v.outcome !== 'pending').length;
+  const pending = total - decided;
+  const grantRate = (granted + dismissed) > 0 ? Math.round(granted / (granted + dismissed) * 100) + '%' : '—';
+  const toDec = vs.map((v) => v.days).filter((d) => d != null);
+  el.innerHTML = `
+    <div class="kpi-strip">
+      <div class="kpi"><div class="num">${total}</div><div class="lbl">Petitions Collected</div></div>
+      <div class="kpi"><div class="num">${granted}</div><div class="lbl">Granted</div></div>
+      <div class="kpi"><div class="num">${dismissed}</div><div class="lbl">Dismissed / Denied</div></div>
+      <div class="kpi"><div class="num">${pending}</div><div class="lbl">Awaiting Decision</div></div>
+      <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Grant Rate (Decided)</div></div>
+    </div>
+    <div class="stats-title">Timing &amp; Context</div>
+    <div class="kpi-strip four">
+      <div class="kpi"><div class="num">${median(toDec) ?? '—'}</div><div class="lbl">Median Days: Petition → Decision</div></div>
+      <div class="kpi"><div class="num">${avg(toDec) ?? '—'}</div><div class="lbl">Avg Days: Petition → Decision</div></div>
+      <div class="kpi"><div class="num">${withOpp}</div><div class="lbl">With Opposition on File</div></div>
+      <div class="kpi"><div class="num">${new Set(vs.map((v) => v.app)).size}</div><div class="lbl">Proceedings With Petitions</div></div>
+    </div>`;
+}
+
+(async () => {
+  const body = document.getElementById('body');
+  try {
+    const res = await fetch('/api/reexam?trail=1');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    _rows = data.trail || [];
+    const fr = document.getElementById('freshness');
+    if (fr) {
+      let maxRaw = null, maxMs = NaN;
+      for (const t of _rows) for (const d of [t.petition, t.opposition, t.decision]) {
+        if (!d) continue; const tm = ms(d.date);
+        if (!isNaN(tm) && (isNaN(maxMs) || tm > maxMs)) { maxMs = tm; maxRaw = d.date; }
+      }
+      fr.textContent = 'Collected automatically from tracked reexamination file wrappers; updates with the daily scan.' + (maxRaw ? ` Most recent petition activity on file: ${fmtDate(maxRaw)}.` : '');
+    }
+    buildStats();
+    if (!_rows.length) {
+      body.innerHTML = '<div class="state">No petitions collected yet — the backfill sweep and daily scan populate this page.</div>';
+      return;
+    }
+    document.getElementById('csv-btn').style.display = '';
+    document.getElementById('filter-bar').style.display = 'flex';
+    render();
+  } catch (e) {
+    body.innerHTML = '<div class="state">Could not load petitions (' + esc(e.message) + ').</div>';
+  }
+})();
+</script>
+<script src="/subscribe.js" defer></script>
+</body>
+</html>

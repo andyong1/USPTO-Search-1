@@ -6,7 +6,8 @@
 //   GET /api/reexam?nirc=1       →  { nirc: [...] } — request-vs-NIRC art comparison
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
-import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs } from '../lib/db.js';
+import { threadPetitions } from '../lib/petitions.js';
 import { clientErrorDetail } from '../lib/secure.js';
 
 const san = (s) => String(s || '').replace(/[^0-9A-Za-z._-]/g, '_');
@@ -50,6 +51,32 @@ export default async function handler(req, res) {
     if (req.query && req.query.petitions) {
       const petitions = await listPostOrderPetitions();
       res.status(200).json({ petitions });
+      return;
+    }
+    // Full petition trail for /reexam-petition-decisions: every petition /
+    // opposition / decision doc per proceeding, threaded server-side.
+    if (req.query && req.query.trail) {
+      const docs = await listPetitionTrailDocs();
+      const byApp = new Map();
+      for (const d of docs) {
+        if (!byApp.has(d.application_number)) byApp.set(d.application_number, { ctx: d, rows: [] });
+        byApp.get(d.application_number).rows.push(d);
+      }
+      const trail = [];
+      for (const [app, { ctx, rows: appRows }] of byApp) {
+        for (const t of threadPetitions(appRows)) {
+          trail.push({
+            application_number: app,
+            underlying_patent: ctx.underlying_patent, patent_owner: ctx.patent_owner,
+            requester_name: ctx.requester_name, requester_type: ctx.requester_type,
+            cert_date: ctx.cert_date,
+            petition: t.petition && { doc_id: t.petition.doc_id, date: t.petition.official_date, code: t.petition.doc_code },
+            opposition: t.opposition && { doc_id: t.opposition.doc_id, date: t.opposition.official_date, code: t.opposition.doc_code },
+            decision: t.decision && { doc_id: t.decision.doc_id, date: t.decision.official_date, code: t.decision.doc_code, outcome: t.decision.outcome },
+          });
+        }
+      }
+      res.status(200).json({ trail });
       return;
     }
     if (req.query && req.query.actions) {

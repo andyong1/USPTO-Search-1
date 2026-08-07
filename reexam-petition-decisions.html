@@ -51,7 +51,6 @@
     .badge.granted { background: var(--ok-bg); color: var(--ok-fg); }
     .badge.dismissed { background: var(--bad-bg); color: var(--bad-fg); }
     .badge.partial { background: var(--warn-bg); color: var(--warn-fg); }
-    .badge.pending { background: var(--border); color: var(--text-2); }
     .badge.other { background: var(--info-bg); color: var(--info-fg); }
     .chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.74rem; background: var(--surface-3); color: var(--text-2); border: 1px solid var(--border); margin: 1px 2px 1px 0; white-space: nowrap; }
     .chip.primary { background: var(--info-bg); color: var(--info-fg); border-color: transparent; font-weight: 600; }
@@ -98,7 +97,7 @@
 </header>
 
 <div class="container">
-  <nav class="site-nav" style="margin:0 0 12px"><a class="back-btn" href="/itc">&larr; ITC investigations data</a></nav>
+  <div style="margin:0 0 12px"><a href="/itc" style="display:inline-block;padding:7px 12px;border-radius:8px;font-weight:600;font-size:0.84rem;text-decoration:none;background:var(--brand);color:var(--on-brand)">&larr; ITC investigations data</a></div>
   <nav class="site-nav">
     <div class="nav-section">
       <span class="nav-section-label">Application Search</span>
@@ -318,7 +317,10 @@ function exportCsv() {
 
 const OUTCOME_LABEL = { granted: 'Granted', granted_in_part: 'Granted in part', dismissed: 'Dismissed', denied: 'Denied', undecided: 'Deferred', decided: 'Decided', other: 'Decided', pending: 'Pending' };
 function outcomeBadge(v) {
-  if (v.outcome === 'pending') return '<span class="badge pending">Pending</span>';
+  // No decision document on file yet — a plain dash reads better than a badge,
+  // which implied a disposition the Office hasn't made. (The "Pending" option in
+  // the Decision filter and the "Awaiting Decision" KPI still cover this state.)
+  if (v.outcome === 'pending') return dash;
   const o = v.outcome;
   const cls = o === 'granted' ? 'granted' : o === 'granted_in_part' ? 'partial' : (o === 'dismissed' || o === 'denied') ? 'dismissed' : 'other';
   let html = `<span class="badge ${cls}">${esc(OUTCOME_LABEL[o] || o)}</span>`;

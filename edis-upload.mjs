@@ -118,6 +118,15 @@ function classifyOutcome(docs, status) {
   const hay = docs.map((d) => `${d.document_type || ''} :: ${d.document_title || ''}`.toLowerCase());
   const any = (re) => hay.some((h) => re.test(h));
 
+  // An Active investigation is ongoing: the caption heuristic can't reliably tell an
+  // ISSUED remedy from remedy-phase briefing (proposed orders, briefs, and USITC
+  // correspondence that merely MENTION an exclusion order — only 4 of 42 active
+  // "remedy" matches were actual issued orders), nor a partial termination/settlement
+  // of one respondent from a full one. So never infer a terminal or remedy outcome for
+  // an active matter — leave it pending. The AI classifier reads the decision text for
+  // the genuine final-determination cases (including the Presidential-review window).
+  if (status === 'Active') return { outcome: 'pending', remedy: null, reviewFlag: false };
+
   let remedy = null;
   if (any(/general exclusion order/)) remedy = 'GEO';
   else if (any(/limited exclusion order/)) remedy = 'LEO';
@@ -126,13 +135,8 @@ function classifyOutcome(docs, status) {
 
   let outcome, reviewFlag = false;
   if (remedy || cdo) {
-    outcome = 'violation_remedy';                            // a final remedy order = violation found (may still show Active during Presidential review)
+    outcome = 'violation_remedy';                            // a final remedy order = violation found
     if (!remedy && cdo) remedy = 'CDO';
-  } else if (status === 'Active') {
-    // An Active investigation is ongoing by definition: a partial termination or
-    // settlement of an INDIVIDUAL respondent (common in multi-respondent cases)
-    // does NOT conclude it, so never infer a terminal outcome from doc titles here.
-    outcome = 'pending';
   } else if (any(/consent order/) || any(/settlement agreement/) || any(/motion to terminate.*(settl|license)/)) {
     outcome = 'terminated_settlement';
   } else if (any(/(finding|determination) of no violation/) || any(/no violation/)) {

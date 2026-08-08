@@ -163,6 +163,10 @@
           <option value="pending">Pending (no decision)</option>
         </select>
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-2);cursor:pointer">
+        <input type="checkbox" id="decided-filter" onchange="page=1;render()" aria-label="Show only rows with decided petitions" />
+        Show only rows with decided petitions
+      </label>
     </div>
     <div id="body" style="margin-top:14px"><div class="state">Loading…</div></div>
     <div id="pager"></div>
@@ -297,8 +301,12 @@ function filtered() {
   const q = (document.getElementById('table-filter').value || '').trim().toLowerCase();
   const oc = document.getElementById('outcome-filter').value;
   const rf = document.getElementById('relief-filter').value;
+  const decidedOnly = document.getElementById('decided-filter').checked;
   return _rows.filter((t) => {
     const v = view(t);
+    // "Decided" = a decision document is on file for this petition. Composes with
+    // the Decision dropdown (both must pass).
+    if (decidedOnly && v.outcome === 'pending') return false;
     if (oc === 'pending' && v.outcome !== 'pending') return false;
     if (oc === 'granted' && v.outcome !== 'granted') return false;
     if (oc === 'granted_in_part' && v.outcome !== 'granted_in_part') return false;

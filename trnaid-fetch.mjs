@@ -20,7 +20,7 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { sql } from '@vercel/postgres';
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
-import { getReexamsMissingRequester } from './lib/db.js';
+import { getReexamsMissingRequester, setRequesterFromTrna } from './lib/db.js';
 import { fetchDocuments, fetchDocumentBytes } from './lib/uspto.js';
 
 if (!process.env.POSTGRES_URL) {
@@ -97,7 +97,12 @@ for (const row of rows) {
 
   const docs = bag.map((d) => ({ id: d.documentIdentifier, code: (d.documentCode || '').toUpperCase(), date: (d.officialDate || '').slice(0, 10) }));
   const trna = pickTrna(docs);
-  if (!trna) { noTrna++; console.log(`${app}: no TRNA doc — skipped`); continue; }
+  if (!trna) {
+    // Stamp req_code='TRNA' (no name) so this proceeding is not re-pulled every
+    // run — there is no TRNA to read. Gap-fill guard leaves any existing name.
+    await setRequesterFromTrna(app, { requester_name: null, docId: null, date: null, confidence: 'low', note: 'no TRNA document on file' });
+    noTrna++; console.log(`${app}: no TRNA doc — marked`); continue;
+  }
 
   const txt = await trnaText(app, trna);
   await writeFile(`${DIR}/${app}__trna.txt`, txt || '(no text extracted)', 'utf-8');

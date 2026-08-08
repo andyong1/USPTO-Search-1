@@ -437,7 +437,7 @@ function render() {
   const rows = slice.map((t) => {
     const v = view(t);
     const num = v.app;
-    const petCell = t.petition ? `${fmtDate(v.pet_date)} <span class="note">${esc(t.petition.code || '')}</span>${docLinks(num, t.petition.doc_id)}` : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>';
+    const petCell = t.petition ? `${fmtDate(v.pet_date)}${docLinks(num, t.petition.doc_id)}` : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>';
     const oppCell = t.opposition ? `${fmtDate(v.opp_date)}${docLinks(num, t.opposition.doc_id)}` : dash;
     const decCell = t.decision ? `${outcomeBadge(v)} ${fmtDate(v.dec_date)}${docLinks(num, t.decision.doc_id)}` : outcomeBadge(v);
     return `<tr>

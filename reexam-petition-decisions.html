@@ -132,9 +132,18 @@
     <div class="sub">Petitions filed in tracked ex parte reexamination proceedings — any party, any subject — with the relief requested, the opposing paper (if any), and the Office's decision, each linked to the underlying document. Filter by type of relief.</div>
     <div id="scope" class="sub" style="margin-bottom:0"></div>
     <div class="explainer">
-      <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or terminate the proceeding, reconsider the order, extend time, strike papers, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision (<code>RXPT*</code>). The <strong>relief requested</strong> is read from the decision itself, which conventionally recites what the petition asked for; because a single petition commonly asks for several things, relief is multi-label and the <em>substantive</em> ask is highlighted.</p>
-      <p style="margin-top:10px" id="scope-detail"></p>
-      <p style="margin-top:10px"><strong>Statistics key on the relief actually decided.</strong> The most common shape in this corpus is a combined petition seeking a procedural waiver (37 CFR 1.183, of rules such as 1.515(a) or 1.540) <em>so that</em> the Office will consider a request to deny or terminate the reexamination under 35 U.S.C. § 325(d). The Office resolves these two ways. Sometimes it grants the waiver and dismisses the § 325(d) request in the same decision — that is recorded as a dismissal, with the waiver noted as “(waiver granted)”. More often it grants the waiver as <em>leave to file</em> the § 325(d) paper and refers the § 325(d) question to the Central Reexamination Unit, which answers it in the reexamination determination rather than in any later petition decision. Those petitions are <strong>granted</strong> — the Office gave exactly the relief it decided — and the row states which relief that was and how the determination came out, because no further petition decision will ever issue. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
+      <p>This page traces each reexamination proceeding's full petition trail — the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision (<code>RXPT*</code>) — read from the file wrapper. A petition often asks for several things; relief is multi-label, with the substantive ask highlighted. Statistics key on that substantive ask, not on procedural waivers granted along the way.</p>
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;font-weight:600">Coverage &amp; methodology</summary>
+        <div id="scope-detail" style="margin-top:10px"></div>
+        <ul style="margin:10px 0 0;padding-left:20px;line-height:1.6">
+          <li>Most common pattern: a combined petition seeks a procedural waiver (37 CFR 1.183, e.g. of 1.515(a)/1.540) so the Office will consider a request to deny or terminate under § 325(d).</li>
+          <li>Waiver granted and § 325(d) dismissed in the same decision → recorded as <strong>dismissed</strong>, with "(waiver granted)" noted.</li>
+          <li>Waiver granted as leave to file, with § 325(d) referred to the Central Reexamination Unit → recorded as <strong>granted</strong> — the Office resolves the § 325(d) merits in the reexam order, not in a further petition decision.</li>
+          <li>Petitions are matched to decisions by filing order; a decision with no petition paper on file appears as a decision-only row.</li>
+          <li>Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</li>
+        </ul>
+      </details>
     </div>
     <p id="freshness" class="sub" style="margin:0 0 12px"></p>
     <p style="font-size:0.78rem;color:var(--text-5);margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO document codes — informational only, not legal advice; verify against official USPTO records.</p>
@@ -212,13 +221,13 @@ function renderScope() {
     + `plus ${u.awaiting_determination.toLocaleString()} recently filed requests that have no determination yet. `
     + `<strong>${u.proceedings_with_petitions.toLocaleString()}</strong> of them contain at least one petition.`;
   if (detail) {
-    detail.innerHTML = `<strong>What this dataset is — and isn't.</strong> A proceeding enters it one of two ways: its determination `
-      + `(order granting, or denial) was captured, which begins ${detFrom}; or its request was filed recently enough to still be `
-      + `awaiting a determination. For every proceeding in scope, the <em>complete</em> petition history is read from the file `
-      + `wrapper, so its petitions are collected whatever their date — the earliest on file is ${petFrom}. `
-      + `Reexaminations that were already decided before ${detFrom} are <strong>not</strong> included, so this is not a complete `
-      + `history of reexamination petition practice; it is complete for the proceedings listed above. Very old requests that never `
-      + `received a determination also age out of the tracking window.`;
+    detail.innerHTML = `<ul style="margin:0;padding-left:20px;line-height:1.6">`
+      + `<li>A proceeding is in scope if its determination (order or denial) was captured — beginning ${detFrom} — or its request `
+      + `is recent enough to still be awaiting one.</li>`
+      + `<li>Once in scope, the full petition history is pulled regardless of date; the earliest on file is ${petFrom}.</li>`
+      + `<li>Proceedings already decided before ${detFrom}, and very old undetermined requests that have aged out of the `
+      + `tracking window, aren't included.</li>`
+      + `</ul>`;
   }
 }
 let page = 1;

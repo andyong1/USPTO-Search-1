@@ -223,24 +223,41 @@ const reliefLabel = (r) => RELIEF_LABEL[r] || r;
 // a procedural waiver on the way to dismissing the real ask counts as dismissed.
 function view(t) {
   const d = t.decision;
+  const p = t.petition;
   const merits = d && d.merits_outcome;
+  // Relief comes from two independent reads. The DECISION says how the Office
+  // characterized the request — authoritative, and the only one that pairs with
+  // an outcome — so it wins when present. The PETITION says what was asked for as
+  // filed, which is all we have while a petition is undecided. Where both exist
+  // and name a different substantive ask, that divergence is surfaced, not hidden.
+  const officeReliefs = (d && d.reliefs) || [];
+  const officePrimary = (d && d.primary_relief) || '';
+  const filedReliefs = (p && p.reliefs) || [];
+  const filedPrimary = (p && p.primary_relief) || '';
+  const useOffice = !!officePrimary;
   return {
     app: t.application_number,
     patent: t.underlying_patent || '',
     owner: t.patent_owner || '',
     requester: t.requester_name || '',
-    pet_date: t.petition ? t.petition.date : '',
+    pet_date: p ? p.date : '',
     opp_date: t.opposition ? t.opposition.date : '',
     dec_date: d ? d.date : '',
     outcome: d ? (merits || d.outcome || 'decided') : 'pending',
     code_outcome: d ? (d.outcome || '') : '',
     classified: !!merits,
-    reliefs: (d && d.reliefs) || [],
-    primary: (d && d.primary_relief) || '',
+    // merged relief (what the filter, chips and leaderboard use)
+    reliefs: useOffice ? officeReliefs : filedReliefs,
+    primary: useOffice ? officePrimary : filedPrimary,
+    reliefSource: useOffice ? 'office' : (filedPrimary ? 'filed' : ''),
+    verbatim: useOffice ? ((d && d.relief_verbatim) || '') : ((p && p.relief_verbatim) || ''),
+    // the two readings, kept separate for the divergence marker
+    officePrimary, filedPrimary,
+    divergent: !!(officePrimary && filedPrimary && officePrimary !== filedPrimary),
     ancillary: (d && d.ancillary_waiver) || '',
-    verbatim: (d && d.relief_verbatim) || '',
     rules: (d && d.rules) || [],
-    days: (t.petition && d) ? daysBetween(t.petition.date, d.date) : null,
+    petitioner: (d && d.petitioner) || (p && p.petitioner) || '',
+    days: (p && d) ? daysBetween(p.date, d.date) : null,
   };
 }
 
@@ -301,12 +318,15 @@ function sortedRows(items) {
 function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function exportCsv() {
   const header = ['Control No.', 'Patent', 'Patent Owner', 'Requester', 'Relief Requested (all)', 'Primary Relief',
+    'Relief Source', 'Primary Relief as Filed', 'Office vs Filed Differ',
     'Petition Date', 'Opposition Date', 'Decision on Merits', 'Ancillary Waiver', 'Decision Date', 'Days to Decision',
-    'Rules Cited', 'Relief Quote (from decision)'];
+    'Rules Cited', 'Relief Quote'];
   const rows = sortedRows(filtered()).map((t) => {
     const v = view(t);
     return [v.app, v.patent, titleCaseName(v.owner), titleCaseName(v.requester),
       v.reliefs.map(reliefLabel).join('; '), v.primary ? reliefLabel(v.primary) : '',
+      v.reliefSource === 'office' ? 'Office decision' : v.reliefSource === 'filed' ? 'Petition as filed' : '',
+      v.filedPrimary ? reliefLabel(v.filedPrimary) : '', v.divergent ? 'Yes' : '',
       fmtDate(v.pet_date || ''), v.opp_date ? fmtDate(v.opp_date) : '',
       v.outcome === 'pending' ? '' : (OUTCOME_LABEL[v.outcome] || v.outcome), v.ancillary || '',
       v.dec_date ? fmtDate(v.dec_date) : '', v.days == null ? '' : v.days,
@@ -337,8 +357,18 @@ function reliefCell(v) {
   const chips = v.reliefs.map((r) => r === v.primary
     ? `<span class="chip primary" title="The substantive relief sought">${esc(reliefLabel(r))}</span>`
     : `<span class="chip">${esc(reliefLabel(r))}</span>`).join(' ');
-  const quote = v.verbatim ? `<div class="note" style="margin-top:3px" title="Quoted from the decision">“${esc(v.verbatim.slice(0, 90))}${v.verbatim.length > 90 ? '…' : ''}”</div>` : '';
-  return chips + quote;
+  const src = v.reliefSource === 'filed'
+    ? ' <span class="note" title="Read from the petition as filed; the Office has not yet issued a decision characterizing it">(as filed)</span>'
+    : '';
+  const quoteFrom = v.reliefSource === 'filed' ? 'the petition' : 'the decision';
+  const quote = v.verbatim
+    ? `<div class="note" style="margin-top:3px" title="Quoted from ${quoteFrom}">“${esc(v.verbatim.slice(0, 90))}${v.verbatim.length > 90 ? '…' : ''}”</div>`
+    : '';
+  // Petitioner styled it as one thing; the Office treated it as another.
+  const diff = v.divergent
+    ? `<div class="note" style="margin-top:3px" title="The petition was styled as ${esc(reliefLabel(v.filedPrimary))}, but the Office's decision treated the substantive request as ${esc(reliefLabel(v.officePrimary))}.">⇄ filed as ${esc(reliefLabel(v.filedPrimary))}</div>`
+    : '';
+  return chips + src + quote + diff;
 }
 
 function render() {
@@ -449,7 +479,19 @@ function buildStats() {
     </div>
     <div class="note" style="margin-top:10px">The grant rate counts only petitions whose substantive request was actually decided — the ${deferred} deferred to the Central Reexamination Unit and ${pending} still pending are excluded. ${withOpp} have an opposition on file.</div>
     <div class="stats-title">Most-Requested Relief</div>
+    ${reliefCoverageHtml(vs)}
     ${reliefTableHtml(vs)}`;
+}
+
+// How much of the table has relief data, and from which read — so the numbers
+// below are never mistaken for full coverage.
+function reliefCoverageHtml(vs) {
+  const office = vs.filter((v) => v.reliefSource === 'office').length;
+  const filed = vs.filter((v) => v.reliefSource === 'filed').length;
+  const none = vs.length - office - filed;
+  const diff = vs.filter((v) => v.divergent).length;
+  const pct = vs.length ? Math.round((office + filed) / vs.length * 100) : 0;
+  return `<div class="note" style="margin-bottom:8px">Relief identified for <strong>${office + filed} of ${vs.length}</strong> petitions (${pct}%) — ${office} from the Office's decision, ${filed} read from the petition as filed${none ? `, ${none} not yet classified` : ''}.${diff ? ` In <strong>${diff}</strong>, the Office treated the substantive request as something other than how the petition was styled (marked ⇄ in the table).` : ''}</div>`;
 }
 
 // Relief leaderboard. Two counts per relief, because they answer different

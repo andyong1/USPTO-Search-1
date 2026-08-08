@@ -70,7 +70,17 @@ export default async function handler(req, res) {
             underlying_patent: ctx.underlying_patent, patent_owner: ctx.patent_owner,
             requester_name: ctx.requester_name, requester_type: ctx.requester_type,
             cert_date: ctx.cert_date,
-            petition: t.petition && { doc_id: t.petition.doc_id, date: t.petition.official_date, code: t.petition.doc_code },
+            petition: t.petition && {
+              doc_id: t.petition.doc_id, date: t.petition.official_date, code: t.petition.doc_code,
+              // Relief AS FILED, read from the petition itself. Supplies relief for
+              // petitions with no decision yet, and cross-checks the Office's
+              // characterization where a decision exists.
+              reliefs: t.petition.req_reliefs || null,
+              primary_relief: t.petition.req_primary_relief || null,
+              relief_verbatim: t.petition.req_verbatim || null,
+              petitioner: t.petition.req_party || null,
+              confidence: t.petition.req_confidence || null,
+            },
             opposition: t.opposition && { doc_id: t.opposition.doc_id, date: t.opposition.official_date, code: t.opposition.doc_code },
             decision: t.decision && {
               doc_id: t.decision.doc_id, date: t.decision.official_date,

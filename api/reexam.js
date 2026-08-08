@@ -6,7 +6,7 @@
 //   GET /api/reexam?nirc=1       →  { nirc: [...] } — request-vs-NIRC art comparison
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
-import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse } from '../lib/db.js';
 import { threadPetitions } from '../lib/petitions.js';
 import { clientErrorDetail } from '../lib/secure.js';
 
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
     // Full petition trail for /reexam-petition-decisions: every petition /
     // opposition / decision doc per proceeding, threaded server-side.
     if (req.query && req.query.trail) {
-      const all = await listPetitionTrailDocs();
+      const [all, universe] = await Promise.all([listPetitionTrailDocs(), getPetitionUniverse()]);
       // Reading the petitions revealed that ~20% of documents filed under petition
       // codes are exhibits, standalone oppositions, or Office papers rather than
       // requests for relief. Threading them produced phantom "pending petition"
@@ -113,7 +113,7 @@ export default async function handler(req, res) {
       }
       // excludedNonPetitions is reported so the page can disclose what was filtered
       // rather than silently shrinking the count.
-      res.status(200).json({ trail, excludedNonPetitions: excluded });
+      res.status(200).json({ trail, excludedNonPetitions: excluded, universe });
       return;
     }
     if (req.query && req.query.actions) {

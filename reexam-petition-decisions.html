@@ -129,9 +129,11 @@
 
   <div class="card">
     <h2>Petition Decisions in Reexamination Proceedings</h2>
-    <div class="sub">Every petition filed in a tracked ex parte reexamination proceeding — any party, any subject — with the relief requested, the opposing paper (if any), and the Office's decision, each linked to the underlying document. Filter by type of relief.</div>
+    <div class="sub">Petitions filed in tracked ex parte reexamination proceedings — any party, any subject — with the relief requested, the opposing paper (if any), and the Office's decision, each linked to the underlying document. Filter by type of relief.</div>
+    <div id="scope" class="sub" style="margin-bottom:0"></div>
     <div class="explainer">
       <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or terminate the proceeding, reconsider the order, extend time, strike papers, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision (<code>RXPT*</code>). The <strong>relief requested</strong> is read from the decision itself, which conventionally recites what the petition asked for; because a single petition commonly asks for several things, relief is multi-label and the <em>substantive</em> ask is highlighted.</p>
+      <p style="margin-top:10px" id="scope-detail"></p>
       <p style="margin-top:10px"><strong>Statistics key on the merits.</strong> The most common shape in this corpus is a combined petition in which the Office grants a procedural waiver (37 CFR 1.183, of rules such as 1.515(a) or 1.540) <em>so that</em> it can reach a request to terminate the reexamination under 35 U.S.C. § 325(d) — and then dismisses that request. Granting the waiver is not a win, so the grant rate here counts only the disposition of the substantive relief; the waiver leg is noted separately as “(waiver granted)”. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
     </div>
     <p id="freshness" class="sub" style="margin:0 0 12px"></p>
@@ -190,6 +192,31 @@ const dash = '<span class="ext" style="margin-left:0">—</span>';
 
 let _rows = [];   // one row per threaded petition
 let _excludedNonPetitions = 0;  // exhibits / oppositions filtered out server-side
+let _universe = {};             // which proceedings were searched (for the scope statement)
+
+// Scope statement, built from live counts so it can't drift from the data. States
+// how a proceeding enters the dataset — and, just as importantly, what is not in it.
+function renderScope() {
+  const u = _universe || {};
+  const el = document.getElementById('scope');
+  const detail = document.getElementById('scope-detail');
+  if (!el || !u.tracked) return;
+  const detFrom = fmtDate(u.earliest_determination);
+  const petFrom = fmtDate(u.earliest_petition);
+  el.innerHTML = `<strong>Coverage:</strong> the file wrappers of all <strong>${u.tracked.toLocaleString()}</strong> tracked proceedings were searched — `
+    + `${u.with_determination.toLocaleString()} whose reexamination determination issued on or after ${detFrom}, `
+    + `plus ${u.awaiting_determination.toLocaleString()} recently filed requests that have no determination yet. `
+    + `<strong>${u.proceedings_with_petitions.toLocaleString()}</strong> of them contain at least one petition.`;
+  if (detail) {
+    detail.innerHTML = `<strong>What this dataset is — and isn't.</strong> A proceeding enters it one of two ways: its determination `
+      + `(order granting, or denial) was captured, which begins ${detFrom}; or its request was filed recently enough to still be `
+      + `awaiting a determination. For every proceeding in scope, the <em>complete</em> petition history is read from the file `
+      + `wrapper, so its petitions are collected whatever their date — the earliest on file is ${petFrom}. `
+      + `Reexaminations that were already decided before ${detFrom} are <strong>not</strong> included, so this is not a complete `
+      + `history of reexamination petition practice; it is complete for the proceedings listed above. Very old requests that never `
+      + `received a determination also age out of the tracking window.`;
+  }
+}
 let page = 1;
 const PAGE_SIZE = 100;
 
@@ -572,6 +599,8 @@ function buildReliefFilter() {
     const data = await res.json();
     _rows = data.trail || [];
     _excludedNonPetitions = data.excludedNonPetitions || 0;
+    _universe = data.universe || {};
+    renderScope();
     const fr = document.getElementById('freshness');
     if (fr) {
       let maxRaw = null, maxMs = NaN;

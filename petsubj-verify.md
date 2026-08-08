@@ -39,8 +39,21 @@ waiver's disposition. Likewise, procedural vehicles (`supervisory_review`,
 `matters_not_provided_for`) are the primary relief only when nothing more
 substantive is sought through them.
 
-If the decision expressly defers the substantive request to the CRU / another
-decision-maker without deciding it, set `merits_outcome` to `undecided`.
+**When the § 325(d) question is referred to the CRU (very common), the petition is
+GRANTED — not deferred.** The Office grants the 1.183 waiver as *leave to file* the
+§ 325(d) paper and sends the § 325(d) question to the Central Reexamination Unit,
+which answers it in the reexamination determination (order granting or denial).
+No second petition decision ever issues, so `undecided` would leave the row
+permanently unresolved and would also misstate what happened: the Office gave
+exactly the relief it decided. For that shape record:
+- `merits_outcome`: `granted`
+- `granted_relief`: `waiver_or_suspension_of_rule` (the relief actually granted)
+- `referred_to_cru`: `true`
+- `ancillary_waiver`: `granted`
+- `primary_relief`: still the substantive aim (`vacate_or_terminate_proceeding`)
+
+Reserve `undecided` for a genuine deferral where a further decision on the
+petition is actually expected.
 
 ## Controlled relief vocabulary (use these exact strings)
 
@@ -54,10 +67,17 @@ decision-maker without deciding it, set `merits_outcome` to `undecided`.
 ## Output line
 
 ```json
-{"doc_id":"MQISZDP5X20X206","application_number":"90015457","reliefs":["waiver_or_suspension_of_rule","vacate_or_terminate_proceeding"],"primary_relief":"vacate_or_terminate_proceeding","merits_outcome":"dismissed","ancillary_waiver":"granted","rules":["37 CFR 1.181","37 CFR 1.183","37 CFR 1.540"],"statutes":["35 USC 325(d)"],"petitioner":"patent_owner","relief_verbatim":"requests the Office terminate the present reexamination proceeding","confidence":"high","note":""}
+{"doc_id":"MQISZDP5X20X206","application_number":"90015457","reliefs":["waiver_or_suspension_of_rule","vacate_or_terminate_proceeding"],"primary_relief":"vacate_or_terminate_proceeding","merits_outcome":"dismissed","ancillary_waiver":"granted","granted_relief":null,"referred_to_cru":false,"rules":["37 CFR 1.181","37 CFR 1.183","37 CFR 1.540"],"statutes":["35 USC 325(d)"],"petitioner":"patent_owner","relief_verbatim":"requests the Office terminate the present reexamination proceeding","confidence":"high","note":""}
+```
+
+Referred-to-CRU shape (grant of leave):
+```json
+{"doc_id":"MRZ9NTMR120X224","application_number":"90016339","reliefs":["waiver_or_suspension_of_rule","vacate_or_terminate_proceeding"],"primary_relief":"vacate_or_terminate_proceeding","merits_outcome":"granted","ancillary_waiver":"granted","granted_relief":"waiver_or_suspension_of_rule","referred_to_cru":true,"rules":["37 CFR 1.183","37 CFR 1.540"],"statutes":["35 USC 325(d)"],"petitioner":"patent_owner","relief_verbatim":"requests waiver of 37 CFR 1.540 so the Office may consider its § 325(d) request","confidence":"high","note":"§ 325(d) referred to the CRU"}
 ```
 
 - `merits_outcome`: `granted` | `granted_in_part` | `dismissed` | `denied` | `undecided` | `other`
+- `granted_relief`: the relief actually granted, when it differs from `primary_relief`; else null
+- `referred_to_cru`: true when the § 325(d) question was sent to the CRU
 - `ancillary_waiver`: `granted` | `dismissed` | `denied` | omit/null if none
 - `petitioner`: `patent_owner` | `third_party_requester` | `unclear`
 - `relief_verbatim`: ≤25-word quote showing what was requested (the evidence)

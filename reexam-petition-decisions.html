@@ -134,7 +134,7 @@
     <div class="explainer">
       <p>Parties in reexamination petition the Office for many kinds of relief — to vacate or terminate the proceeding, reconsider the order, extend time, strike papers, revive, or invoke supervisory authority. This page collects the full petition trail from each proceeding's file wrapper: the petition (<code>RXPET.</code>/<code>PET.OP</code>), any opposition (<code>RXOPPPET</code>), and the Office's decision (<code>RXPT*</code>). The <strong>relief requested</strong> is read from the decision itself, which conventionally recites what the petition asked for; because a single petition commonly asks for several things, relief is multi-label and the <em>substantive</em> ask is highlighted.</p>
       <p style="margin-top:10px" id="scope-detail"></p>
-      <p style="margin-top:10px"><strong>Statistics key on the merits.</strong> The most common shape in this corpus is a combined petition in which the Office grants a procedural waiver (37 CFR 1.183, of rules such as 1.515(a) or 1.540) <em>so that</em> it can reach a request to terminate the reexamination under 35 U.S.C. § 325(d) — and then dismisses that request. Granting the waiver is not a win, so the grant rate here counts only the disposition of the substantive relief; the waiver leg is noted separately as “(waiver granted)”. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
+      <p style="margin-top:10px"><strong>Statistics key on the relief actually decided.</strong> The most common shape in this corpus is a combined petition seeking a procedural waiver (37 CFR 1.183, of rules such as 1.515(a) or 1.540) <em>so that</em> the Office will consider a request to deny or terminate the reexamination under 35 U.S.C. § 325(d). The Office resolves these two ways. Sometimes it grants the waiver and dismisses the § 325(d) request in the same decision — that is recorded as a dismissal, with the waiver noted as “(waiver granted)”. More often it grants the waiver as <em>leave to file</em> the § 325(d) paper and refers the § 325(d) question to the Central Reexamination Unit, which answers it in the reexamination determination rather than in any later petition decision. Those petitions are <strong>granted</strong> — the Office gave exactly the relief it decided — and the row states which relief that was and how the determination came out, because no further petition decision will ever issue. Petitions are matched to decisions by filing order; a decision whose petition paper is not separately on file appears as a decision-only row. Collection updates with the same daily scan that watches each proceeding for its certificate, and stops when the proceeding concludes.</p>
     </div>
     <p id="freshness" class="sub" style="margin:0 0 12px"></p>
     <p style="font-size:0.78rem;color:var(--text-5);margin:0 0 12px;line-height:1.45">Compiled automatically from USPTO document codes — informational only, not legal advice; verify against official USPTO records.</p>
@@ -159,7 +159,7 @@
           <option value="granted">Granted</option>
           <option value="granted_in_part">Granted in part</option>
           <option value="dismissed">Dismissed / denied</option>
-          <option value="undecided">Deferred to the CRU</option>
+          <option value="referred">Granted leave to file § 325(d) paper</option>
           <option value="pending">Pending (no decision)</option>
         </select>
       </label>
@@ -283,6 +283,10 @@ function view(t) {
     officePrimary, filedPrimary,
     divergent: !!(officePrimary && filedPrimary && officePrimary !== filedPrimary),
     ancillary: (d && d.ancillary_waiver) || '',
+    grantedRelief: (d && d.granted_relief) || '',
+    referredToCru: !!(d && d.referred_to_cru),
+    detType: (d && d.det_type) || '',
+    detDate: (d && d.det_date) || '',
     rules: (d && d.rules) || [],
     petitioner: (d && d.petitioner) || (p && p.petitioner) || '',
     days: (p && d) ? daysBetween(p.date, d.date) : null,
@@ -299,6 +303,10 @@ function filtered() {
     if (oc === 'granted' && v.outcome !== 'granted') return false;
     if (oc === 'granted_in_part' && v.outcome !== 'granted_in_part') return false;
     if (oc === 'dismissed' && v.outcome !== 'dismissed' && v.outcome !== 'denied') return false;
+    // 'referred' = granted leave to file the § 325(d) paper, with § 325(d) itself
+    // answered by the CRU in the determination. 'undecided' kept for any genuine
+    // deferral a future decision might produce.
+    if (oc === 'referred' && !v.referredToCru) return false;
     if (oc === 'undecided' && v.outcome !== 'undecided') return false;
     // Relief is multi-label: "contains" semantics. `primary:` restricts to rows
     // where that relief was the substantive ask, not merely one of several.
@@ -347,8 +355,9 @@ function csvCell(v) { const s = String(v == null ? '' : v); return /[",\n]/.test
 function exportCsv() {
   const header = ['Control No.', 'Patent', 'Patent Owner', 'Requester', 'Relief Requested (all)', 'Primary Relief',
     'Relief Source', 'Primary Relief as Filed', 'Office vs Filed Differ',
-    'Petition Date', 'Opposition Date', 'Decision on Merits', 'Ancillary Waiver', 'Decision Date', 'Days to Decision',
-    'Rules Cited', 'Relief Quote'];
+    'Petition Date', 'Opposition Date', 'Decision on Merits', 'Relief Granted', 'Ancillary Waiver',
+    '§325(d) Referred to CRU', 'Determination Outcome', 'Determination Date',
+    'Decision Date', 'Days to Decision', 'Rules Cited', 'Relief Quote'];
   const rows = sortedRows(filtered()).map((t) => {
     const v = view(t);
     return [v.app, v.patent, titleCaseName(v.owner), titleCaseName(v.requester),
@@ -356,7 +365,10 @@ function exportCsv() {
       v.reliefSource === 'office' ? 'Office decision' : v.reliefSource === 'filed' ? 'Petition as filed' : '',
       v.filedPrimary ? reliefLabel(v.filedPrimary) : '', v.divergent ? 'Yes' : '',
       fmtDate(v.pet_date || ''), v.opp_date ? fmtDate(v.opp_date) : '',
-      v.outcome === 'pending' ? '' : (OUTCOME_LABEL[v.outcome] || v.outcome), v.ancillary || '',
+      v.outcome === 'pending' ? '' : (OUTCOME_LABEL[v.outcome] || v.outcome),
+      v.grantedRelief ? reliefLabel(v.grantedRelief) : '', v.ancillary || '',
+      v.referredToCru ? 'Yes' : '', v.referredToCru ? (v.detType || '') : '',
+      v.referredToCru && v.detDate ? fmtDate(v.detDate) : '',
       v.dec_date ? fmtDate(v.dec_date) : '', v.days == null ? '' : v.days,
       (v.rules || []).join('; '), v.verbatim];
   });
@@ -364,6 +376,8 @@ function exportCsv() {
 }
 
 const OUTCOME_LABEL = { granted: 'Granted', granted_in_part: 'Granted in part', dismissed: 'Dismissed', denied: 'Denied', undecided: 'Deferred', decided: 'Decided', other: 'Decided', pending: 'Pending' };
+// A referred § 325(d) request is answered by whether reexamination was ordered.
+const orderedish = (t) => /order/i.test(String(t || ''));
 function outcomeBadge(v) {
   // No decision document on file yet — a plain dash reads better than a badge,
   // which implied a disposition the Office hasn't made. (The "Pending" option in
@@ -372,9 +386,19 @@ function outcomeBadge(v) {
   const o = v.outcome;
   const cls = o === 'granted' ? 'granted' : o === 'granted_in_part' ? 'partial' : (o === 'dismissed' || o === 'denied') ? 'dismissed' : 'other';
   let html = `<span class="badge ${cls}">${esc(OUTCOME_LABEL[o] || o)}</span>`;
-  // Where the merits were dismissed but a procedural waiver was granted, say so —
-  // that combination is the single most common shape in this corpus.
-  if (v.ancillary === 'granted' && (o === 'dismissed' || o === 'denied')) {
+  // Say WHICH relief was granted where the Office granted leave and sent the
+  // substantive § 325(d) question to the CRU. The petition is fully disposed of —
+  // no further petition decision ever issues — so this must not read as pending,
+  // and the determination that actually answered § 325(d) is shown alongside.
+  if (v.referredToCru) {
+    html += ` <span class="note" title="The Office granted the rule waiver so the § 325(d) paper could be filed and considered. The § 325(d) question itself is decided by the Central Reexamination Unit in the reexamination determination — no further petition decision issues.">(leave to file § 325(d) paper)</span>`;
+    if (v.detType) {
+      const poWon = !orderedish(v.detType);
+      html += `<div class="note" style="margin-top:3px">§ 325(d) resolved in the determination: <strong style="color:var(--${poWon ? 'ok' : 'bad'}-fg)">${esc(v.detType)}</strong>${v.detDate ? ' · ' + fmtDate(v.detDate) : ''}</div>`;
+    } else {
+      html += '<div class="note" style="margin-top:3px">§ 325(d) awaits the reexamination determination</div>';
+    }
+  } else if (v.ancillary === 'granted' && (o === 'dismissed' || o === 'denied')) {
     html += ` <span class="note" title="A procedural rule waiver was granted so the Office could reach the substantive request, which was then ${OUTCOME_LABEL[o].toLowerCase()}.">(waiver granted)</span>`;
   }
   return html;
@@ -489,6 +513,11 @@ function buildStats() {
   const grantRate = decidedForRate > 0 ? Math.round((granted + partial) / decidedForRate * 100) + '%' : '—';
   const waiverOnly = vs.filter((v) => v.ancillary === 'granted' && (v.outcome === 'dismissed' || v.outcome === 'denied')).length;
   const deferred = vs.filter((v) => v.outcome === 'undecided').length;
+  // Petitions granted leave to file a § 325(d) paper, and how the CRU then ruled
+  // in the determination — the real answer to what those petitioners wanted.
+  const referred = vs.filter((v) => v.referredToCru);
+  const refDecided = referred.filter((v) => v.detType);
+  const refPoWon = refDecided.filter((v) => !orderedish(v.detType)).length;
   const toDec = vs.map((v) => v.days).filter((d) => d != null);
   el.innerHTML = `
     <div class="kpi-strip">
@@ -502,10 +531,11 @@ function buildStats() {
     <div class="kpi-strip four">
       <div class="kpi"><div class="num">${median(toDec) ?? '—'}</div><div class="lbl">Median Days: Petition → Decision</div></div>
       <div class="kpi"><div class="num">${pending}</div><div class="lbl">Awaiting Decision</div></div>
-      <div class="kpi"><div class="num">${deferred}</div><div class="lbl">Merits Deferred to the CRU</div><div class="note" style="margin-top:2px">waiver decided, § 325(d) forwarded</div></div>
+      <div class="kpi"><div class="num">${referred.length}</div><div class="lbl">Granted Leave to File § 325(d) Paper</div><div class="note" style="margin-top:2px">§ 325(d) then decided by the CRU</div></div>
       <div class="kpi"><div class="num">${waiverOnly}</div><div class="lbl">Waiver Granted, Merits Denied</div></div>
     </div>
-    <div class="note" style="margin-top:10px">The grant rate counts only petitions whose substantive request was actually decided — the ${deferred} deferred to the Central Reexamination Unit and ${pending} still pending are excluded. ${withOpp} have an opposition on file.</div>
+    <div class="note" style="margin-top:10px">The grant rate counts petitions whose relief was actually decided; the ${pending} with no decision on file${deferred ? ` and ${deferred} genuinely deferred` : ''} are excluded. ${withOpp} have an opposition on file.
+      ${refDecided.length ? `Of the ${referred.length} petitions granted leave to file a § 325(d) paper, the CRU has since ruled in ${refDecided.length}: reexamination was <strong>ordered anyway in ${refDecided.length - refPoWon}</strong> and <strong>not ordered in ${refPoWon}</strong> — so the patent owner ultimately prevailed on § 325(d) in ${Math.round(refPoWon / refDecided.length * 100)}% of them, even though the petition itself was granted.` : ''}</div>
     <div class="stats-title">Most-Requested Relief</div>
     ${reliefCoverageHtml(vs)}
     ${reliefTableHtml(vs)}`;

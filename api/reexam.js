@@ -103,6 +103,13 @@ export default async function handler(req, res) {
               primary_relief: t.decision.primary_relief || null,
               merits_outcome: t.decision.merits_outcome || null,
               ancillary_waiver: t.decision.ancillary_waiver || null,
+              // Which relief was actually granted, and — where the § 325(d) question
+              // was referred to the CRU — how the reexamination determination
+              // answered it, since no further petition decision ever issues.
+              granted_relief: t.decision.granted_relief || null,
+              referred_to_cru: t.decision.referred_to_cru === true,
+              det_type: t.decision.det_type || null,
+              det_date: t.decision.det_date || null,
               rules: t.decision.rules || null,
               relief_verbatim: t.decision.relief_verbatim || null,
               subj_confidence: t.decision.subj_confidence || null,

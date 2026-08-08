@@ -54,11 +54,20 @@ for (const line of raw.split(/\r?\n/)) {
   const waiver = WAIVER.has(clean(o.ancillary_waiver)) ? clean(o.ancillary_waiver) : null;
   const party = PARTY.has(clean(o.petitioner)) ? clean(o.petitioner) : 'unclear';
 
+  // Where the § 325(d) question was referred to the CRU, the petition is granted
+  // (leave to file) and granted_relief records which relief that was — see
+  // petsubj-verify.md. Guarded so a stale spec can't reintroduce "deferred".
+  const referred = o.referred_to_cru === true;
+  const grantedRelief = RELIEFS.has(clean(o.granted_relief)) ? clean(o.granted_relief)
+    : (referred ? 'waiver_or_suspension_of_rule' : null);
+
   await setPetitionSubject(docId, m.application_number, {
     reliefs: reliefs.length ? reliefs : [primary],
     primary_relief: primary,
-    merits_outcome: merits,
+    merits_outcome: referred && merits === 'undecided' ? 'granted' : merits,
     ancillary_waiver: waiver,
+    granted_relief: grantedRelief,
+    referred_to_cru: referred,
     rules: arr(o.rules).slice(0, 25),
     statutes: arr(o.statutes).slice(0, 25),
     petitioner: party,

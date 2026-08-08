@@ -56,7 +56,17 @@ export default async function handler(req, res) {
     // Full petition trail for /reexam-petition-decisions: every petition /
     // opposition / decision doc per proceeding, threaded server-side.
     if (req.query && req.query.trail) {
-      const docs = await listPetitionTrailDocs();
+      const all = await listPetitionTrailDocs();
+      // Reading the petitions revealed that ~20% of documents filed under petition
+      // codes are exhibits, standalone oppositions, or Office papers rather than
+      // requests for relief. Threading them produced phantom "pending petition"
+      // rows, so drop them before pairing — but only once classification has
+      // actually judged them (req_is_petition defaults true when unclassified).
+      let excluded = 0;
+      const docs = all.filter((d) => {
+        if (d.kind === 'petition' && d.req_is_petition === false) { excluded++; return false; }
+        return true;
+      });
       const byApp = new Map();
       for (const d of docs) {
         if (!byApp.has(d.application_number)) byApp.set(d.application_number, { ctx: d, rows: [] });
@@ -101,7 +111,9 @@ export default async function handler(req, res) {
           });
         }
       }
-      res.status(200).json({ trail });
+      // excludedNonPetitions is reported so the page can disclose what was filtered
+      // rather than silently shrinking the count.
+      res.status(200).json({ trail, excludedNonPetitions: excluded });
       return;
     }
     if (req.query && req.query.actions) {

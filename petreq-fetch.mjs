@@ -24,6 +24,9 @@ const num = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? Numbe
 const str = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def; };
 const LIMIT = num('--limit', 100000);
 const DIR = `snq-cumulative/${str('--dir', 'petreq-prod')}`;
+// A handful of petitions are large enough to exceed the default download window;
+// --timeout lets a mop-up run give them longer instead of losing them.
+const DL_MS = num('--timeout', 30000);
 
 // Neon's serverless driver intermittently drops the TLS connection (ECONNRESET)
 // on an otherwise fine query. A long unattended run must not die on that, so
@@ -53,7 +56,7 @@ let ok = 0, fail = 0, pagesTotal = 0, undecided = 0;
 for (const r of rows) {
   if (have.has(r.doc_id)) { ok++; continue; }
   try {
-    const { buffer } = await fetchDocumentBytes(r.application_number, r.doc_id, 'PDF', 30000);
+    const { buffer } = await fetchDocumentBytes(r.application_number, r.doc_id, 'PDF', DL_MS);
     let pages = 0;
     try { pages = (await pdfParse(buffer)).numpages || 0; } catch { /* image-only */ }
     await writeFile(`${DIR}/pdf/${r.application_number}__${r.doc_id}.pdf`, buffer);

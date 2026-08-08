@@ -47,7 +47,17 @@ let raw;
 try { raw = await readFile(IN, 'utf-8'); }
 catch { console.error(`No ${IN} — run the AI pass per petreq-verify.md first.`); process.exit(1); }
 
-let uploaded = 0, bad = 0;
+// A document filed under a petition code but which is not itself a request for
+// relief (an exhibit, a standalone opposition, an Office paper). The classifiers
+// signal these per petreq-verify.md with reliefs=["other"] + low confidence, and
+// a note beginning "Not a petition:" / "Plainly an opposition:". Both signals are
+// required: a genuine petition can legitimately have relief "other", and a real
+// petition may merely mention an opposition.
+const NOT_PET_NOTE = /^\s*(not a petition|plainly an opposition|not itself a petition)/i;
+const isNonPetition = (reliefs, conf, note) =>
+  reliefs.length === 1 && reliefs[0] === 'other' && conf === 'low' && NOT_PET_NOTE.test(note || '');
+
+let uploaded = 0, bad = 0, nonPetitions = 0;
 const reliefTally = {}, partyTally = {}, confTally = {};
 for (const line of raw.split(/\r?\n/)) {
   if (!line.trim()) continue;
@@ -64,26 +74,37 @@ for (const line of raw.split(/\r?\n/)) {
   if (!RELIEFS.has(primary)) { if (primary) console.error(`  ${docId}: bad primary_relief "${primary}"`); primary = reliefs[0] || 'other'; }
   const party = PARTY.has(clean(o.petitioner)) ? clean(o.petitioner) : 'unclear';
   const conf = clean(o.confidence).toLowerCase() || null;
+  const note = clean(o.note).slice(0, 200) || null;
+  const finalReliefs = reliefs.length ? reliefs : [primary];
+  const nonPet = isNonPetition(finalReliefs, conf, note);
+  if (nonPet) nonPetitions++;
 
   await retry(docId, () => setPetitionRequestSubject(docId, m.application_number, {
-    reliefs: reliefs.length ? reliefs : [primary],
+    reliefs: finalReliefs,
     primary_relief: primary,
     rules: arr(o.rules).slice(0, 25),
     statutes: arr(o.statutes).slice(0, 25),
     petitioner: party,
     relief_verbatim: clean(o.relief_verbatim).slice(0, 300),
     confidence: conf,
-    note: clean(o.note).slice(0, 200) || null,
+    note,
+    is_petition: !nonPet,
   }));
   uploaded++;
-  for (const r of (reliefs.length ? reliefs : [primary])) reliefTally[r] = (reliefTally[r] || 0) + 1;
-  partyTally[party] = (partyTally[party] || 0) + 1;
-  confTally[conf || 'none'] = (confTally[conf || 'none'] || 0) + 1;
+  // Non-petitions are excluded from the relief distribution — counting exhibits
+  // as "other" relief would badly skew it.
+  if (!nonPet) {
+    for (const r of finalReliefs) reliefTally[r] = (reliefTally[r] || 0) + 1;
+    partyTally[party] = (partyTally[party] || 0) + 1;
+    confTally[conf || 'none'] = (confTally[conf || 'none'] || 0) + 1;
+  }
 }
 
 try { await rename(IN, IN.replace(/\.jsonl$/, `.${Date.now()}.done.jsonl`)); } catch { /* best-effort */ }
-console.log(`\nDone. ${uploaded} petition(s) uploaded; ${bad} rejected.`);
-console.log('\nrelief AS FILED (multi-label):');
+console.log(`\nDone. ${uploaded} document(s) uploaded; ${bad} rejected.`);
+console.log(`  of those, ${nonPetitions} are NOT petitions (exhibits / oppositions / Office papers) — flagged is_petition=false and excluded from the stats below.`);
+console.log(`  genuine petitions: ${uploaded - nonPetitions}`);
+console.log('\nrelief AS FILED (multi-label, genuine petitions only):');
 for (const [k, v] of Object.entries(reliefTally).sort((a, b) => b[1] - a[1])) console.log(`  ${String(v).padStart(4)}  ${k}`);
 console.log('\npetitioner:', JSON.stringify(partyTally), '| confidence:', JSON.stringify(confTally));
 

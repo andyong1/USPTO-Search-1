@@ -189,6 +189,7 @@ const docLinks = (num, docId) => {
 const dash = '<span class="ext" style="margin-left:0">—</span>';
 
 let _rows = [];   // one row per threaded petition
+let _excludedNonPetitions = 0;  // exhibits / oppositions filtered out server-side
 let page = 1;
 const PAGE_SIZE = 100;
 
@@ -491,7 +492,10 @@ function reliefCoverageHtml(vs) {
   const none = vs.length - office - filed;
   const diff = vs.filter((v) => v.divergent).length;
   const pct = vs.length ? Math.round((office + filed) / vs.length * 100) : 0;
-  return `<div class="note" style="margin-bottom:8px">Relief identified for <strong>${office + filed} of ${vs.length}</strong> petitions (${pct}%) — ${office} from the Office's decision, ${filed} read from the petition as filed${none ? `, ${none} not yet classified` : ''}.${diff ? ` In <strong>${diff}</strong>, the Office treated the substantive request as something other than how the petition was styled (marked ⇄ in the table).` : ''}</div>`;
+  const dropped = _excludedNonPetitions
+    ? ` <strong>${_excludedNonPetitions}</strong> document(s) filed under petition codes were exhibits, standalone oppositions, or Office papers rather than requests for relief, and are excluded.`
+    : '';
+  return `<div class="note" style="margin-bottom:8px">Relief identified for <strong>${office + filed} of ${vs.length}</strong> petitions (${pct}%) — ${office} from the Office's decision, ${filed} read from the petition as filed${none ? `, ${none} not yet classified` : ''}.${diff ? ` In <strong>${diff}</strong>, the Office treated the substantive request as something other than how the petition was styled (marked ⇄ in the table).` : ''}${dropped}</div>`;
 }
 
 // Relief leaderboard. Two counts per relief, because they answer different
@@ -567,6 +571,7 @@ function buildReliefFilter() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     _rows = data.trail || [];
+    _excludedNonPetitions = data.excludedNonPetitions || 0;
     const fr = document.getElementById('freshness');
     if (fr) {
       let maxRaw = null, maxMs = NaN;

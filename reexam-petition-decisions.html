@@ -462,6 +462,8 @@ function render() {
     return `<tr>
       <td><a class="link" href="/uspto-search?app=${encodeURIComponent(num)}">${esc(num)}</a>
         <a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(num)}" target="_blank" rel="noopener">Patent Center ↗</a></td>
+      <td>${v.owner ? esc(titleCaseName(v.owner)) : dash}</td>
+      <td>${v.requester ? esc(titleCaseName(v.requester)) : dash}</td>
       <td>${reliefCell(v)}</td>
       <td>${petCell}</td>
       <td>${oppCell}</td>
@@ -473,6 +475,8 @@ function render() {
   body.innerHTML = `<div class="table-wrap"><table>
     <thead><tr>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('app')}" onclick="sortTrail('app')">Control No.${arrow('app')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('owner')}" onclick="sortTrail('owner')">Patent Owner${arrow('owner')}</th>
+      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('requester')}" onclick="sortTrail('requester')">Requester${arrow('requester')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('primary')}" onclick="sortTrail('primary')">Relief Requested${arrow('primary')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('pet_date')}" onclick="sortTrail('pet_date')">Petition${arrow('pet_date')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('opp_date')}" onclick="sortTrail('opp_date')">Opposition${arrow('opp_date')}</th>

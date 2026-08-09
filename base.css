@@ -37,12 +37,16 @@
   --chart-grid: #e2e8f0; --chart-tick: #718096;
 }
 :root[data-themable][data-theme="dark"] {
-  --page-bg: #0f172a;
-  --surface: #172236;
-  --surface-2: #1c2942;
-  --surface-3: #22314c;
-  --border: #2a3a58;
-  --border-2: #33425f;
+  /* Neutral slate: structural surfaces (page/card/border) are desaturated
+     gray rather than navy-tinted, so blue reads as an accent instead of a
+     background tint. Borders are pushed brighter (was 1.4:1 against the
+     card, now 2.6:1) so card/table/input edges are actually visible. */
+  --page-bg: #14171c;
+  --surface: #1f2329;
+  --surface-2: #262b32;
+  --surface-3: #2f353d;
+  --border: #5b6370;
+  --border-2: #6b7382;
   --text: #e6edf5;
   --text-2: #c2d0e4;
   --text-3: #93a4bd;
@@ -52,11 +56,11 @@
   --link: #79b1f0;
   --brand: #2f6fed;
   --brand-hover: #4f8bf5;
-  --header-bg: #132542;
+  --header-bg: #191c22;
   --on-brand: #ffffff;
-  --nav-bg: #22314c;
-  --nav-hover: #2c3f60;
-  --input-bg: #0e1930;
+  --nav-bg: #2f353d;
+  --nav-hover: #3a4149;
+  --input-bg: #14171c;
   --shadow: rgba(0,0,0,0.5);
   --ok-bg: #14432a; --ok-fg: #86efac;
   --bad-bg: #4a1d1d; --bad-fg: #fca5a5;
@@ -64,22 +68,22 @@
   --info-bg: #12395e; --info-fg: #bcdcff;
   --accent2-bg: #33265c; --accent2-fg: #c8b6f0;
   --chart-1: #4f9dff; --chart-2: #7dd3fc; --chart-3: #34d399; --chart-4: #fbbf77;
-  --chart-grid: #2a3a58; --chart-tick: #93a4bd;
+  --chart-grid: #5b6370; --chart-tick: #93a4bd;
 }
 /* Auto dark when the OS prefers it and the user hasn't forced light. */
 @media (prefers-color-scheme: dark) {
   :root[data-themable]:not([data-theme="light"]) {
-    --page-bg: #0f172a; --surface: #172236; --surface-2: #1c2942; --surface-3: #22314c;
-    --border: #2a3a58; --border-2: #33425f;
+    --page-bg: #14171c; --surface: #1f2329; --surface-2: #262b32; --surface-3: #2f353d;
+    --border: #5b6370; --border-2: #6b7382;
     --text: #e6edf5; --text-2: #c2d0e4; --text-3: #93a4bd; --text-4: #7186a3; --text-5: #8aa0c0;
     --heading: #79b1f0; --link: #79b1f0; --brand: #2f6fed; --brand-hover: #4f8bf5;
-    --header-bg: #132542; --on-brand: #ffffff; --nav-bg: #22314c; --nav-hover: #2c3f60;
-    --input-bg: #0e1930; --shadow: rgba(0,0,0,0.5);
+    --header-bg: #191c22; --on-brand: #ffffff; --nav-bg: #2f353d; --nav-hover: #3a4149;
+    --input-bg: #14171c; --shadow: rgba(0,0,0,0.5);
     --ok-bg: #14432a; --ok-fg: #86efac; --bad-bg: #4a1d1d; --bad-fg: #fca5a5;
     --warn-bg: #4a3410; --warn-fg: #fcd383; --info-bg: #12395e; --info-fg: #bcdcff;
     --accent2-bg: #33265c; --accent2-fg: #c8b6f0;
     --chart-1: #4f9dff; --chart-2: #7dd3fc; --chart-3: #34d399; --chart-4: #fbbf77;
-    --chart-grid: #2a3a58; --chart-tick: #93a4bd;
+    --chart-grid: #5b6370; --chart-tick: #93a4bd;
   }
 }
 

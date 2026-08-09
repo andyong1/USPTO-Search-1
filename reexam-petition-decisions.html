@@ -522,24 +522,32 @@ function buildStats() {
   const vs = _rows.map(view);
   const total = vs.length;
   const withOpp = vs.filter((v) => v.opp_date).length;
-  const granted = vs.filter((v) => v.outcome === 'granted').length;
-  const partial = vs.filter((v) => v.outcome === 'granted_in_part').length;
-  const dismissed = vs.filter((v) => v.outcome === 'dismissed' || v.outcome === 'denied').length;
-  const pending = vs.filter((v) => v.outcome === 'pending').length;
-  const decidedForRate = granted + partial + dismissed;
-  const grantRate = decidedForRate > 0 ? Math.round((granted + partial) / decidedForRate * 100) + '%' : '—';
-  const waiverOnly = vs.filter((v) => v.ancillary === 'granted' && (v.outcome === 'dismissed' || v.outcome === 'denied')).length;
-  const deferred = vs.filter((v) => v.outcome === 'undecided').length;
   // Petitions granted leave to file a § 325(d) paper, and how the CRU then ruled
   // in the determination — the real answer to what those petitioners wanted.
+  // These are RESOLVED petitions but NOT grants of the relief sought: what was
+  // granted was leave to file, so counting them as grants would overstate the
+  // rate several-fold (46% vs 24% site-wide). They are their own category.
   const referred = vs.filter((v) => v.referredToCru);
   const refDecided = referred.filter((v) => v.detType);
   const refPoWon = refDecided.filter((v) => !orderedish(v.detType)).length;
+  const granted = vs.filter((v) => v.outcome === 'granted' && !v.referredToCru).length;
+  const partial = vs.filter((v) => v.outcome === 'granted_in_part' && !v.referredToCru).length;
+  const dismissed = vs.filter((v) => v.outcome === 'dismissed' || v.outcome === 'denied').length;
+  const pending = vs.filter((v) => v.outcome === 'pending').length;
+  // Leave-only grants stay in the denominator — the Office did resolve them —
+  // but out of the numerator, since the relief sought was not granted.
+  const decidedForRate = granted + partial + referred.length + dismissed;
+  const grantRate = decidedForRate > 0 ? Math.round((granted + partial) / decidedForRate * 100) + '%' : '—';
+  const waiverOnly = vs.filter((v) => v.ancillary === 'granted' && (v.outcome === 'dismissed' || v.outcome === 'denied')).length;
+  const deferred = vs.filter((v) => v.outcome === 'undecided').length;
+  // What the petitioner ultimately got: the relief granted outright, plus the
+  // referred cases where the CRU then declined to order reexamination.
+  const prevailed = granted + partial + refPoWon;
   const toDec = vs.map((v) => v.days).filter((d) => d != null);
   el.innerHTML = `
     <div class="kpi-strip">
       <div class="kpi"><div class="num">${total}</div><div class="lbl">Petitions Collected</div></div>
-      <div class="kpi"><div class="num">${granted}</div><div class="lbl">Granted on the Merits</div></div>
+      <div class="kpi"><div class="num">${granted}</div><div class="lbl">Relief Sought Granted</div><div class="note" style="margin-top:2px">excludes leave-to-file grants</div></div>
       <div class="kpi"><div class="num">${partial}</div><div class="lbl">Granted in Part</div></div>
       <div class="kpi"><div class="num">${dismissed}</div><div class="lbl">Dismissed / Denied</div></div>
       <div class="kpi"><div class="num">${grantRate}</div><div class="lbl">Grant Rate on the Merits</div>${decidedForRate ? `<div class="note" style="margin-top:2px">${granted + partial} of ${decidedForRate} decided</div>` : ''}</div>
@@ -552,7 +560,8 @@ function buildStats() {
       <div class="kpi"><div class="num">${waiverOnly}</div><div class="lbl">Waiver Granted, Merits Denied</div></div>
     </div>
     <div class="note" style="margin-top:10px">The grant rate counts petitions whose relief was actually decided; the ${pending} with no decision on file${deferred ? ` and ${deferred} genuinely deferred` : ''} are excluded. ${withOpp} have an opposition on file.
-      ${refDecided.length ? `Of the ${referred.length} petitions granted leave to file a § 325(d) paper, the CRU has since ruled in ${refDecided.length}: reexamination was <strong>ordered anyway in ${refDecided.length - refPoWon}</strong> and <strong>not ordered in ${refPoWon}</strong> — so the patent owner ultimately prevailed on § 325(d) in ${Math.round(refPoWon / refDecided.length * 100)}% of them, even though the petition itself was granted.` : ''}</div>
+      ${referred.length ? `The <strong>${referred.length}</strong> petitions granted leave to file a § 325(d) paper count as decided but <strong>not</strong> as grants: what the Office granted was leave to file, not the relief sought.` : ''}
+      ${refDecided.length ? `The CRU has since ruled in ${refDecided.length} of them — reexamination was <strong>ordered anyway in ${refDecided.length - refPoWon}</strong> and <strong>not ordered in ${refPoWon}</strong>. Counting those ${refPoWon} alongside the ${granted + partial} outright grants, petitioners ultimately got the relief they wanted in <strong>${prevailed} of ${decidedForRate}</strong> decided petitions (${Math.round(prevailed / decidedForRate * 100)}%).` : ''}</div>
     <div class="stats-title">Most-Requested Relief</div>
     ${reliefCoverageHtml(vs)}
     ${reliefTableHtml(vs)}`;
@@ -580,18 +589,27 @@ function reliefCoverageHtml(vs) {
 // vehicle would be wrong (a 1.183 waiver appears 160 times but is the real ask
 // ~4 times; its own disposition lives in ancillary_waiver, reported below).
 function reliefTableHtml(vs) {
+  const blank = () => ({ requested: 0, primary: 0, granted: 0, elsewhere: 0, refused: 0, decided: 0, cruRuled: 0, cruStopped: 0 });
   const t = {};
   for (const v of vs) {
-    for (const r of v.reliefs) {
-      t[r] = t[r] || { requested: 0, primary: 0, granted: 0, decided: 0 };
-      t[r].requested++;
-    }
+    for (const r of v.reliefs) { t[r] = t[r] || blank(); t[r].requested++; }
     const p = v.primary;
     if (!p) continue;
-    t[p] = t[p] || { requested: 0, primary: 0, granted: 0, decided: 0 };
+    t[p] = t[p] || blank();
     t[p].primary++;
-    if (v.outcome === 'granted' || v.outcome === 'granted_in_part') { t[p].granted++; t[p].decided++; }
-    else if (v.outcome === 'dismissed' || v.outcome === 'denied') t[p].decided++;
+    const isGrant = v.outcome === 'granted' || v.outcome === 'granted_in_part';
+    if (isGrant) {
+      t[p].decided++;
+      // A grant only counts FOR this relief if this relief is what was granted.
+      // Where the § 325(d) question was referred to the CRU, what the Office
+      // granted was leave to file — the substantive ask (e.g. terminate the
+      // proceeding) was never granted, so crediting it here would badly
+      // overstate the rate. granted_relief records what actually was granted.
+      if (v.referredToCru || (v.grantedRelief && v.grantedRelief !== p)) {
+        t[p].elsewhere++;
+        if (v.referredToCru && v.detType) { t[p].cruRuled++; if (!orderedish(v.detType)) t[p].cruStopped++; }
+      } else t[p].granted++;
+    } else if (v.outcome === 'dismissed' || v.outcome === 'denied') { t[p].refused++; t[p].decided++; }
   }
   const rows = Object.entries(t).sort((a, b) => b[1].requested - a[1].requested);
   if (!rows.length) return '<div class="note">Relief types appear once the classification pass has run.</div>';
@@ -602,13 +620,21 @@ function reliefTableHtml(vs) {
   const waiverNote = wDecided
     ? `<div class="note" style="margin-top:8px">Separately, the procedural rule-waiver leg was itself granted in <strong>${wGranted} of ${wDecided}</strong> petitions that included one (${Math.round(wGranted / wDecided * 100)}%). Procedural vehicles are usually granted; the substantive request usually is not — which is why the two are kept apart.</div>`
     : '';
+  // Where a relief was never actually granted but the petition was resolved by a
+  // referral, the grant rate alone reads as a total loss — so report how the CRU
+  // then came out, which is the real answer to whether the petitioner prevailed.
+  const ref = rows.filter(([, x]) => x.cruRuled);
+  const refNote = ref.length
+    ? `<div class="note" style="margin-top:8px">${ref.map(([r, x]) => `<strong>${esc(reliefLabel(r))}</strong>: the ${x.elsewhere} petitions resolved by a grant of leave to file a § 325(d) paper did <strong>not</strong> obtain that relief — the CRU has ruled in ${x.cruRuled} of them, declining to order reexamination in ${x.cruStopped}. Including those, petitioners ultimately obtained this relief in <strong>${x.granted + x.cruStopped} of ${x.decided}</strong> decided petitions (${Math.round((x.granted + x.cruStopped) / x.decided * 100)}%).`).join(' ')}</div>`
+    : '';
 
   return `<div class="table-wrap" style="max-height:none"><table>
     <thead><tr>
       <th>Relief Requested</th>
       <th title="Petitions that asked for this at all (a petition can ask for several)">Times Requested</th>
       <th title="Petitions where this was the substantive ask rather than a procedural vehicle">As the Substantive Ask</th>
-      <th>Granted (incl. in part)</th>
+      <th title="Petitions where THIS relief is what the Office actually granted">Granted (incl. in part)</th>
+      <th title="Resolved by granting a different relief — almost always leave to file a § 325(d) paper, with the § 325(d) question referred to the CRU. The relief sought was not granted.">Granted Other Relief</th>
       <th title="Computed only over petitions where this was the substantive ask and it was actually decided">Grant Rate on Merits</th>
     </tr></thead>
     <tbody>${rows.map(([r, x]) => `<tr>
@@ -616,9 +642,10 @@ function reliefTableHtml(vs) {
       <td>${x.requested}</td>
       <td>${x.primary || '<span class="note">vehicle only</span>'}</td>
       <td>${x.primary ? x.granted : '<span class="ext" style="margin-left:0">—</span>'}</td>
+      <td>${x.elsewhere ? `${x.elsewhere}<span class="note"> leave to file</span>` : (x.primary ? '<span class="ext" style="margin-left:0">—</span>' : '<span class="ext" style="margin-left:0">—</span>')}</td>
       <td>${x.decided ? Math.round(x.granted / x.decided * 100) + '%' + `<span class="note"> (${x.granted} of ${x.decided} decided)</span>`
         : (x.primary ? '<span class="note">none decided yet</span>' : '<span class="note">n/a</span>')}</td>
-    </tr>`).join('')}</tbody></table>${waiverNote}</div>`;
+    </tr>`).join('')}</tbody></table>${refNote}${waiverNote}</div>`;
 }
 function setRelief(r) {
   const sel = document.getElementById('relief-filter');

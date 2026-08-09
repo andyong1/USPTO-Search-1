@@ -28,7 +28,7 @@
     .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
     .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
     .explainer p { margin: 0; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
     .kpi-strip.four { grid-template-columns: repeat(4, 1fr); }
     @media (max-width: 700px) { .kpi-strip, .kpi-strip.four { grid-template-columns: repeat(2, 1fr); } }
     .stats-title { font-size: 0.85rem; font-weight: 600; color: var(--text-2); margin: 20px 0 8px; }
@@ -519,6 +519,7 @@ function buildStats() {
   const el = document.getElementById('stat');
   const vs = _rows.map(view);
   const total = vs.length;
+  const decisionsIssued = vs.filter((v) => v.outcome !== 'pending').length;
   const withOpp = vs.filter((v) => v.opp_date).length;
   // Petitions granted leave to file a § 325(d) paper, and how the CRU then ruled
   // in the determination — the real answer to what those petitioners wanted.
@@ -545,6 +546,7 @@ function buildStats() {
   el.innerHTML = `
     <div class="kpi-strip">
       <div class="kpi"><div class="num">${total}</div><div class="lbl">Petitions Collected</div></div>
+      <div class="kpi"><div class="num">${decisionsIssued}</div><div class="lbl">Decisions Issued</div></div>
       <div class="kpi"><div class="num">${granted}</div><div class="lbl">Relief Sought Granted</div><div class="note" style="margin-top:2px">excludes leave-to-file grants</div></div>
       <div class="kpi"><div class="num">${partial}</div><div class="lbl">Granted in Part</div></div>
       <div class="kpi"><div class="num">${dismissed}</div><div class="lbl">Dismissed / Denied</div></div>

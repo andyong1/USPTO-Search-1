@@ -468,7 +468,6 @@ function render() {
       <td>${petCell}</td>
       <td>${oppCell}</td>
       <td>${decCell}</td>
-      <td>${v.days == null ? dash : v.days}</td>
     </tr>`;
   }).join('');
 
@@ -481,7 +480,6 @@ function render() {
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('pet_date')}" onclick="sortTrail('pet_date')">Petition${arrow('pet_date')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('opp_date')}" onclick="sortTrail('opp_date')">Opposition${arrow('opp_date')}</th>
       <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('dec_date')}" onclick="sortTrail('dec_date')">Decision${arrow('dec_date')}</th>
-      <th class="sortable" tabindex="0" role="button" aria-sort="${ariaSort('days')}" onclick="sortTrail('days')">Days to Decision${arrow('days')}</th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 

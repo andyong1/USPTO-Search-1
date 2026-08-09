@@ -52,8 +52,8 @@
   --text-3: #93a4bd;
   --text-4: #7186a3;
   --text-5: #8aa0c0;
-  --heading: #79b1f0;
-  --link: #79b1f0;
+  --heading: #6fa3e0;
+  --link: #6fa3e0;
   --brand: #2f6fed;
   --brand-hover: #4f8bf5;
   --header-bg: #191c22;
@@ -76,7 +76,7 @@
     --page-bg: #14171c; --surface: #1f2329; --surface-2: #262b32; --surface-3: #2f353d;
     --border: #5b6370; --border-2: #6b7382;
     --text: #e6edf5; --text-2: #c2d0e4; --text-3: #93a4bd; --text-4: #7186a3; --text-5: #8aa0c0;
-    --heading: #79b1f0; --link: #79b1f0; --brand: #2f6fed; --brand-hover: #4f8bf5;
+    --heading: #6fa3e0; --link: #6fa3e0; --brand: #2f6fed; --brand-hover: #4f8bf5;
     --header-bg: #191c22; --on-brand: #ffffff; --nav-bg: #2f353d; --nav-hover: #3a4149;
     --input-bg: #14171c; --shadow: rgba(0,0,0,0.5);
     --ok-bg: #14432a; --ok-fg: #86efac; --bad-bg: #4a1d1d; --bad-fg: #fca5a5;

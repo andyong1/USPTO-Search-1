@@ -10,7 +10,7 @@
 
 import { sql } from '@vercel/postgres';
 import { fetchDocuments } from './lib/uspto.js';
-import { recordPetitionDocs } from './lib/db.js';
+import { recordPetitionDocs, recordUnclassifiedPetitionCode } from './lib/db.js';
 import { classifyPetitionDoc } from './lib/petitions.js';
 
 if (!process.env.POSTGRES_URL || !process.env.USPTO_API_KEY) {
@@ -65,22 +65,37 @@ const { rows } = GAP
       ORDER BY application_number LIMIT ${LIMIT} OFFSET ${OFFSET}`;
 console.log(`Sweeping ${rows.length} proceeding(s) — ${GAP ? 'GAP set (not covered by either ongoing harvest)' : 'all known controls (watch ∪ determinations)'}, offset ${OFFSET}…`);
 
-let swept = 0, withPets = 0, docsTotal = 0, failed = 0;
+// Same unrecognized-code capture the cron's harvest does — kept in sync with
+// api/cron/reexam-scan.js. This sweep walks EVERY wrapper, so it is by far the
+// best source of candidate codes; skipping it here would leave the audit
+// dependent on the cron slowly rotating through the same ground.
+const PETITIONISH = /PET|RQ|REQ|WAIV|EXT|SUSP|RECON|REV/;
+const PETITIONISH_DESC = /petition|request|extension|waiv|suspend|reconsider|review/i;
+
+let swept = 0, withPets = 0, docsTotal = 0, failed = 0, flagged = 0;
 for (const r of rows) {
   const app = r.application_number;
   try {
     const docs = await fetchDocuments(app);
     const petDocs = [];
+    const unknown = new Map();
     for (const d of docs) {
-      const pet = classifyPetitionDoc((d.documentCode || '').toUpperCase(), d.description);
-      if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: (d.documentCode || '').toUpperCase(), kind: pet.kind, outcome: pet.outcome });
+      const code = (d.documentCode || '').toUpperCase();
+      const pet = classifyPetitionDoc(code, d.description);
+      if (pet) { petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome }); continue; }
+      if (code && !unknown.has(code) && (PETITIONISH.test(code) || PETITIONISH_DESC.test(d.description || ''))) {
+        unknown.set(code, { description: d.description || '', docId: d.documentIdentifier });
+      }
     }
     if (petDocs.length) { await recordPetitionDocs(app, petDocs); withPets++; docsTotal += petDocs.length; }
+    for (const [code, u] of unknown) {
+      try { await recordUnclassifiedPetitionCode(code, u.description, app, u.docId); flagged++; } catch { /* advisory */ }
+    }
     swept++;
     if (swept % 50 === 0) console.log(`  …${swept}/${rows.length} swept (${docsTotal} petition docs so far)`);
   } catch (e) { failed++; console.log(`${app}: ${e.message.slice(0, 100)}`); }
 }
-console.log(`\nDone. Swept ${swept}, failed ${failed}. ${docsTotal} petition doc(s) across ${withPets} proceeding(s).`);
+console.log(`\nDone. Swept ${swept}, failed ${failed}. ${docsTotal} petition doc(s) across ${withPets} proceeding(s). ${flagged} unrecognized-code sighting(s) logged.`);
 const { rows: t } = await sql`SELECT kind, count(*)::int n FROM reexam_petition_docs GROUP BY kind ORDER BY kind`;
 console.log('table now:', t.map((x) => `${x.kind}=${x.n}`).join(' '));
 try { await sql.end(); } catch { /* */ }

@@ -856,3 +856,47 @@ test('threadPetitions — an extension ruling never closes a substantive petitio
   assert.equal(t3.length, 1);
   assert.equal(t3[0].decision.outcome, 'denied');
 });
+
+test('firms — extracts both cover-sheet blocks by label, never by position', async () => {
+  const { extractFirmBlocks, normalizeFirm, classifyFiler, isCoverLabel } = await import('../lib/firms.js');
+  // Real PTOL-90A shape (90016155): 7590 introduces the OWNER block; the requester
+  // block is separately labelled. Swapping these would invert every statistic.
+  const text = [
+    'CONFIRMATION NO.', '2986', '7590',
+    'GOODWIN PROCTER LLP / PTAB', '100 NORTHERN AVENUE', 'BOSTON, MA 02210',
+    'EXAMINER', 'PEIKARI, BEHZAD',
+    "(THIRD PARTY REQUESTERS CORRESPONDENCE ADDRESS)",
+    'KLARQUIST SPARKMAN, LLP (IPR/Reexam)', '121 SW SALMON STREET',
+  ].join('\n');
+  const b = extractFirmBlocks(text);
+  assert.equal(b.ownerRaw, 'GOODWIN PROCTER LLP / PTAB');
+  assert.equal(b.requesterRaw, 'KLARQUIST SPARKMAN, LLP (IPR/Reexam)');
+
+  // OCR interleaves the cover sheet's two columns (real case 90015335): the line
+  // after 7590 is a right-column label, so there is NO owner firm to record —
+  // accepting it would invent a firm called "EXAMINER".
+  const bad = extractFirmBlocks(['7590', 'EXAMINER', 'ROSWELL, MICHAEL'].join('\n'));
+  assert.equal(bad.ownerRaw, null);
+  assert.ok(isCoverLabel('ART UNIT'));
+
+  // Normalization collapses the routing suffix, the OCR "/"->"1" variant, the
+  // entity suffix and punctuation onto one key.
+  const a = normalizeFirm('GOODWIN PROCTER LLP / PTAB');
+  const c = normalizeFirm('GOODWIN PROCTER LLP 1 PTAB');
+  const d = normalizeFirm('Goodwin Procter LLP');
+  assert.equal(a.key, 'GOODWIN PROCTER');
+  assert.equal(c.key, a.key);
+  assert.equal(d.key, a.key);
+  assert.equal(a.display, 'GOODWIN PROCTER LLP');           // suffix stripped for display
+  // Entity suffix is stripped from the KEY so P.C./LLP forms of one firm merge.
+  assert.equal(normalizeFirm('Fish & Richardson P.C. (TC)').key, 'FISH & RICHARDSON');
+  assert.equal(normalizeFirm('Fish & Richardson LLP').key, 'FISH & RICHARDSON');
+  assert.equal(normalizeFirm('Haynes and Boone, LLP').key, 'HAYNES & BOONE');
+
+  // Firm vs party vs individual — heuristic, used only for grouping.
+  assert.equal(classifyFiler('WOLF GREENFIELD & SACKS, P.C.'), 'firm');
+  assert.equal(classifyFiler('PLUMSEA LAW GROUP, LLC'), 'firm');
+  assert.equal(classifyFiler('Unified Patents, LLC'), 'other');
+  assert.equal(classifyFiler('KA Filing LLC'), 'other');
+  assert.equal(classifyFiler('Sang Young Han'), 'individual');
+});

@@ -769,6 +769,7 @@ test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
   assert.deepEqual(classifyPetitionDoc('PET.OP', ''), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('SE.PET', ''), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXRPET', 'Petition for Review of Reexam Denial'), { kind: 'petition' });
+  assert.deepEqual(classifyPetitionDoc('RXRQ/T', 'Reexam Request for Extension of Time'), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXOPPPET', 'Reexam - Opposition filed in response to petition'), { kind: 'opposition' });
   assert.deepEqual(classifyPetitionDoc('RXPTGR', ''), { kind: 'decision', outcome: 'granted' });
   assert.deepEqual(classifyPetitionDoc('RXPTDI', ''), { kind: 'decision', outcome: 'dismissed' });

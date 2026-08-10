@@ -173,30 +173,38 @@ async function harvestPetitionDocs(appNum, docs) {
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we
 // can flag concluded proceedings. Capped per run; rolling (re-checks weekly).
+// This is also the only harvest path for post-order petitions on the broader
+// (any-relief, any-party) petition-trail page for proceedings that ARE ordered
+// -- so its throughput has to keep pace with the ~1,000-proceeding
+// ordered-not-concluded pool at a ~2-day cadence, or that broader page silently
+// lags behind the narrower patent-owner-petition page. Batched concurrently
+// (I/O-bound fetches) so raising maxApps buys real throughput, not just a
+// longer queue of unprocessed rows within the same time slice.
 async function detectConclusionsStep(maxApps, deadline) {
   const rows = await getDeterminationsToCheckConclusion(maxApps);
   let found = 0;
   const errors = [];
-  for (const r of rows) {
-    if (Date.now() > deadline) break;
-    const app = r.application_number;
-    try {
-      const docs = await fetchDocuments(app);
-      let nirc = null; const certs = [];
-      for (const d of docs) {
-        const code = (d.documentCode || '').toUpperCase();
-        if (code === 'RXNIRC' && !nirc) nirc = d;
-        if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
-      }
-      await recordConclusionDocs(app, {
-        nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
-        certCandidates: certs,
-      });
-      // Petition-trail harvest: same feed, zero extra API calls. Stops with the
-      // cert checks once the proceeding concludes — which is the desired scope.
-      await harvestPetitionDocs(app, docs);
-      if (nirc || certs.length) found++;
-    } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
+  for (let i = 0; i < rows.length && Date.now() < deadline; i += 5) {
+    await Promise.all(rows.slice(i, i + 5).map(async (r) => {
+      const app = r.application_number;
+      try {
+        const docs = await fetchDocuments(app);
+        let nirc = null; const certs = [];
+        for (const d of docs) {
+          const code = (d.documentCode || '').toUpperCase();
+          if (code === 'RXNIRC' && !nirc) nirc = d;
+          if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
+        }
+        await recordConclusionDocs(app, {
+          nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
+          certCandidates: certs,
+        });
+        // Petition-trail harvest: same feed, zero extra API calls. Stops with the
+        // cert checks once the proceeding concludes — which is the desired scope.
+        await harvestPetitionDocs(app, docs);
+        if (nirc || certs.length) found++;
+      } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
+    }));
   }
   return { checked: rows.length, concluded: found, errors };
 }
@@ -451,10 +459,14 @@ export default async function handler(req, res) {
     // can flag concluded proceedings. Rolling and capped per run. We no longer
     // parse the claim outcome from the PDF text (most certificates are scanned
     // images without extractable text); the column just shows "Concluded" + the
-    // certificate document.
+    // certificate document. maxApps=25 (batched 5-concurrent) so this keeps pace
+    // with the ~1,000-proceeding ordered-not-concluded pool -- at the previous
+    // cap of 5/run sequential, the pool was chronically 2-7+ days stale, which
+    // in turn delayed post-order petitions from appearing on the broader
+    // petition-trail page relative to the narrower patent-owner-petition page.
     let conclusions = { skipped: true };
     try {
-      const detect = await detectConclusionsStep(5, Math.min(Date.now() + 8000, runDeadline));
+      const detect = await detectConclusionsStep(25, Math.min(Date.now() + 8000, runDeadline));
       conclusions = { detect };
     } catch (e) { conclusions = { error: String(e.message || e) }; }
 

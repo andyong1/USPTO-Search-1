@@ -23,6 +23,7 @@ import {
   listReexamSubscribers, getSubDigestDate, setSubDigestDate,
   getDocEventsByOfficialDate, getD325SummariesByDocIds,
   getDeterminationsToCheckConclusion, recordConclusionDocs, recordPetitionDocs,
+  recordUnclassifiedPetitionCode,
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
   upsertPtabInstitution, upsertPtabDd, upsertPtabFwdMeta, getPtabKv, setPtabKv,
@@ -158,17 +159,33 @@ async function maybeSendSubscriberDigest(req) {
   return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors };
 }
 
+// Anything the classifier rejects but that reads as a petition/request paper is
+// a candidate for classifyPetitionDoc. Deliberately broader than /petition/ —
+// RXRQ/T's description ("Reexam Request for Extension of Time") contains no such
+// word, which is exactly how it stayed invisible; this pattern is validated
+// against both codes that got missed (RXRPET matches on PET, RXRQ/T on RQ).
+const PETITIONISH = /PET|RQ|REQ|WAIV|EXT|SUSP|RECON|REV/;
+const PETITIONISH_DESC = /petition|request|extension|waiv|suspend|reconsider|review/i;
+
 // Classify + record every petition-trail doc in an already-fetched documents
 // feed. Shared by every harvest step below so there's one place that turns a
 // documents feed into petition-trail rows.
 async function harvestPetitionDocs(appNum, docs) {
   const petDocs = [];
+  const unknown = new Map(); // dedupe within this wrapper: one row per code
   for (const d of docs) {
     const code = (d.documentCode || '').toUpperCase();
     const pet = classifyPetitionDoc(code, d.description);
-    if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
+    if (pet) { petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome }); continue; }
+    if (code && !unknown.has(code) && (PETITIONISH.test(code) || PETITIONISH_DESC.test(d.description || ''))) {
+      unknown.set(code, { description: d.description || '', docId: d.documentIdentifier });
+    }
   }
   if (petDocs.length) await recordPetitionDocs(appNum, petDocs);
+  // Audit trail only — never let it fail the harvest it rides along with.
+  for (const [code, u] of unknown) {
+    try { await recordUnclassifiedPetitionCode(code, u.description, appNum, u.docId); } catch { /* advisory */ }
+  }
 }
 
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we

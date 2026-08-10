@@ -159,6 +159,41 @@ async function load(pw) {
   return status;
 }
 
+// Coverage audits — unlike the backlog cards above, a non-zero count here is not
+// "waiting for the next run", it needs a person. Two checks, both born from real
+// misses: document codes the petition classifier doesn't recognize (RXRPET and
+// RXRQ/T each hid for months), and post-order petitions absent from the broader
+// petition-trail table that is supposed to be their superset.
+function coverageAuditHtml(s) {
+  const codes = s._unclassifiedCodes || [];
+  const gaps = s._supersetGaps || [];
+  const codeRows = codes.map((c) => `<tr>
+      <td><code>${escHtml(c.doc_code)}</code></td>
+      <td>${escHtml(c.description || '—')}</td>
+      <td>${c.seen_count}</td>
+      <td>${c.sample_app ? `<a href="/uspto-search?app=${encodeURIComponent(c.sample_app)}">${escHtml(c.sample_app)}</a>` : '—'}</td>
+    </tr>`).join('');
+  const gapRows = gaps.map((g) => `<tr>
+      <td><a href="/uspto-search?app=${encodeURIComponent(g.application_number)}">${escHtml(g.application_number)}</a></td>
+      <td>${escHtml(String(g.petition_date || '').slice(0, 10))}</td>
+      <td>${g.has_any_petition ? 'other petition doc present' : '<strong>no petition doc at all</strong>'}</td>
+    </tr>`).join('');
+  return `<div class="card">
+    <h2>Coverage audits</h2>
+    <div class="sub" style="margin:4px 0 12px">Zero on both is the healthy state. These need a person, not a scheduled run.</div>
+    <div class="kpi-strip">
+      ${dueCard(s.unclassified_codes, 'Unrecognized petition-ish codes')}
+      ${dueCard(s.petition_superset_gaps, 'Post-order petitions not in trail')}
+    </div>
+    ${codes.length ? `<h3 style="font-size:0.95rem;margin:18px 0 6px">Document codes the petition classifier doesn't recognize</h3>
+      <div class="sub" style="margin:0 0 8px">Seen in wrappers we already fetch. If one is a real petition paper, add it to <code>classifyPetitionDoc</code> and re-sweep.</div>
+      <table><thead><tr><th>Code</th><th>USPTO description</th><th>Times seen</th><th>Sample proceeding</th></tr></thead><tbody>${codeRows}</tbody></table>` : ''}
+    ${gaps.length ? `<h3 style="font-size:0.95rem;margin:18px 0 6px">Post-order petitions missing from the petition-trail table</h3>
+      <div class="sub" style="margin:0 0 8px">Either a classifier gap or a cached document id that no longer resolves in USPTO's live feed.</div>
+      <table><thead><tr><th>Control no.</th><th>Petition date</th><th>Status in trail table</th></tr></thead><tbody>${gapRows}</tbody></table>` : ''}
+  </div>`;
+}
+
 function dueCard(n, label) {
   const v = n == null ? '—' : n;
   const cls = n === 0 ? 'zero' : (n > 0 ? 'busy' : '');
@@ -282,6 +317,7 @@ function render(s) {
         ${dueCard(s.engine2_pending, 'Engine-2 OCR pending')}
       </div>
     </div>
+    ${coverageAuditHtml(s)}
     <div class="card">
       <h2>Last activity &amp; emails</h2>
       <table>

@@ -770,6 +770,10 @@ test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
   assert.deepEqual(classifyPetitionDoc('SE.PET', ''), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXRPET', 'Petition for Review of Reexam Denial'), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXRQ/T', 'Reexam Request for Extension of Time'), { kind: 'petition' });
+  // The RXRQ/T request and its RXEXTG/RXEXTD ruling are a pair — without the
+  // ruling, every extension petition would read as permanently pending.
+  assert.deepEqual(classifyPetitionDoc('RXEXTG', 'Reexam Extension of Time Period for Response Granted'), { kind: 'decision', outcome: 'granted' });
+  assert.deepEqual(classifyPetitionDoc('RXEXTD', 'Extension of Time Period for Response Denied'), { kind: 'decision', outcome: 'denied' });
   assert.deepEqual(classifyPetitionDoc('RXOPPPET', 'Reexam - Opposition filed in response to petition'), { kind: 'opposition' });
   assert.deepEqual(classifyPetitionDoc('RXPTGR', ''), { kind: 'decision', outcome: 'granted' });
   assert.deepEqual(classifyPetitionDoc('RXPTDI', ''), { kind: 'decision', outcome: 'dismissed' });

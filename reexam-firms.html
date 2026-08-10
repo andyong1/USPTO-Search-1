@@ -126,6 +126,7 @@
 
 <script>
 let ROWS = [];
+let CORRECTIONS = new Map();
 let SIDE = 'requester';
 let SORT = { key: 'total', dir: -1 };
 const OPEN = new Set();
@@ -187,7 +188,10 @@ function aggregate(side, ftype) {
   for (const f of firms) {
     let best = null, bestN = -1;
     for (const [s, n] of f.spellings) if (n > bestN || (n === bestN && s.length < best.length)) { best = s; bestN = n; }
-    f.display = best || f.key;
+    // A curated correction outranks the majority spelling — it exists precisely
+    // for the firms whose name the corpus reads wrong more often than right.
+    f.display = CORRECTIONS.get(f.key) || best || f.key;
+    f.corrected = CORRECTIONS.has(f.key);
     // Filer type is decided ONCE for the whole firm, by majority of its rows.
     // Classifying row-by-row would let the type filter split a single firm's
     // record — a truncated variant that reads as "other" would silently drop
@@ -287,7 +291,7 @@ function render() {
   const body = firms.map((f) => {
     const open = OPEN.has(f.key);
     const row = `<tr class="firm-row" onclick="toggleFirm('${esc(f.key).replace(/'/g, "\\'")}')">
-      <td><span class="caret">${open ? '&#9660;' : '&#9654;'}</span> <span class="firm-name">${esc(f.display || f.key)}</span>${f.type && f.type !== 'firm' ? `<span class="tag">${esc(f.type)}</span>` : ''}</td>
+      <td><span class="caret">${open ? '&#9660;' : '&#9654;'}</span> <span class="firm-name">${esc(f.display || f.key)}</span>${f.type && f.type !== 'firm' ? `<span class="tag">${esc(f.type)}</span>` : ''}${f.corrected ? '<span class="tag" title="The cover sheets misread this firm&#39;s name; the name shown is corrected. Expand the row to see each document as read.">name corrected</span>' : ''}</td>
       <td class="num">${f.total}</td>
       <td class="num">${f.ordered}</td>
       <td class="num">${f.denied}</td>
@@ -314,6 +318,7 @@ async function load() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     ROWS = data.firms || [];
+    CORRECTIONS = new Map(data.corrections || []);
     if (!ROWS.length) { document.getElementById('body').innerHTML = '<div class="state">No attributed proceedings yet.</div>'; return; }
 
     const ownerN = ROWS.filter((r) => r.owner_firm_key).length;

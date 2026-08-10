@@ -927,6 +927,17 @@ test('firms — strips office / client qualifiers so one firm is not a row per o
   assert.equal(k('Volpe Koenig - AMI)'), 'VOLPE KOENIG');
   // A mid-name bracket is part of the name, not a trailing qualifier.
   assert.equal(k('Smith (Jones) Law LLP'), 'SMITH JONES LAW');
+  // Everything past "d/b/a" is a trade name for the same entity. Written five
+  // ways in the corpus, it alone split Flener IP Law across five keys.
+  assert.equal(k('FLENER IP Law d.b.a. Fiener IP & Business Law'), 'FLENER IP LAW');
+  assert.equal(k('FLENER IP LAW DBA FLENER IP & BUSINESS LAW'), 'FLENER IP LAW');
+  assert.equal(k('FLENER IP LAW DBA'), 'FLENER IP LAW');
+  // "care of" is mail routing; the firm is what follows. Without this the slash
+  // rule cut the line at "c/o" and left the key as the single letter "C".
+  assert.equal(k('c/o Lombard Geliebter LLP'), 'LOMBARD GELIEBTER');
+  assert.equal(k('C/O Fish & Richardson P.C.'), 'FISH & RICHARDSON');
+  // ...but a name merely beginning with "Co" must be untouched.
+  assert.equal(k('Cooley LLP'), 'COOLEY');
   // A hyphen inside a single-word name is not a qualifier boundary.
   assert.equal(k('Foo-Bar'), 'FOO-BAR');
   // OCR drops the space around the ampersand.
@@ -995,4 +1006,28 @@ test('firms — folds a one-word OCR misreading into the better-supported spelli
   const flipped = canonicalizeFirmKeys(new Map([['GOODWIN PROCTER', 2], ['GODWIN PROCTER', 9]]));
   assert.equal(flipped.get('GOODWIN PROCTER'), 'GODWIN PROCTER');
   assert.equal(new Set(flipped.values()).size, 1);
+});
+
+test('firms — curated corrections outrank the corpus majority', async () => {
+  const { canonicalizeFirmKeys, firmDisplayCorrections } = await import('../lib/firms.js');
+  const canon = canonicalizeFirmKeys(new Map([
+    // OCR mangles a different NUMBER of words, so no automatic rule sees these:
+    // "K&L" reads as "KU" and sometimes drops out entirely.
+    ['K & L GATES', 20], ['KU GATES', 16], ['GATES', 10],
+    // An unrelated firm ending in the same word must survive.
+    ['KOLITCH ROMANO DASCENZO GATES', 1],
+    // Here the corpus reads the name wrong MORE often than right, so majority
+    // naming would label the group with the error.
+    ['CANNICHAEL IP', 4], ['CARMICHAEL IP', 3],
+  ]));
+  for (const k of ['K & L GATES', 'KU GATES', 'GATES']) assert.equal(canon.get(k), 'K & L GATES', k);
+  assert.equal(canon.get('KOLITCH ROMANO DASCENZO GATES'), 'KOLITCH ROMANO DASCENZO GATES');
+  // The correction wins over the better-supported misreading.
+  assert.equal(canon.get('CANNICHAEL IP'), 'CARMICHAEL IP');
+  assert.equal(canon.get('CARMICHAEL IP'), 'CARMICHAEL IP');
+  // Labels are keyed by the CORRECTED key, and each key is derived from the name
+  // through normalizeFirm so the table cannot state a key that drifts from it.
+  const corr = firmDisplayCorrections();
+  assert.equal(corr.get('K & L GATES'), 'K&L Gates LLP');
+  assert.equal(corr.get('CARMICHAEL IP'), 'Carmichael IP, PLLC');
 });

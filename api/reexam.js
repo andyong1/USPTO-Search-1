@@ -8,7 +8,7 @@
 //                                   determination + office-action PDF locally.
 import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse, listReexamFirms } from '../lib/db.js';
 import { threadPetitions } from '../lib/petitions.js';
-import { canonicalizeFirmKeys } from '../lib/firms.js';
+import { canonicalizeFirmKeys, firmDisplayCorrections } from '../lib/firms.js';
 import { clientErrorDetail } from '../lib/secure.js';
 
 const san = (s) => String(s || '').replace(/[^0-9A-Za-z._-]/g, '_');
@@ -146,7 +146,11 @@ export default async function handler(req, res) {
         if (r.owner_firm_key) r.owner_firm_key = canon.get(r.owner_firm_key) || r.owner_firm_key;
         if (r.requester_firm_key) r.requester_firm_key = canon.get(r.requester_firm_key) || r.requester_firm_key;
       }
-      res.status(200).json({ firms });
+      // Corrected names for the groups where the majority reading is the error,
+      // so the page can label them properly. Sent separately rather than written
+      // over the row values: the drill-down should keep showing what each
+      // document actually said.
+      res.status(200).json({ firms, corrections: [...firmDisplayCorrections()] });
       return;
     }
     if (req.query && req.query.actions) {

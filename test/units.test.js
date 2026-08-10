@@ -965,3 +965,34 @@ test('firms — canonicalizes OCR-truncated variants onto the best-supported key
   assert.equal(canon.get('LAW'), 'LAW');
   assert.equal(canon.get('LEE & HAYES'), 'LEE & HAYES');
 });
+
+test('firms — folds a one-word OCR misreading into the better-supported spelling', async () => {
+  const { canonicalizeFirmKeys } = await import('../lib/firms.js');
+  const canon = canonicalizeFirmKeys(new Map([
+    // Real case: 90015688/90/91 read "GODWIN PROCTER LLP / PTAB", a dropped 'O',
+    // so they did not appear under Goodwin. Neither key prefixes the other.
+    ['GOODWIN PROCTER', 12], ['GODWIN PROCTER', 3],
+    // ...but a genuinely different entity sharing a word must survive intact. The
+    // token-aligned rule is what guarantees this: the word counts differ.
+    ['THE PROCTER & GAMBLE COMPANY', 3],
+    ['FISH & RICHARDSON', 55], ['FISCH & RICHARDSON', 1],
+    ['KNOBBE MARTENS OLSON & BEAR', 33], ['KNOBBE MARTENS OLSEN & BEAR', 1],
+    // Address fragments leak into the firm field; their ZIPs differ by one digit,
+    // which is a VALUE and must never be treated as a misread character.
+    ['LONG CA 90802', 1], ['LONG CA 90806', 1],
+    // A one-character difference in an initial distinguishes real firms.
+    ['SMITH A LAW GROUP', 4], ['SMITH B LAW GROUP', 2],
+  ]));
+  assert.equal(canon.get('GODWIN PROCTER'), 'GOODWIN PROCTER');
+  assert.equal(canon.get('THE PROCTER & GAMBLE COMPANY'), 'THE PROCTER & GAMBLE COMPANY');
+  assert.equal(canon.get('FISCH & RICHARDSON'), 'FISH & RICHARDSON');
+  assert.equal(canon.get('KNOBBE MARTENS OLSEN & BEAR'), 'KNOBBE MARTENS OLSON & BEAR');
+  assert.equal(canon.get('LONG CA 90806'), 'LONG CA 90806');
+  assert.equal(canon.get('SMITH B LAW GROUP'), 'SMITH B LAW GROUP');
+  // Direction follows the evidence, not a spelling judgement: whichever variant
+  // the corpus attests more becomes canonical. Merging is the guarantee here; the
+  // label is only ever the majority reading, which can itself be the misreading.
+  const flipped = canonicalizeFirmKeys(new Map([['GOODWIN PROCTER', 2], ['GODWIN PROCTER', 9]]));
+  assert.equal(flipped.get('GOODWIN PROCTER'), 'GODWIN PROCTER');
+  assert.equal(new Set(flipped.values()).size, 1);
+});

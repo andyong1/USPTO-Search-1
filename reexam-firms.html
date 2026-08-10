@@ -133,42 +133,55 @@ const OPEN = new Set();
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 100) + '%' : '—');
 
-// Entity forms and initialisms that stay upright when a name is de-shouted.
-const KEEP_UPPER = new Set(['LLP', 'LLC', 'PLLC', 'PC', 'PA', 'LTD', 'INC', 'CO', 'IP', 'US', 'USA', 'UK', 'PTAB', 'IPR', 'TC', 'CN', 'DC', 'SV', 'NY', 'LA', 'BDX', 'DLA', 'KED', 'MRG', 'EML']);
+// Entity forms that stay upright when a name is de-shouted. "LLC" and "LLP" are
+// written upper by convention; "Inc.", "Corp.", "Ltd." and "Co." are NOT, so they
+// are deliberately absent and get title-cased like any other word.
+const KEEP_UPPER = new Set([
+  'LLC', 'LLP', 'PLLC', 'PC', 'PA', 'PLC', 'ULC', 'LP', 'LL',
+  'SA', 'SAS', 'NV', 'BV', 'OY', 'AB', 'PTE', 'SRL', 'SPA', 'KG', 'KK', 'APS',
+  // Initialisms the corpus actually contains.
+  'IP', 'US', 'USA', 'UK', 'EU', 'PTAB', 'IPR', 'TC', 'CN', 'DC', 'SV', 'NY',
+  'BDX', 'DLA', 'KED', 'MRG', 'EML', 'MCP', 'VDPP', 'DIVX', 'LCD', 'FMC', 'GME',
+  'NEC', 'KPN', 'HD', 'IQ', 'MVW', 'OS',
+]);
+// Names whose correct form is neither all-upper nor plain title case.
+const MIXED_CASE = new Map([['GMBH', 'GmbH']]);
 // Words that stay down inside a name, so "HAYNES AND BOONE" does not read as
 // "Haynes And Boone".
 const KEEP_LOWER = new Set(['and', 'of', 'the', 'at', 'for', 'in', 'on', 'de', 'van', 'von', 'der', 'da']);
 
-function capWord(w) {
-  if (!w) return w;
-  // Punctuated initialisms ("P.L.L.C.", "P.C.") are already correct upright.
-  if (/^(?:[A-Z]\.){2,}$/.test(w) || /^[A-Z]\.$/.test(w)) return w;
-  const bare = w.replace(/[^A-Z0-9&]/gi, '');
-  if (KEEP_UPPER.has(bare.toUpperCase())) return w.toUpperCase();
-  if (bare.length === 1) return w.toUpperCase();            // a middle initial
-  let s = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-  // Scottish/Irish prefixes and anything after a hyphen or apostrophe carry
-  // their own capital: MCANDREWS -> McAndrews, O'MELVENY -> O'Melveny.
-  s = s.replace(/^Mc([a-z])/, (m, c) => 'Mc' + c.toUpperCase());
-  s = s.replace(/([-'’])([a-z])/g, (m, p, c) => p + c.toUpperCase());
-  return s;
-}
-
 /**
- * De-shout an ALL-CAPS firm name. Names that already carry lower case are left
- * exactly as filed — they are printed correctly and any transform would only
- * damage them ("IPspeedy" -> "Ipspeedy", "Haynes and Boone" -> "Haynes And
- * Boone"). So this runs only when there is no lower case to lose.
+ * De-shout an ALL-CAPS firm or party name.
+ *
+ * Names that already carry lower case are left exactly as filed -- they are
+ * printed correctly and any transform could only damage them ("IPspeedy" ->
+ * "Ipspeedy", "Haynes and Boone" -> "Haynes And Boone"). So this runs only when
+ * there is no lower case to lose.
+ *
+ * Casing is applied per RUN OF LETTERS rather than per whitespace-delimited
+ * token, because the punctuation is where the words actually divide:
+ * "CO.,LTD." is one token but two words, and "P.L.L.C." is one token but four
+ * single letters that must each stay upright. Digits fall outside every run, so
+ * "3D" and "H2" keep their letter upper without a special case.
  */
-function titleCaseFirm(s) {
+function titleCaseName(s) {
   const t = String(s || '');
   if (!t || /[a-z]/.test(t)) return t;
-  return t.split(/(\s+)/).map((tok, i) => {
-    if (/^\s+$/.test(tok)) return tok;
-    const w = capWord(tok);
+  let n = 0;
+  return t.replace(/[A-Za-z][A-Za-z’']*/g, (run) => {
+    const first = n++ === 0;
+    const up = run.toUpperCase();
+    if (KEEP_UPPER.has(up)) return up;
+    if (MIXED_CASE.has(up)) return MIXED_CASE.get(up);
+    if (run.length === 1) return up;                    // an initial, or P.L.L.C.
+    let w = run.charAt(0).toUpperCase() + run.slice(1).toLowerCase();
+    // Scottish/Irish prefixes and anything after an apostrophe carry their own
+    // capital: MCANDREWS -> McAndrews, O'MELVENY -> O'Melveny.
+    w = w.replace(/^Mc([a-z])/, (m, c) => 'Mc' + c.toUpperCase());
+    w = w.replace(/([’'])([a-z])/g, (m, q, c) => q + c.toUpperCase());
     // A small word keeps its case only inside the name, never at the start.
-    return i > 0 && KEEP_LOWER.has(w.toLowerCase()) ? w.toLowerCase() : w;
-  }).join('');
+    return !first && KEEP_LOWER.has(w.toLowerCase()) ? w.toLowerCase() : w;
+  });
 }
 
 // --- Aggregation --------------------------------------------------------------
@@ -199,7 +212,7 @@ function aggregate(side, ftype) {
     for (const [s, n] of f.spellings) if (n > bestN || (n === bestN && s.length < best.length)) { best = s; bestN = n; }
     // A curated correction outranks the majority spelling — it exists precisely
     // for the firms whose name the corpus reads wrong more often than right.
-    f.display = titleCaseFirm(CORRECTIONS.get(f.key) || best || f.key);
+    f.display = titleCaseName(CORRECTIONS.get(f.key) || best || f.key);
     f.corrected = CORRECTIONS.has(f.key);
     // Filer type is decided ONCE for the whole firm, by majority of its rows.
     // Classifying row-by-row would let the type filter split a single firm's
@@ -229,8 +242,8 @@ function detailHtml(f, side) {
     <td>${esc(r.underlying_patent || '—')}</td>
     <td>${esc(r.determination_date || '—')}</td>
     <td><span class="badge ${r.determination_kind === 'order' ? 'ok' : 'bad'}">${r.determination_kind === 'order' ? 'ordered' : 'denied'}</span></td>
-    <td>${esc((side === 'requester' ? r.patent_owner : r.requester_name) || '—')}</td>
-    <td>${esc(titleCaseFirm((side === 'requester' ? r.owner_firm : r.requester_firm) || '') || '—')}</td>
+    <td>${esc(titleCaseName((side === 'requester' ? r.patent_owner : r.requester_name) || '') || '—')}</td>
+    <td>${esc(titleCaseName((side === 'requester' ? r.owner_firm : r.requester_firm) || '') || '—')}</td>
   </tr>`).join('');
   return `<tr class="detail"><td colspan="5" style="padding:0 12px 12px">
     <table><thead><tr>

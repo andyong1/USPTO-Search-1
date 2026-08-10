@@ -817,3 +817,38 @@ test('threadPetitions — FIFO pairing, orphans, pending', async () => {
   assert.equal(same[0].petition.doc_id, 'pA');
   assert.equal(same[0].decision.doc_id, 'dA');
 });
+
+test('threadPetitions — an extension ruling never closes a substantive petition', async () => {
+  const { threadPetitions } = await import('../lib/petitions.js');
+  // Real 90015644 shape: a § 325(d) petition + its opposition, then an UNRELATED
+  // extension grant. Family-blind FIFO pairing rendered the § 325(d) petition as
+  // "granted" — the same misattribution class as crediting a leave-to-file grant.
+  const t = threadPetitions([
+    { doc_id: 'p325', official_date: '2026-03-23', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'opp', official_date: '2026-06-09', doc_code: 'RXOPPPET', kind: 'opposition' },
+    { doc_id: 'extg', official_date: '2026-07-07', doc_code: 'RXEXTG', kind: 'decision', outcome: 'granted' },
+  ]);
+  const sub = t.find((x) => x.petition && x.petition.doc_id === 'p325');
+  assert.equal(sub.opposition.doc_id, 'opp');
+  assert.equal(sub.decision, null, 'the § 325(d) petition must remain undecided');
+  assert.ok(t.some((x) => !x.petition && x.decision && x.decision.doc_id === 'extg'),
+    'the extension grant becomes its own decision-only row');
+
+  // Real 90015806 shape: the extension grant pairs with the extension REQUEST,
+  // leaving the earlier substantive petition pending.
+  const t2 = threadPetitions([
+    { doc_id: 'p325', official_date: '2026-06-02', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'req', official_date: '2026-06-24', doc_code: 'RXRQ/T', kind: 'petition' },
+    { doc_id: 'extg', official_date: '2026-06-26', doc_code: 'RXEXTG', kind: 'decision', outcome: 'granted' },
+  ]);
+  assert.equal(t2.find((x) => x.petition.doc_id === 'p325').decision, null);
+  assert.equal(t2.find((x) => x.petition.doc_id === 'req').decision.doc_id, 'extg');
+
+  // Extension practice on its own still pairs normally.
+  const t3 = threadPetitions([
+    { doc_id: 'req', official_date: '2026-04-01', doc_code: 'RXRQ/T', kind: 'petition' },
+    { doc_id: 'extd', official_date: '2026-05-05', doc_code: 'RXEXTD', kind: 'decision', outcome: 'denied' },
+  ]);
+  assert.equal(t3.length, 1);
+  assert.equal(t3[0].decision.outcome, 'denied');
+});

@@ -770,6 +770,10 @@ test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
   assert.deepEqual(classifyPetitionDoc('SE.PET', ''), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXRPET', 'Petition for Review of Reexam Denial'), { kind: 'petition' });
   assert.deepEqual(classifyPetitionDoc('RXRQ/T', 'Reexam Request for Extension of Time'), { kind: 'petition' });
+  // 37 CFR 1.36 attorney-withdrawal request. Its decision needs no new code — it
+  // issues under PETDEC / RXPTGR, both already recognized (verified on 90015397).
+  assert.deepEqual(classifyPetitionDoc('PET.POA.WDRW', 'Request for withdrawal as attorney or agent'), { kind: 'petition' });
+  assert.deepEqual(classifyPetitionDoc('PETDEC', 'Petition Decision'), { kind: 'decision', outcome: 'decided' });
   // The RXRQ/T request and its RXEXTG/RXEXTD ruling are a pair — without the
   // ruling, every extension petition would read as permanently pending.
   assert.deepEqual(classifyPetitionDoc('RXEXTG', 'Reexam Extension of Time Period for Response Granted'), { kind: 'decision', outcome: 'granted' });

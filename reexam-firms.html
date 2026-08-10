@@ -51,7 +51,6 @@
     .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
     .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
     .badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
-    .badge.flat { background: var(--border); color: var(--text-2); }
     .tag { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 0.72rem; background: var(--surface-3); color: var(--text-3); margin-left: 6px; }
     .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 14px 0; }
     .controls label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-2); }
@@ -86,7 +85,7 @@
     <details class="method">
       <summary>Coverage &amp; how to read the rates</summary>
       <p id="coverage-note"></p>
-      <p><strong>The grant rate is a weak discriminator.</strong> Because the Office orders reexamination on the large majority of requests, almost every firm with any volume lands near the corpus average, and a small firm going undefeated is the expected outcome rather than evidence of skill. The <em>vs. baseline</em> column runs an exact two-sided binomial test of each firm's record against the corpus rate and reports "not distinguishable" whenever the record is consistent with average performance — which is most of the table. Treat unlabeled differences as noise.</p>
+      <p><strong>The grant rate is a weak discriminator.</strong> Because the Office orders reexamination on the large majority of requests, almost every firm with any volume lands near the corpus average, and a small firm going undefeated is the expected outcome rather than evidence of skill. Tested formally against the corpus rate, the great majority of these records are <em>not</em> statistically distinguishable from average — so read the differences between firms as noise unless the volume is large and the gap is wide. Where a firm does separate from the baseline it is usually a reflection of the kind of case it takes rather than of quality.</p>
       <p><strong>Filer type</strong> (firm / individual / other) is a heuristic: the cover sheet does not say what kind of correspondent it names. It exists to let you exclude self-represented parties and filing services from a firm leaderboard, not as an authoritative classification.</p>
       <p>Where OCR interleaved the cover sheet's two columns the firm name is simply absent from the text; those proceedings are reported as unattributed rather than assigned a firm invented from layout noise. A patent-owner-requested reexamination legitimately has no requester block at all.</p>
     </details>
@@ -134,32 +133,42 @@ const OPEN = new Set();
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 100) + '%' : '—');
 
-// --- Exact two-sided binomial test -------------------------------------------
-// The whole point of this page's caveat: with a ~94% base rate, a perfect record
-// at small n is unremarkable. Rather than assert that in prose alone, each row is
-// tested against the corpus rate so rows that ARE unusual can be told apart from
-// rows that merely look impressive. n here is at most a few dozen, so the exact
-// test is computed directly instead of approximated.
-const lnFactCache = [0, 0];
-function lnFact(n) {
-  for (let i = lnFactCache.length; i <= n; i++) lnFactCache[i] = lnFactCache[i - 1] + Math.log(i);
-  return lnFactCache[n];
+// Entity forms and initialisms that stay upright when a name is de-shouted.
+const KEEP_UPPER = new Set(['LLP', 'LLC', 'PLLC', 'PC', 'PA', 'LTD', 'INC', 'CO', 'IP', 'US', 'USA', 'UK', 'PTAB', 'IPR', 'TC', 'CN', 'DC', 'SV', 'NY', 'LA', 'BDX', 'DLA', 'KED', 'MRG', 'EML']);
+// Words that stay down inside a name, so "HAYNES AND BOONE" does not read as
+// "Haynes And Boone".
+const KEEP_LOWER = new Set(['and', 'of', 'the', 'at', 'for', 'in', 'on', 'de', 'van', 'von', 'der', 'da']);
+
+function capWord(w) {
+  if (!w) return w;
+  // Punctuated initialisms ("P.L.L.C.", "P.C.") are already correct upright.
+  if (/^(?:[A-Z]\.){2,}$/.test(w) || /^[A-Z]\.$/.test(w)) return w;
+  const bare = w.replace(/[^A-Z0-9&]/gi, '');
+  if (KEEP_UPPER.has(bare.toUpperCase())) return w.toUpperCase();
+  if (bare.length === 1) return w.toUpperCase();            // a middle initial
+  let s = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  // Scottish/Irish prefixes and anything after a hyphen or apostrophe carry
+  // their own capital: MCANDREWS -> McAndrews, O'MELVENY -> O'Melveny.
+  s = s.replace(/^Mc([a-z])/, (m, c) => 'Mc' + c.toUpperCase());
+  s = s.replace(/([-'’])([a-z])/g, (m, p, c) => p + c.toUpperCase());
+  return s;
 }
-function binomPmf(k, n, p) {
-  if (p <= 0) return k === 0 ? 1 : 0;
-  if (p >= 1) return k === n ? 1 : 0;
-  return Math.exp(lnFact(n) - lnFact(k) - lnFact(n - k) + k * Math.log(p) + (n - k) * Math.log(1 - p));
-}
-/** Two-sided p-value: total probability of outcomes no more likely than the observed one. */
-function binomTest(k, n, p) {
-  if (!n) return 1;
-  const obs = binomPmf(k, n, p);
-  let tail = 0;
-  for (let i = 0; i <= n; i++) {
-    const q = binomPmf(i, n, p);
-    if (q <= obs * 1.0000001) tail += q;
-  }
-  return Math.min(1, tail);
+
+/**
+ * De-shout an ALL-CAPS firm name. Names that already carry lower case are left
+ * exactly as filed — they are printed correctly and any transform would only
+ * damage them ("IPspeedy" -> "Ipspeedy", "Haynes and Boone" -> "Haynes And
+ * Boone"). So this runs only when there is no lower case to lose.
+ */
+function titleCaseFirm(s) {
+  const t = String(s || '');
+  if (!t || /[a-z]/.test(t)) return t;
+  return t.split(/(\s+)/).map((tok, i) => {
+    if (/^\s+$/.test(tok)) return tok;
+    const w = capWord(tok);
+    // A small word keeps its case only inside the name, never at the start.
+    return i > 0 && KEEP_LOWER.has(w.toLowerCase()) ? w.toLowerCase() : w;
+  }).join('');
 }
 
 // --- Aggregation --------------------------------------------------------------
@@ -190,7 +199,7 @@ function aggregate(side, ftype) {
     for (const [s, n] of f.spellings) if (n > bestN || (n === bestN && s.length < best.length)) { best = s; bestN = n; }
     // A curated correction outranks the majority spelling — it exists precisely
     // for the firms whose name the corpus reads wrong more often than right.
-    f.display = CORRECTIONS.get(f.key) || best || f.key;
+    f.display = titleCaseFirm(CORRECTIONS.get(f.key) || best || f.key);
     f.corrected = CORRECTIONS.has(f.key);
     // Filer type is decided ONCE for the whole firm, by majority of its rows.
     // Classifying row-by-row would let the type filter split a single firm's
@@ -213,28 +222,17 @@ function baseline(side, ftype) {
   return { ordered, total, rate: total ? ordered / total : 0 };
 }
 
-function verdictCell(f, base, side) {
-  // Requester side is judged on getting the reexam ordered; owner side on
-  // getting the request denied. Same test, opposite success event.
-  const wins = side === 'requester' ? f.ordered : f.denied;
-  const p = side === 'requester' ? base.rate : 1 - base.rate;
-  const pv = binomTest(wins, f.total, p);
-  if (pv >= 0.05) return '<span class="badge flat">not distinguishable</span>';
-  const better = wins / f.total > p;
-  return `<span class="badge ${better ? 'ok' : 'bad'}">${better ? 'above' : 'below'} baseline · p=${pv < 0.001 ? '&lt;0.001' : pv.toFixed(3)}</span>`;
-}
-
 function detailHtml(f, side) {
   const opposing = side === 'requester' ? 'Patent owner' : 'Requester';
   const rows = f.rows.map((r) => `<tr>
-    <td><a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number)}" target="_blank" rel="noopener">${esc(r.application_number)} &#8599;</a></td>
+    <td><a class="link" href="/uspto-search?app=${encodeURIComponent(r.application_number)}" target="_blank" rel="noopener">${esc(r.application_number)}</a></td>
     <td>${esc(r.underlying_patent || '—')}</td>
     <td>${esc(r.determination_date || '—')}</td>
     <td><span class="badge ${r.determination_kind === 'order' ? 'ok' : 'bad'}">${r.determination_kind === 'order' ? 'ordered' : 'denied'}</span></td>
     <td>${esc((side === 'requester' ? r.patent_owner : r.requester_name) || '—')}</td>
-    <td>${esc((side === 'requester' ? r.owner_firm : r.requester_firm) || '—')}</td>
+    <td>${esc(titleCaseFirm((side === 'requester' ? r.owner_firm : r.requester_firm) || '') || '—')}</td>
   </tr>`).join('');
-  return `<tr class="detail"><td colspan="6" style="padding:0 12px 12px">
+  return `<tr class="detail"><td colspan="5" style="padding:0 12px 12px">
     <table><thead><tr>
       <th>Control no.</th><th>Patent</th><th>Determination</th><th>Outcome</th><th>${opposing}</th><th>Opposing counsel</th>
     </tr></thead><tbody>${rows}</tbody></table>
@@ -296,7 +294,6 @@ function render() {
       <td class="num">${f.ordered}</td>
       <td class="num">${f.denied}</td>
       <td class="num">${pct(f[winKey], f.total)}</td>
-      <td>${verdictCell(f, base, SIDE)}</td>
     </tr>`;
     return row + (open ? detailHtml(f, SIDE) : '');
   }).join('');
@@ -307,7 +304,6 @@ function render() {
     ${th('ordered', 'Ordered', 'num')}
     ${th('denied', 'Denied', 'num')}
     ${th('rate', SIDE === 'requester' ? 'Grant rate' : 'Denial rate', 'num')}
-    <th>vs. baseline</th>
   </tr></thead><tbody>${body}</tbody></table></div>
   <p class="sub" style="margin:10px 0 0">${firms.length} firm(s) shown. Click a row for the underlying proceedings.</p>`;
 }

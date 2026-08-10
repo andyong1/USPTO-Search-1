@@ -317,7 +317,6 @@ function render(s) {
         ${dueCard(s.engine2_pending, 'Engine-2 OCR pending')}
       </div>
     </div>
-    ${coverageAuditHtml(s)}
     <div class="card">
       <h2>Last activity &amp; emails</h2>
       <table>
@@ -360,8 +359,9 @@ function render(s) {
         <tr><td>— never scanned yet</td><td>${s.never_scanned ?? '—'}</td></tr>
         <tr><td>Tracked proceedings (alerts)</td><td>${s.watchlist_count ?? '—'}</td></tr>
       </table>
-      <p class="muted" style="margin-top:12px"><a href="/uspto-search">← Back to the app</a></p>
-    </div>`;
+    </div>
+    ${coverageAuditHtml(s)}
+    <p class="muted" style="margin-top:16px"><a href="/uspto-search">← Back to the app</a></p>`;
 }
 
 // Auto-load if we already have the password this session.

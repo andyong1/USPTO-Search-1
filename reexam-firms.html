@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Law Firm Scorecard — USPTO Reexam</title>
+  <!-- Unlinked exploratory page: kept out of the site navigation and out of search
+       indexes on purpose. The grant-rate statistic here is easy to misread (see the
+       base-rate warning in the explainer), so it is not yet published. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 24px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; margin-bottom: 16px; }
+    .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
+    .explainer p { margin: 0; }
+    .explainer p + p { margin-top: 10px; }
+    .warn-box { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--warn-bg); border: 1px solid var(--warn-fg); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
+    .warn-box strong { color: var(--warn-fg); }
+    details.method { margin-top: 12px; font-size: 0.85rem; color: var(--text-2); }
+    details.method summary { cursor: pointer; font-weight: 600; color: var(--heading); }
+    details.method p { margin-top: 10px; line-height: 1.55; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+    @media (max-width: 700px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+    .kpi { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 12px; text-align: center; }
+    .kpi .num { font-size: 1.6rem; font-weight: 700; color: var(--heading); line-height: 1.1; }
+    .kpi .lbl { font-size: 0.72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 5px; }
+    .table-wrap { overflow: auto; max-height: 70vh; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    th { position: sticky; top: 0; z-index: 2; background: var(--surface-3); padding: 10px 12px; text-align: left; font-weight: 600; color: var(--text-2); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--border-2); }
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: var(--border); }
+    th.num, td.num { text-align: right; }
+    td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+    tr.firm-row { cursor: pointer; }
+    tr.firm-row:hover td { background: var(--surface-2); }
+    .firm-name { font-weight: 600; color: var(--heading); }
+    .caret { display: inline-block; width: 12px; color: var(--text-3); font-size: 0.7rem; }
+    .state { text-align: center; padding: 40px 20px; color: var(--text-3); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+    .badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+    .badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
+    .badge.flat { background: var(--border); color: var(--text-2); }
+    .tag { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 0.72rem; background: var(--surface-3); color: var(--text-3); margin-left: 6px; }
+    .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin: 14px 0; }
+    .controls label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-2); }
+    input[type="text"], select { background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 0.85rem; font-family: inherit; }
+    .detail { background: var(--surface-2); }
+    .detail table { font-size: 0.8rem; }
+    .detail th { position: static; background: var(--surface-2); font-size: 0.68rem; }
+    .detail td { border-top: 1px solid var(--border); }
+    .ext { color: var(--text-3); font-size: 0.78rem; text-decoration: none; }
+    .ext:hover { text-decoration: underline; }
+    .toggle-row { display: flex; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+    .toggle-row button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 0.85rem; font-weight: 600; font-family: inherit; cursor: pointer; }
+    .toggle-row button.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Law firm scorecard — ex parte reexamination</h2>
+    <div class="explainer">
+      <p>Which firm appeared for each side of a reexamination, and how the request was decided. Both sides are read from the <strong>correspondence blocks on the determination's cover sheet</strong> — the bare <em>7590</em> block names the patent owner's correspondent, and a separately labeled block names the third-party requester's counsel. That is the same document recording the outcome, so firm and result come from one source.</p>
+      <p>Firms are shown <strong>as of the determination</strong>, not today. Powers of attorney change hands, so a firm listed here may no longer represent the patent owner.</p>
+    </div>
+    <div class="warn-box" id="baseline-warn"></div>
+    <details class="method">
+      <summary>Coverage &amp; how to read the rates</summary>
+      <p id="coverage-note"></p>
+      <p><strong>The grant rate is a weak discriminator.</strong> Because the Office orders reexamination on the large majority of requests, almost every firm with any volume lands near the corpus average, and a small firm going undefeated is the expected outcome rather than evidence of skill. The <em>vs. baseline</em> column runs an exact two-sided binomial test of each firm's record against the corpus rate and reports "not distinguishable" whenever the record is consistent with average performance — which is most of the table. Treat unlabeled differences as noise.</p>
+      <p><strong>Filer type</strong> (firm / individual / other) is a heuristic: the cover sheet does not say what kind of correspondent it names. It exists to let you exclude self-represented parties and filing services from a firm leaderboard, not as an authoritative classification.</p>
+      <p>Where OCR interleaved the cover sheet's two columns the firm name is simply absent from the text; those proceedings are reported as unattributed rather than assigned a firm invented from layout noise. A patent-owner-requested reexamination legitimately has no requester block at all.</p>
+    </details>
+    <div id="kpis"></div>
+  </div>
+
+  <div class="card">
+    <div class="toggle-row">
+      <button id="btn-requester" class="active" onclick="setSide('requester')">Requester's counsel</button>
+      <button id="btn-owner" onclick="setSide('owner')">Patent owner's counsel</button>
+    </div>
+    <h2 id="side-heading" style="margin-top:14px">Requester-side records</h2>
+    <p class="sub" id="side-sub"></p>
+    <div class="controls" id="controls" style="display:none">
+      <input type="text" id="q" placeholder="Search firm…" oninput="render()" aria-label="Search firm" style="min-width:220px" />
+      <label>Min. proceedings
+        <select id="minv" onchange="render()">
+          <option value="1">1</option>
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option value="20">20</option>
+        </select>
+      </label>
+      <label>Filer type
+        <select id="ftype" onchange="render()">
+          <option value="firm" selected>Law firms only</option>
+          <option value="all">All correspondents</option>
+          <option value="individual">Individuals</option>
+          <option value="other">Other / entities</option>
+        </select>
+      </label>
+    </div>
+    <div id="body"><div class="state">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+let ROWS = [];
+let SIDE = 'requester';
+let SORT = { key: 'total', dir: -1 };
+const OPEN = new Set();
+
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pct = (n, d) => (d ? Math.round((n / d) * 100) + '%' : '—');
+
+// --- Exact two-sided binomial test -------------------------------------------
+// The whole point of this page's caveat: with a ~94% base rate, a perfect record
+// at small n is unremarkable. Rather than assert that in prose alone, each row is
+// tested against the corpus rate so rows that ARE unusual can be told apart from
+// rows that merely look impressive. n here is at most a few dozen, so the exact
+// test is computed directly instead of approximated.
+const lnFactCache = [0, 0];
+function lnFact(n) {
+  for (let i = lnFactCache.length; i <= n; i++) lnFactCache[i] = lnFactCache[i - 1] + Math.log(i);
+  return lnFactCache[n];
+}
+function binomPmf(k, n, p) {
+  if (p <= 0) return k === 0 ? 1 : 0;
+  if (p >= 1) return k === n ? 1 : 0;
+  return Math.exp(lnFact(n) - lnFact(k) - lnFact(n - k) + k * Math.log(p) + (n - k) * Math.log(1 - p));
+}
+/** Two-sided p-value: total probability of outcomes no more likely than the observed one. */
+function binomTest(k, n, p) {
+  if (!n) return 1;
+  const obs = binomPmf(k, n, p);
+  let tail = 0;
+  for (let i = 0; i <= n; i++) {
+    const q = binomPmf(i, n, p);
+    if (q <= obs * 1.0000001) tail += q;
+  }
+  return Math.min(1, tail);
+}
+
+// --- Aggregation --------------------------------------------------------------
+// Grouped client-side so the volume threshold and filer-type filter re-apply
+// without another round trip, and so a firm's underlying proceedings stay
+// available for the drill-down.
+function aggregate(side, ftype) {
+  const keyF = side === 'requester' ? 'requester_firm_key' : 'owner_firm_key';
+  const dispF = side === 'requester' ? 'requester_firm' : 'owner_firm';
+  const typeF = side === 'requester' ? 'requester_filer_type' : 'owner_filer_type';
+  const byFirm = new Map();
+  for (const r of ROWS) {
+    const key = r[keyF];
+    if (!key) continue;
+    if (!byFirm.has(key)) byFirm.set(key, { key, ordered: 0, denied: 0, rows: [], spellings: new Map(), types: new Map() });
+    const f = byFirm.get(key);
+    if (r.determination_kind === 'order') f.ordered++; else f.denied++;
+    f.rows.push(r);
+    // Label the firm with its MAJORITY spelling. Variants of one name differ by
+    // OCR truncation and by address or client fragments welded on, so neither the
+    // first nor the longest variant is reliably the firm's actual name.
+    if (r[dispF]) f.spellings.set(r[dispF], (f.spellings.get(r[dispF]) || 0) + 1);
+    if (r[typeF]) f.types.set(r[typeF], (f.types.get(r[typeF]) || 0) + 1);
+  }
+  const firms = [...byFirm.values()];
+  for (const f of firms) {
+    let best = null, bestN = -1;
+    for (const [s, n] of f.spellings) if (n > bestN || (n === bestN && s.length < best.length)) { best = s; bestN = n; }
+    f.display = best || f.key;
+    // Filer type is decided ONCE for the whole firm, by majority of its rows.
+    // Classifying row-by-row would let the type filter split a single firm's
+    // record — a truncated variant that reads as "other" would silently drop
+    // those proceedings out of a law-firm leaderboard.
+    let bt = null, btN = -1;
+    for (const [t, n] of f.types) if (n > btN) { bt = t; btN = n; }
+    f.type = bt || 'other';
+    f.total = f.ordered + f.denied;
+    f.rows.sort((a, b) => String(b.determination_date || '').localeCompare(String(a.determination_date || '')));
+  }
+  return ftype === 'all' ? firms : firms.filter((f) => f.type === ftype);
+}
+
+/** Corpus grant rate over the same population the table is drawn from. */
+function baseline(side, ftype) {
+  const firms = aggregate(side, ftype);
+  const ordered = firms.reduce((s, f) => s + f.ordered, 0);
+  const total = firms.reduce((s, f) => s + f.total, 0);
+  return { ordered, total, rate: total ? ordered / total : 0 };
+}
+
+function verdictCell(f, base, side) {
+  // Requester side is judged on getting the reexam ordered; owner side on
+  // getting the request denied. Same test, opposite success event.
+  const wins = side === 'requester' ? f.ordered : f.denied;
+  const p = side === 'requester' ? base.rate : 1 - base.rate;
+  const pv = binomTest(wins, f.total, p);
+  if (pv >= 0.05) return '<span class="badge flat">not distinguishable</span>';
+  const better = wins / f.total > p;
+  return `<span class="badge ${better ? 'ok' : 'bad'}">${better ? 'above' : 'below'} baseline · p=${pv < 0.001 ? '&lt;0.001' : pv.toFixed(3)}</span>`;
+}
+
+function detailHtml(f, side) {
+  const opposing = side === 'requester' ? 'Patent owner' : 'Requester';
+  const rows = f.rows.map((r) => `<tr>
+    <td><a class="ext" href="https://patentcenter.uspto.gov/applications/${esc(r.application_number)}" target="_blank" rel="noopener">${esc(r.application_number)} &#8599;</a></td>
+    <td>${esc(r.underlying_patent || '—')}</td>
+    <td>${esc(r.determination_date || '—')}</td>
+    <td><span class="badge ${r.determination_kind === 'order' ? 'ok' : 'bad'}">${r.determination_kind === 'order' ? 'ordered' : 'denied'}</span></td>
+    <td>${esc((side === 'requester' ? r.patent_owner : r.requester_name) || '—')}</td>
+    <td>${esc((side === 'requester' ? r.owner_firm : r.requester_firm) || '—')}</td>
+  </tr>`).join('');
+  return `<tr class="detail"><td colspan="6" style="padding:0 12px 12px">
+    <table><thead><tr>
+      <th>Control no.</th><th>Patent</th><th>Determination</th><th>Outcome</th><th>${opposing}</th><th>Opposing counsel</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </td></tr>`;
+}
+
+function setSide(side) {
+  SIDE = side;
+  OPEN.clear();
+  document.getElementById('btn-requester').classList.toggle('active', side === 'requester');
+  document.getElementById('btn-owner').classList.toggle('active', side === 'owner');
+  document.getElementById('side-heading').textContent = side === 'requester' ? 'Requester-side records' : 'Patent-owner-side records';
+  render();
+}
+
+function sortBy(key) {
+  SORT = SORT.key === key ? { key, dir: -SORT.dir } : { key, dir: -1 };
+  render();
+}
+
+function toggleFirm(key) {
+  if (OPEN.has(key)) OPEN.delete(key); else OPEN.add(key);
+  render();
+}
+
+function render() {
+  const ftype = document.getElementById('ftype').value;
+  const minv = Number(document.getElementById('minv').value);
+  const q = document.getElementById('q').value.trim().toUpperCase();
+  const base = baseline(SIDE, ftype);
+  let firms = aggregate(SIDE, ftype).filter((f) => f.total >= minv);
+  if (q) firms = firms.filter((f) => f.key.includes(q) || String(f.display || '').toUpperCase().includes(q));
+
+  const winKey = SIDE === 'requester' ? 'ordered' : 'denied';
+  firms.sort((a, b) => {
+    const k = SORT.key;
+    let av, bv;
+    if (k === 'firm') { av = a.display || a.key; bv = b.display || b.key; return SORT.dir * String(av).localeCompare(String(bv)); }
+    if (k === 'rate') { av = a[winKey] / a.total; bv = b[winKey] / b.total; }
+    else { av = a[k]; bv = b[k]; }
+    return SORT.dir * (av - bv) || b.total - a.total;
+  });
+
+  document.getElementById('side-sub').innerHTML = SIDE === 'requester'
+    ? `How often each firm's reexamination request was <strong>ordered</strong>. Baseline for this population: <strong>${pct(base.ordered, base.total)}</strong> ordered (${base.ordered} of ${base.total}).`
+    : `How often a request against a patent this firm represented was <strong>denied</strong>. Baseline for this population: <strong>${pct(base.total - base.ordered, base.total)}</strong> denied (${base.total - base.ordered} of ${base.total}).`;
+
+  if (!firms.length) {
+    document.getElementById('body').innerHTML = '<div class="state">No firms match these filters.</div>';
+    return;
+  }
+
+  const th = (key, label, cls) => `<th class="sortable ${cls || ''}" onclick="sortBy('${key}')">${label}${SORT.key === key ? (SORT.dir < 0 ? ' &darr;' : ' &uarr;') : ''}</th>`;
+  const body = firms.map((f) => {
+    const open = OPEN.has(f.key);
+    const row = `<tr class="firm-row" onclick="toggleFirm('${esc(f.key).replace(/'/g, "\\'")}')">
+      <td><span class="caret">${open ? '&#9660;' : '&#9654;'}</span> <span class="firm-name">${esc(f.display || f.key)}</span>${f.type && f.type !== 'firm' ? `<span class="tag">${esc(f.type)}</span>` : ''}</td>
+      <td class="num">${f.total}</td>
+      <td class="num">${f.ordered}</td>
+      <td class="num">${f.denied}</td>
+      <td class="num">${pct(f[winKey], f.total)}</td>
+      <td>${verdictCell(f, base, SIDE)}</td>
+    </tr>`;
+    return row + (open ? detailHtml(f, SIDE) : '');
+  }).join('');
+
+  document.getElementById('body').innerHTML = `<div class="table-wrap"><table><thead><tr>
+    ${th('firm', 'Firm')}
+    ${th('total', 'Reexams', 'num')}
+    ${th('ordered', 'Ordered', 'num')}
+    ${th('denied', 'Denied', 'num')}
+    ${th('rate', SIDE === 'requester' ? 'Grant rate' : 'Denial rate', 'num')}
+    <th>vs. baseline</th>
+  </tr></thead><tbody>${body}</tbody></table></div>
+  <p class="sub" style="margin:10px 0 0">${firms.length} firm(s) shown. Click a row for the underlying proceedings.</p>`;
+}
+
+async function load() {
+  try {
+    const res = await fetch('/api/reexam?firms=1');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    ROWS = data.firms || [];
+    if (!ROWS.length) { document.getElementById('body').innerHTML = '<div class="state">No attributed proceedings yet.</div>'; return; }
+
+    const ownerN = ROWS.filter((r) => r.owner_firm_key).length;
+    const reqN = ROWS.filter((r) => r.requester_firm_key).length;
+    const base = baseline('requester', 'all');
+    const distinct = (f) => new Set(ROWS.map((r) => r[f]).filter(Boolean)).size;
+
+    document.getElementById('kpis').innerHTML = `<div class="kpi-strip">
+      <div class="kpi"><div class="num">${ROWS.length}</div><div class="lbl">Proceedings</div></div>
+      <div class="kpi"><div class="num">${distinct('requester_firm_key')}</div><div class="lbl">Requester-side firms</div></div>
+      <div class="kpi"><div class="num">${distinct('owner_firm_key')}</div><div class="lbl">Owner-side firms</div></div>
+      <div class="kpi"><div class="num">${pct(base.ordered, base.total)}</div><div class="lbl">Baseline grant rate</div></div>
+    </div>`;
+
+    // A perfect record at the median volume, quantified — the concrete number is
+    // what keeps the caveat from reading as boilerplate.
+    const n = 9;
+    const pPerfect = Math.round(Math.pow(base.rate, n) * 100);
+    document.getElementById('baseline-warn').innerHTML = `<strong>Read the grant rate with care.</strong>
+      The Office orders reexamination on <strong>${pct(base.ordered, base.total)}</strong> of requests in this corpus
+      (${base.ordered} of ${base.total}), so an unbeaten requester-side record is close to the expected result:
+      a perfectly average firm has a <strong>${pPerfect}%</strong> chance of going ${n}-for-${n}.
+      A high grant rate here is mostly evidence of a high base rate. Denials are the scarce event, which makes the
+      owner side the more informative half of this page.`;
+
+    document.getElementById('coverage-note').innerHTML = `Attribution covers <strong>${ROWS.length}</strong> proceedings with a
+      determination on file: <strong>${pct(ownerN, ROWS.length)}</strong> have a patent-owner correspondent
+      (${ownerN}) and <strong>${pct(reqN, ROWS.length)}</strong> a requester correspondent (${reqN}).
+      Each proceeding is keyed on its <em>earliest</em> determination, since that is the one answering the request.`;
+
+    document.getElementById('controls').style.display = 'flex';
+    render();
+  } catch (err) {
+    document.getElementById('body').innerHTML = `<div class="state">Failed to load: ${esc(err.message)}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

@@ -6,8 +6,9 @@
 //   GET /api/reexam?nirc=1       →  { nirc: [...] } — request-vs-NIRC art comparison
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
-import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse, listReexamFirms } from '../lib/db.js';
 import { threadPetitions } from '../lib/petitions.js';
+import { canonicalizeFirmKeys } from '../lib/firms.js';
 import { clientErrorDetail } from '../lib/secure.js';
 
 const san = (s) => String(s || '').replace(/[^0-9A-Za-z._-]/g, '_');
@@ -121,6 +122,31 @@ export default async function handler(req, res) {
       // excludedNonPetitions is reported so the page can disclose what was filtered
       // rather than silently shrinking the count.
       res.status(200).json({ trail, excludedNonPetitions: excluded, universe });
+      return;
+    }
+    // Law-firm attribution, both sides, one row per proceeding. Returns the raw
+    // rows rather than server-side aggregates so the page can re-group live as
+    // the minimum-volume threshold and filer-type filters change, and can drill
+    // into a firm's individual proceedings, all without refetching.
+    if (req.query && req.query.firms) {
+      const firms = await listReexamFirms();
+      // The cover sheet clips long correspondent lines, so one firm arrives under
+      // several truncated keys. Collapse them corpus-wide before the page groups,
+      // or a single firm lists as several rows with contradictory records. Both
+      // sides are pooled into one key universe so a firm canonicalizes the same
+      // way whichever side it appeared on.
+      const counts = new Map();
+      for (const r of firms) {
+        for (const k of [r.owner_firm_key, r.requester_firm_key]) {
+          if (k) counts.set(k, (counts.get(k) || 0) + 1);
+        }
+      }
+      const canon = canonicalizeFirmKeys(counts);
+      for (const r of firms) {
+        if (r.owner_firm_key) r.owner_firm_key = canon.get(r.owner_firm_key) || r.owner_firm_key;
+        if (r.requester_firm_key) r.requester_firm_key = canon.get(r.requester_firm_key) || r.requester_firm_key;
+      }
+      res.status(200).json({ firms });
       return;
     }
     if (req.query && req.query.actions) {

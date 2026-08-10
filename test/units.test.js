@@ -899,4 +899,69 @@ test('firms — extracts both cover-sheet blocks by label, never by position', a
   assert.equal(classifyFiler('Unified Patents, LLC'), 'other');
   assert.equal(classifyFiler('KA Filing LLC'), 'other');
   assert.equal(classifyFiler('Sang Young Han'), 'individual');
+  // A truncated firm name keeps no LLP and no trailing ampersand to match on, so
+  // the comma-list shape has to carry it. Real case: this clipped Finnegan line
+  // classified as 'other' and silently vanished from the law-firm leaderboard.
+  assert.equal(classifyFiler('FINNEGAN, HENDERSON, FARABOW, GARRETT &'), 'firm');
+  assert.equal(classifyFiler('Smith, John A.'), 'individual');
+});
+
+test('firms — strips office / client qualifiers so one firm is not a row per office', async () => {
+  const { normalizeFirm } = await import('../lib/firms.js');
+  const k = (s) => normalizeFirm(s).key;
+  // Every variant below is the same firm on the real cover sheets.
+  for (const v of ['FISH & RICHARDSON P.C. (DC)', 'FISH & RICHARDSON P.C. (SV)',
+                   'FISH & RICHARDSON P.C. (MAGIC LEAP)', 'Fish & Richardson PC / Atmel',
+                   'FISH AND RICHARDSON, PC (TC)', 'Fish & Richardson']) {
+    assert.equal(k(v), 'FISH & RICHARDSON', v);
+  }
+  // ...but a different firm sharing the first word must NOT collapse into it.
+  assert.equal(k('FISH IP LAW, LLP'), 'FISH IP LAW');
+  // Dash-qualified offices and clients.
+  assert.equal(k('FisherBroyles, LLP - MAIN CN'), 'FISHERBROYLES');
+  assert.equal(k('FISHERBROYLES, LLP-MAIN CN'), 'FISHERBROYLES');
+  assert.equal(k('Cabello Hall Zinda, PLLC - KPN'), 'CABELLO HALL ZINDA');
+  // Stacked and OCR-clipped brackets.
+  assert.equal(k('Barnes & Thornburg LLP (IN) (J&J)'), 'BARNES & THORNBURG');
+  assert.equal(k('Vista IP Law Group, LLP (Magic Leap'), 'VISTA IP LAW GROUP');
+  assert.equal(k('Volpe Koenig - AMI)'), 'VOLPE KOENIG');
+  // A mid-name bracket is part of the name, not a trailing qualifier.
+  assert.equal(k('Smith (Jones) Law LLP'), 'SMITH JONES LAW');
+  // A hyphen inside a single-word name is not a qualifier boundary.
+  assert.equal(k('Foo-Bar'), 'FOO-BAR');
+  // OCR drops the space around the ampersand.
+  assert.equal(k('Finnegan, Henderson, Farabow, Garrett &Dunner LLP'),
+    'FINNEGAN HENDERSON FARABOW GARRETT & DUNNER');
+});
+
+test('firms — canonicalizes OCR-truncated variants onto the best-supported key', async () => {
+  const { canonicalizeFirmKeys } = await import('../lib/firms.js');
+  // The cover sheet clips long lines, so one firm arrives under a chain of
+  // truncations. No per-string rule can recover the missing words.
+  const canon = canonicalizeFirmKeys(new Map([
+    ['FINNEGAN HENDERSON FARABOW', 6],
+    ['FINNEGAN HENDERSON FARABOW GARRETT', 58],
+    ['FINNEGAN HENDERSON FARABOW GARRETT & DUNNER', 15],
+    ['COVINGTON & BURLING', 8],
+    ['COVINGTON & BURLINGTON', 1],
+    ['FISH & RICHARDSON', 55],
+    ['FISH IP LAW', 2],
+    ['LEE & HAYES', 11],
+    ['LAW', 3],
+  ]));
+  // All three truncations collapse, and onto the BEST-SUPPORTED spelling — not the
+  // longest, which is usually the one with an address fragment welded on.
+  const fin = 'FINNEGAN HENDERSON FARABOW GARRETT';
+  assert.equal(canon.get('FINNEGAN HENDERSON FARABOW'), fin);
+  assert.equal(canon.get('FINNEGAN HENDERSON FARABOW GARRETT & DUNNER'), fin);
+  assert.equal(canon.get(fin), fin);
+  // Two distinct firms are never merged on a shared stem...
+  assert.equal(canon.get('FISH & RICHARDSON'), 'FISH & RICHARDSON');
+  assert.equal(canon.get('FISH IP LAW'), 'FISH IP LAW');
+  // ...which is why the word-boundary rule leaves this misspelling unmerged: an
+  // accepted miss, taken deliberately over the risk of merging real firms.
+  assert.equal(canon.get('COVINGTON & BURLINGTON'), 'COVINGTON & BURLINGTON');
+  // A short generic stem must not absorb anything.
+  assert.equal(canon.get('LAW'), 'LAW');
+  assert.equal(canon.get('LEE & HAYES'), 'LEE & HAYES');
 });

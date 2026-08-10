@@ -26,7 +26,7 @@ import {
   getDeterminationsToCheckTechCenter,
   getPatentsToScanForProceedings, markPatentProceedingsScanned, upsertPatentProceeding,
   upsertPtabInstitution, upsertPtabDd, upsertPtabFwdMeta, getPtabKv, setPtabKv,
-  getOrderedReexamsToCheckPetitions,
+  getOrderedReexamsToCheckPetitions, getDeniedReexamsToCheckPetitions, markPetitionScan,
   getDecisionsToStartOcr, setDecisionOcrDone, setDecisionOcrFailed,
   getPetitionsToCheck325d, setPetition325dDone, setPetition325dPendingOcr, setPetition325dFailed,
   getActivePetitionsToRefresh,
@@ -158,6 +158,19 @@ async function maybeSendSubscriberDigest(req) {
   return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors };
 }
 
+// Classify + record every petition-trail doc in an already-fetched documents
+// feed. Shared by every harvest step below so there's one place that turns a
+// documents feed into petition-trail rows.
+async function harvestPetitionDocs(appNum, docs) {
+  const petDocs = [];
+  for (const d of docs) {
+    const code = (d.documentCode || '').toUpperCase();
+    const pet = classifyPetitionDoc(code, d.description);
+    if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
+  }
+  if (petDocs.length) await recordPetitionDocs(appNum, petDocs);
+}
+
 // Detect NIRC / reexamination certificate documents for ordered reexams, so we
 // can flag concluded proceedings. Capped per run; rolling (re-checks weekly).
 async function detectConclusionsStep(maxApps, deadline) {
@@ -169,25 +182,46 @@ async function detectConclusionsStep(maxApps, deadline) {
     const app = r.application_number;
     try {
       const docs = await fetchDocuments(app);
-      let nirc = null; const certs = [], petDocs = [];
+      let nirc = null; const certs = [];
       for (const d of docs) {
         const code = (d.documentCode || '').toUpperCase();
         if (code === 'RXNIRC' && !nirc) nirc = d;
         if (code === 'RXCERT') certs.push({ id: d.documentIdentifier, date: d.officialDate });
-        // Petition-trail harvest: same feed, zero extra API calls. Stops with the
-        // cert checks once the proceeding concludes — which is the desired scope.
-        const pet = classifyPetitionDoc(code, d.description);
-        if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
       }
       await recordConclusionDocs(app, {
         nircDocId: nirc && nirc.documentIdentifier, nircDate: nirc && nirc.officialDate,
         certCandidates: certs,
       });
-      if (petDocs.length) await recordPetitionDocs(app, petDocs);
+      // Petition-trail harvest: same feed, zero extra API calls. Stops with the
+      // cert checks once the proceeding concludes — which is the desired scope.
+      await harvestPetitionDocs(app, docs);
       if (nirc || certs.length) found++;
     } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
   }
   return { checked: rows.length, concluded: found, errors };
+}
+
+// Denied reexams draw no ongoing check anywhere else — detectConclusionsStep is
+// ordered-only (no certificate to watch for on a denial) and scanOne stops the
+// moment ANY determination lands. A denied proceeding can still receive a
+// Petition for Review of the denial (RXRPET) well after the fact, so this keeps
+// every denied proceeding in a small, indefinite rotation (no "concluded" signal
+// exists to drop one, but the population is small enough that this is cheap).
+async function detectDeniedPetitionsStep(maxApps, deadline) {
+  const rows = await getDeniedReexamsToCheckPetitions(maxApps);
+  let checked = 0;
+  const errors = [];
+  for (const r of rows) {
+    if (Date.now() > deadline) break;
+    const app = r.application_number;
+    try {
+      const docs = await fetchDocuments(app);
+      await harvestPetitionDocs(app, docs);
+      await markPetitionScan(app);
+      checked++;
+    } catch (e) { errors.push({ application: app, error: String(e.message || e) }); }
+  }
+  return { scanned: rows.length, checked, errors };
 }
 
 async function enumerate() {
@@ -244,13 +278,7 @@ async function scanOne(appNum, filingDate) {
   // without this the 1.183-waiver/§ 325(d) petitions filed before the order were
   // invisible. Same feed, no extra API call.
   try {
-    const petDocs = [];
-    for (const d of docs) {
-      const code = (d.documentCode || '').toUpperCase();
-      const pet = classifyPetitionDoc(code, d.description);
-      if (pet) petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome });
-    }
-    if (petDocs.length) await recordPetitionDocs(appNum, petDocs);
+    await harvestPetitionDocs(appNum, docs);
   } catch { /* never fail the determination scan over petition bookkeeping */ }
 
   // Patent owner pre-order SNQ submissions (for reexams filed on/after cutoff),
@@ -456,6 +484,14 @@ export default async function handler(req, res) {
       petitions = { scanned: apps.length, detected, ocrDone };
     } catch (e) { petitions = { error: String(e.message || e) }; }
 
+    // 3d-2) Same petition-trail harvest as 3d/3c, but for denied reexams — which
+    // neither of those steps ever reaches (see detectDeniedPetitionsStep above).
+    let deniedPetitions = { skipped: true };
+    try {
+      const dDeadline = Math.min(Date.now() + 8000, runDeadline);
+      deniedPetitions = await detectDeniedPetitionsStep(12, dDeadline);
+    } catch (e) { deniedPetitions = { error: String(e.message || e) }; }
+
     // 3e) Office action timing: find first non-final / final action dates for
     // ordered reexams per run (rolling, daily cooldown, re-checks until a final
     // action issues). Processed in small concurrent batches for throughput so a
@@ -574,6 +610,7 @@ export default async function handler(req, res) {
       subscriberDigest,
       conclusions,
       petitions,
+      deniedPetitions,
       actions,
       techCenters,
       petition325d,

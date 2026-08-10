@@ -1,10 +1,12 @@
-// ONE-TIME backfill: sweep every tracked reexam proceeding's documents feed and
-// harvest all petition-trail docs (petitions / oppositions / decisions) into
+// Backfill: sweep tracked reexam proceedings' documents feeds and harvest all
+// petition-trail docs (petitions / oppositions / decisions) into
 // reexam_petition_docs. DIRECT from USPTO (local key → zero Vercel transfer).
-// Going forward, the certificate-check scan harvests new docs for free, so this
-// sweep never needs to run again (concluded proceedings no longer change).
+// The default (non-gap) full sweep is one-time -- the ongoing cron steps cover
+// determined=false, ordered-not-concluded, AND (as of 2026-08) denied
+// proceedings going forward. --gap covers the remaining, smaller set (concluded
+// proceedings, and ones aged out of the watch window) on a recurring schedule.
 //
-//     set -a && . ./grounds-secrets.env && set +a && node pettrail-backfill.mjs [--limit N] [--offset M]
+//     set -a && . ./grounds-secrets.env && set +a && node pettrail-backfill.mjs [--gap] [--limit N] [--offset M]
 
 import { sql } from '@vercel/postgres';
 import { fetchDocuments } from './lib/uspto.js';
@@ -26,11 +28,15 @@ const OFFSET = num('--offset', 0);
 // proceedings still awaiting an order — exactly where PRE-ORDER petitions live
 // (e.g. 90016272 and 90016411 each had an RXPET. + RXPTDI that never got picked up).
 //
-// --gap restricts the sweep to proceedings that NEITHER ongoing harvest reaches:
-// scanOne covers `determined = false` and detectConclusionsStep covers ordered-
-// but-not-concluded, which together leave concluded proceedings, ones denied
-// without ever being ordered, and ones aged out of the 24-month watch window.
-// That's the set worth re-checking on a schedule; it's ~1/4 the full universe.
+// --gap restricts the sweep to proceedings that the ongoing hourly cron doesn't
+// (fully) reach: scanOne covers `determined = false`, detectConclusionsStep
+// covers ordered-but-not-concluded, and detectDeniedPetitionsStep covers denied
+// proceedings -- which together leave concluded proceedings and ones aged out
+// of the 24-month watch window. (Denied proceedings are still included in this
+// query's result set too -- harmless redundant work, since detectDeniedPetitionsStep
+// already checks them every ~2 days -- but the SQL wasn't narrowed further since
+// the population is tiny either way.) That's the set worth re-checking on a
+// schedule; it's ~1/4 the full universe.
 const GAP = args.includes('--gap');
 const { rows } = GAP
   ? await sql`

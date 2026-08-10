@@ -10,7 +10,7 @@
 
 import { sql } from '@vercel/postgres';
 import { fetchDocuments } from './lib/uspto.js';
-import { recordPetitionDocs, recordUnclassifiedPetitionCode } from './lib/db.js';
+import { recordPetitionDocs, recordUnclassifiedPetitionCode, pruneClassifiedPetitionCodes } from './lib/db.js';
 import { classifyPetitionDoc } from './lib/petitions.js';
 
 if (!process.env.POSTGRES_URL || !process.env.USPTO_API_KEY) {
@@ -73,6 +73,7 @@ const PETITIONISH = /PET|RQ|REQ|WAIV|EXT|SUSP|RECON|REV/;
 const PETITIONISH_DESC = /petition|request|extension|waiv|suspend|reconsider|review/i;
 
 let swept = 0, withPets = 0, docsTotal = 0, failed = 0, flagged = 0;
+const recognized = new Set(); // codes that DID classify — used to prune stale audit rows
 for (const r of rows) {
   const app = r.application_number;
   try {
@@ -82,7 +83,7 @@ for (const r of rows) {
     for (const d of docs) {
       const code = (d.documentCode || '').toUpperCase();
       const pet = classifyPetitionDoc(code, d.description);
-      if (pet) { petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome }); continue; }
+      if (pet) { recognized.add(code); petDocs.push({ doc_id: d.documentIdentifier, official_date: (d.officialDate || '').slice(0, 10), doc_code: code, kind: pet.kind, outcome: pet.outcome }); continue; }
       if (code && !unknown.has(code) && (PETITIONISH.test(code) || PETITIONISH_DESC.test(d.description || ''))) {
         unknown.set(code, { description: d.description || '', docId: d.documentIdentifier });
       }
@@ -95,7 +96,9 @@ for (const r of rows) {
     if (swept % 50 === 0) console.log(`  …${swept}/${rows.length} swept (${docsTotal} petition docs so far)`);
   } catch (e) { failed++; console.log(`${app}: ${e.message.slice(0, 100)}`); }
 }
-console.log(`\nDone. Swept ${swept}, failed ${failed}. ${docsTotal} petition doc(s) across ${withPets} proceeding(s). ${flagged} unrecognized-code sighting(s) logged.`);
+// Any code that classified somewhere in the corpus is no longer a review item.
+const pruned = await pruneClassifiedPetitionCodes([...recognized]);
+console.log(`\nDone. Swept ${swept}, failed ${failed}. ${docsTotal} petition doc(s) across ${withPets} proceeding(s). ${flagged} unrecognized-code sighting(s) logged; ${pruned} now-classified code(s) pruned from the audit.`);
 const { rows: t } = await sql`SELECT kind, count(*)::int n FROM reexam_petition_docs GROUP BY kind ORDER BY kind`;
 console.log('table now:', t.map((x) => `${x.kind}=${x.n}`).join(' '));
 try { await sql.end(); } catch { /* */ }

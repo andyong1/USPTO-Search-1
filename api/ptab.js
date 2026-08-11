@@ -575,6 +575,7 @@ export default async function handler(req, res) {
     // ── Filings trends read (daily series per kind) ──
     if (q.filings) {
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      res.setHeader('Vercel-CDN-Cache-Control', 'max-age=300, stale-while-revalidate=3600');
       const rows = await listFilings();
       const series = { reexam: [], ipr: [] };
       let updatedAt = null;
@@ -598,6 +599,7 @@ export default async function handler(req, res) {
       // bills the database-to-app leg, so the real cost of one /reexam load was
       // ~7.7 MB, and caching /api/reexam alone left three quarters of it in place.
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      res.setHeader('Vercel-CDN-Cache-Control', 'max-age=300, stale-while-revalidate=3600');
       const [dets, decisions, fwd, filings, patentProcs, ppCov, reexamGrounds, fwdGrounds] = await Promise.all([
         listRecentDeterminations(), listPtabDecisions(), listPtabFwdBrief(), listFilings(),
         listPatentProceedings(), patentProceedingsCoverage(),
@@ -800,6 +802,7 @@ export default async function handler(req, res) {
     if (q.decisions) {
       // 2.43 MB per load of /ptab-decisions, previously uncached.
       res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      res.setHeader('Vercel-CDN-Cache-Control', 'max-age=300, stale-while-revalidate=3600');
       const [drows, litMap, patentProcs, fwdBrief, reexMap] = await Promise.all([
         listPtabDecisions(), getLitigationMap(), listPatentProceedings(), listPtabFwdBrief(), getPatentReexamsMap(),
       ]);
@@ -854,6 +857,7 @@ export default async function handler(req, res) {
     // 0.99 MB per load of /ptab. The mutating branches above (scan, extract,
     // classify, bump, …) keep no-store — only the read paths are cached.
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+      res.setHeader('Vercel-CDN-Cache-Control', 'max-age=300, stale-while-revalidate=3600');
     const all = await listPtabFwd();
     const summary = { total: all.length, petitioner_all: 0, partial: 0, po_none: 0, other: 0, pending: 0, extractPending: 0, dd: 0, ddPending: 0 };
     let latestFwd = '';

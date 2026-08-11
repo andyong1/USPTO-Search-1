@@ -35,6 +35,12 @@ export default async function handler(req, res) {
     // The trade is up to 5 minutes of staleness. The crons run hourly at most, so
     // no update was ever visible faster than that in practice.
     res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
+    // Cloudflare fronts this domain and interprets Cache-Control for its own
+    // cache, which left some branches of this endpoint reproducibly MISSing at
+    // Vercel's edge while others HIT. Vercel-CDN-Cache-Control addresses Vercel's
+    // cache specifically and is not consumed by an upstream proxy, so the two
+    // layers stop competing over one header.
+    res.setHeader('Vercel-CDN-Cache-Control', 'max-age=300, stale-while-revalidate=3600');
     // A curl config file: run `curl --create-dirs -K reexam-downloads.txt` to pull
     // every determination + office-action PDF into reexam-docs/ locally. Needs only
     // curl.exe (built into Windows 10/11) — no Node, npm, or PowerShell scripts.

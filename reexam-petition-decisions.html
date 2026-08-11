@@ -456,7 +456,14 @@ function render() {
   const rows = slice.map((t) => {
     const v = view(t);
     const num = v.app;
-    const petCell = t.petition ? `${fmtDate(v.pet_date)}${docLinks(num, t.petition.doc_id)}` : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>';
+    // An opposition standing alone answers a paper the Office never entered into
+    // the wrapper, so there is no petition to show and none is missing from our
+    // side. Says so rather than leaving a bare dash that reads as a data gap.
+    const petCell = t.petition
+      ? `${fmtDate(v.pet_date)}${docLinks(num, t.petition.doc_id)}`
+      : (t.opposition && !t.decision
+        ? '<span class="note" title="This opposition answers a paper that is not in the file wrapper — it was not entered by the Office — so there is no petition document to pair it with.">(opposes a paper not in the wrapper)</span>'
+        : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>');
     const oppCell = t.opposition ? `${fmtDate(v.opp_date)}${docLinks(num, t.opposition.doc_id)}` : dash;
     const decCell = t.decision ? `${outcomeBadge(v)} ${fmtDate(v.dec_date)}${docLinks(num, t.decision.doc_id)}` : outcomeBadge(v);
     return `<tr>
@@ -518,7 +525,13 @@ function pagerHtml(cur, pages, start, end, total) {
 function buildStats() {
   const el = document.getElementById('stat');
   const vs = _rows.map(view);
-  const total = vs.length;
+  // A thread is not the same thing as a petition. Some rows carry only an
+  // opposition (a paper answering a filing the Office never entered) or only a
+  // decision (the petition it resolved is not in the wrapper). Counting threads
+  // overstated "Petitions Collected" by every such row, and left the
+  // opposition-only ones reading as petitions awaiting a decision.
+  const petitions = vs.filter((v) => v.pet_date);
+  const total = petitions.length;
   const decisionsIssued = vs.filter((v) => v.outcome !== 'pending').length;
   const withOpp = vs.filter((v) => v.opp_date).length;
   // Petitions granted leave to file a § 325(d) paper, and how the CRU then ruled
@@ -532,7 +545,7 @@ function buildStats() {
   const granted = vs.filter((v) => v.outcome === 'granted' && !v.referredToCru).length;
   const partial = vs.filter((v) => v.outcome === 'granted_in_part' && !v.referredToCru).length;
   const dismissed = vs.filter((v) => v.outcome === 'dismissed' || v.outcome === 'denied').length;
-  const pending = vs.filter((v) => v.outcome === 'pending').length;
+  const pending = petitions.filter((v) => v.outcome === 'pending').length;
   // Leave-only grants stay in the denominator — the Office did resolve them —
   // but out of the numerator, since the relief sought was not granted.
   const decidedForRate = granted + partial + referred.length + dismissed;
@@ -569,7 +582,11 @@ function buildStats() {
 
 // How much of the table has relief data, and from which read — so the numbers
 // below are never mistaken for full coverage.
-function reliefCoverageHtml(vs) {
+function reliefCoverageHtml(all) {
+  // An opposition-only row has no relief to identify and never will — it is not
+  // a petition. Leaving it in the denominator would report the coverage of this
+  // pass as worse than it is.
+  const vs = all.filter((v) => v.pet_date || v.dec_date);
   const office = vs.filter((v) => v.reliefSource === 'office').length;
   const filed = vs.filter((v) => v.reliefSource === 'filed').length;
   const none = vs.length - office - filed;

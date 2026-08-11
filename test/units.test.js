@@ -833,7 +833,9 @@ test('threadPetitions — an extension ruling never closes a substantive petitio
     { doc_id: 'extg', official_date: '2026-07-07', doc_code: 'RXEXTG', kind: 'decision', outcome: 'granted' },
   ]);
   const sub = t.find((x) => x.petition && x.petition.doc_id === 'p325');
-  assert.equal(sub.opposition.doc_id, 'opp');
+  // The opposition lands 78 days later, well past the answering window, so it is
+  // NOT an answer to this petition — see the opposition-window test below.
+  assert.equal(sub.opposition, null);
   assert.equal(sub.decision, null, 'the § 325(d) petition must remain undecided');
   assert.ok(t.some((x) => !x.petition && x.decision && x.decision.doc_id === 'extg'),
     'the extension grant becomes its own decision-only row');
@@ -855,6 +857,53 @@ test('threadPetitions — an extension ruling never closes a substantive petitio
   ]);
   assert.equal(t3.length, 1);
   assert.equal(t3[0].decision.outcome, 'denied');
+});
+
+test('threadPetitions — an opposition past the answering window is not paired', async () => {
+  const { threadPetitions } = await import('../lib/petitions.js');
+  // Real 90/015,704, client-confirmed: the paper filed 57 days after the petition
+  // opposes a patent owner filing the Office never entered into the wrapper. FIFO
+  // attached it to the only petition in sight, asserting a relationship that does
+  // not exist. Corpus-wide the gap is 14 days at the 25th, 50th and 75th
+  // percentile, so 57 days is not a slow opposition.
+  const t = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-02-23', doc_code: 'RXRPET', kind: 'petition' },
+    { doc_id: 'opp', official_date: '2026-04-21', doc_code: 'RXOPPPET', kind: 'opposition' },
+  ]);
+  assert.equal(t.length, 2);
+  assert.equal(t[0].petition.doc_id, 'pet');
+  assert.equal(t[0].opposition, null, 'the petition stands alone');
+  assert.equal(t[1].petition, null, 'the opposition becomes its own row');
+  assert.equal(t[1].opposition.doc_id, 'opp');
+
+  // An opposition inside the window still pairs — the rule must not detach the
+  // ordinary case. 90/015,601 has both shapes in one proceeding.
+  const t2 = threadPetitions([
+    { doc_id: 'p1', official_date: '2026-01-21', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'o1', official_date: '2026-02-04', doc_code: 'RXOPPPET', kind: 'opposition' },
+  ]);
+  assert.equal(t2.length, 1);
+  assert.equal(t2[0].opposition.doc_id, 'o1');
+
+  // Detaching is one-directional: an out-of-window opposition is never re-homed
+  // onto an even earlier petition, which would be a worse fit still.
+  const t3 = threadPetitions([
+    { doc_id: 'old', official_date: '2025-01-01', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'new', official_date: '2026-01-01', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'opp', official_date: '2026-06-01', doc_code: 'RXOPPPET', kind: 'opposition' },
+  ]);
+  assert.ok(t3.every((x) => !(x.petition && x.opposition)), 'neither petition takes it');
+  assert.ok(t3.some((x) => !x.petition && x.opposition && x.opposition.doc_id === 'opp'));
+
+  // A missing date must not silently detach: with no gap to measure, pair as
+  // before. (An undated paper sorts last, so it is the opposition that can lack
+  // a date and still reach an open thread.)
+  const t4 = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-06-01', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'opp', official_date: null, doc_code: 'RXOPPPET', kind: 'opposition' },
+  ]);
+  assert.equal(t4.length, 1);
+  assert.equal(t4[0].opposition.doc_id, 'opp');
 });
 
 test('firms — extracts both cover-sheet blocks by label, never by position', async () => {

@@ -12,6 +12,25 @@
 # 1,500 rows of control numbers. Delete the /api/ rule to reverse it; edge
 # caching already bounds the database cost either way.
 
+# Cloudflare prepends its own managed Content Signals policy to this file, and
+# that block opens with its own `User-agent: *` carrying `Allow: /`. So the served
+# file has TWO `*` groups. Google merges same-agent groups and applies the
+# longest match, which means /api/ still wins over Allow: / -- but a parser that
+# takes only the FIRST matching group would stop at Cloudflare's Allow and never
+# reach these rules.
+#
+# A named group always beats `*` in every compliant parser, so the crawlers that
+# actually matter get the rule stated explicitly rather than relying on how
+# duplicate `*` groups are merged. Googlebot is the one that executes JavaScript
+# and would otherwise fetch the JSON while rendering.
+User-agent: Googlebot
+Disallow: /api/
+Disallow: /status
+
+User-agent: Bingbot
+Disallow: /api/
+Disallow: /status
+
 User-agent: *
 Disallow: /api/
 

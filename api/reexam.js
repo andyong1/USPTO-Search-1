@@ -6,7 +6,7 @@
 //   GET /api/reexam?nirc=1       →  { nirc: [...] } — request-vs-NIRC art comparison
 //   GET /api/reexam?manifest=1   →  a curl config (text) to bulk-download every
 //                                   determination + office-action PDF locally.
-import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse, listReexamFirms } from '../lib/db.js';
+import { listRecentDeterminations, listPostOrderPetitions, listReexamActions, listNircArt, listPetitionTrailDocs, getPetitionUniverse, listReexamFirms, getD325SummariesByDocIds } from '../lib/db.js';
 import { threadPetitions } from '../lib/petitions.js';
 import { canonicalizeFirmKeys, firmDisplayCorrections } from '../lib/firms.js';
 import { clientErrorDetail } from '../lib/secure.js';
@@ -20,9 +20,21 @@ export default async function handler(req, res) {
     return;
   }
   try {
-    // Always serve fresh data — no edge/browser caching — so updates from the cron
-    // and backfills show up immediately rather than after a stale-cache window.
-    res.setHeader('Cache-Control', 'no-store');
+    // Every branch here is an unbounded read of a whole table: the determinations
+    // list alone is ~1.7 MB per call. Under the previous `no-store` each visit,
+    // refresh and crawler hit re-ran the query, which is what put Neon network
+    // transfer at 4 GB in 11 days.
+    //
+    // So the CDN absorbs repeats instead. `max-age=0` keeps the BROWSER
+    // revalidating, so a user who reloads after a cron run sees new data as soon
+    // as the edge copy expires rather than holding a stale copy locally;
+    // `s-maxage=300` means at most one database read per 5 minutes per region
+    // however many requests arrive; `stale-while-revalidate` serves the old copy
+    // while the new one is fetched, so nobody waits on it.
+    //
+    // The trade is up to 5 minutes of staleness. The crons run hourly at most, so
+    // no update was ever visible faster than that in practice.
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
     // A curl config file: run `curl --create-dirs -K reexam-downloads.txt` to pull
     // every determination + office-action PDF into reexam-docs/ locally. Needs only
     // curl.exe (built into Windows 10/11) — no Node, npm, or PowerShell scripts.
@@ -47,6 +59,20 @@ export default async function handler(req, res) {
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="reexam-downloads.txt"');
       res.status(200).send(lines.join('\n') + '\n');
+      return;
+    }
+    // AI § 325(d) summaries for specific determination documents. The list
+    // response carries only a has_d325_summary flag, so the page asks for the
+    // text when a row is expanded — and for the whole filtered set when the user
+    // exports, which is the one time all of it is genuinely needed.
+    if (req.query && req.query.d325) {
+      const ids = String(req.query.d325).split(',')
+        .map((s) => s.trim().replace(/[^0-9A-Za-z._-]/g, ''))
+        .filter(Boolean).slice(0, 2000);
+      const map = await getD325SummariesByDocIds(ids);
+      const summaries = {};
+      for (const [id, v] of map) summaries[id] = v.summary;
+      res.status(200).json({ summaries });
       return;
     }
     if (req.query && req.query.petitions) {

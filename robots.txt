@@ -1,0 +1,25 @@
+# Pages are open to crawlers; the JSON endpoints behind them are not.
+#
+# Every /api/reexam call is an unbounded read of a whole table (~1.7 MB for the
+# determinations list), and a crawler fetching those directly indexes nothing a
+# person would ever search for. Blocking them keeps crawl budget on the pages and
+# keeps Neon network transfer off the JSON.
+#
+# Trade-off worth knowing: renderers that execute JavaScript (Googlebot does)
+# will now see each data page's headings and explainer text but an empty table,
+# because the fetch that fills it is disallowed. That is the intended bargain
+# here — the static description of each dataset is what is worth indexing, not
+# 1,500 rows of control numbers. Delete the /api/ rule to reverse it; edge
+# caching already bounds the database cost either way.
+
+User-agent: *
+Disallow: /api/
+
+# Operational dashboard, password-gated and of no public interest.
+Disallow: /status
+
+# /reexam-firms is deliberately NOT listed. It relies on a noindex meta tag, and
+# a Disallow here would stop a crawler fetching the page at all -- so it would
+# never read the noindex, and the bare URL could still surface in results. The
+# two mechanisms work against each other; noindex is the correct one for keeping
+# a page out of an index. Its data call is covered by the /api/ rule above.

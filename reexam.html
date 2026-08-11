@@ -587,13 +587,27 @@ function litText(d) {
     return (c.caption || '') + (paren ? ` (${paren})` : '') + st;
   }).join('; ');
 }
-function exportCsv() {
+// The export keeps its § 325(d) Summary column, so it has to pull the text the
+// list response no longer carries — but only for the rows being exported, and
+// only when someone actually exports. That moves the cost off every page load.
+async function exportCsv() {
+  const btn = document.getElementById('csv-btn');
+  const label = btn ? btn.textContent : '';
+  const data = filteredSorted();
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+    await fetchD325(data.filter((d) => d325Addressed(d) === 'Y').map((d) => d.document_identifier));
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+    alert('Could not load the § 325(d) summaries for the export: ' + err.message);
+    return;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = label; }
   const header = ['Control No.', 'Determination', 'Date', '325(d) Discussion', '325(d) Summary', 'Examiner Name', 'Group Art Unit', 'Patent Owner', 'Requester', 'Requester Name', 'Related Litigation'];
-  const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const rows = filteredSorted().map((d) => {
+  const rows = data.map((d) => {
     const v = d325Addressed(d);
     return [d.application_number, d.determination_type, fmtDate(d.official_date),
-      v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (d.d325_summary || '') : '',
+      v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '', v === 'Y' ? (D325_CACHE.get(d.document_identifier) || '') : '',
       titleCaseName(d.examiner_name || ''), d.group_art_unit, titleCaseName(d.patent_owner || ''), REQUESTER_LABEL[requesterKey(d)], titleCaseName(d.requester_name || ''), litText(d)];
   });
   window.exportXlsx('reexam-determinations.xlsx', header, rows, { colWidths: header.map(function () { return 18; }) });
@@ -668,14 +682,53 @@ function requesterCell(d) {
 // summarized). Reflects a stored AI reading of the determination text.
 function d325Addressed(d) {
   const a = String(d.d325_addressed || '');
-  if (a === 'Yes' && d.d325_summary) return 'Y';
+  // Keyed on the FLAG, not the text: the list response no longer carries the
+  // summary, and testing the absent text here would silently blank every badge.
+  if (a === 'Yes' && d.has_d325_summary) return 'Y';
   if (a === 'No' || /no explicit/i.test(a)) return 'N';
   return '';
 }
+
+// Summaries fetched so far, by determination doc id. Also consulted by the
+// exporter, so expanding rows before exporting costs nothing extra.
+const D325_CACHE = new Map();
+
+/** Fetch summaries for the given doc ids that aren't cached yet. */
+async function fetchD325(docIds) {
+  const need = [...new Set(docIds.filter((id) => id && !D325_CACHE.has(id)))];
+  if (!need.length) return;
+  // Chunked so a full-corpus export doesn't build a URL the platform rejects.
+  for (let i = 0; i < need.length; i += 200) {
+    const batch = need.slice(i, i + 200);
+    const res = await fetch('/api/reexam?d325=' + encodeURIComponent(batch.join(',')));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const { summaries } = await res.json();
+    // Record every id asked for, so one that has no summary is not re-requested.
+    for (const id of batch) D325_CACHE.set(id, (summaries && summaries[id]) || '');
+  }
+}
+
+/** Fill a row's summary the first time it is expanded. */
+async function loadD325(el, docId) {
+  if (!el.open) return;
+  const body = el.querySelector('.d325-sum-body');
+  if (!body || body.dataset.loaded) return;
+  try {
+    await fetchD325([docId]);
+    body.dataset.loaded = '1';
+    const txt = D325_CACHE.get(docId) || '';
+    body.innerHTML = (txt ? esc(txt) : '<em>No summary on file.</em>')
+      + '<span class="d325-sum-note">AI-generated summary — verify against the order.</span>';
+  } catch (err) {
+    body.textContent = 'Could not load the summary — ' + err.message;
+  }
+}
+
 function d325Cell(d) {
   const v = d325Addressed(d);
-  if (v === 'Y') return `<details class="d325-sum"><summary><span class="badge d325y">Yes</span></summary>`
-    + `<div class="d325-sum-body">${esc(d.d325_summary)}<span class="d325-sum-note">AI-generated summary — verify against the order.</span></div></details>`;
+  const id = d.document_identifier || '';
+  if (v === 'Y') return `<details class="d325-sum" ontoggle="loadD325(this, '${esc(id)}')"><summary><span class="badge d325y">Yes</span></summary>`
+    + `<div class="d325-sum-body">Loading…</div></details>`;
   if (v === 'N') return '<span class="badge d325n">No</span>';
   return '<span class="ext">—</span>';
 }

@@ -445,7 +445,16 @@ function reliefCell(v) {
 function render() {
   const body = document.getElementById('body');
   const items = sortedRows(filtered());
-  document.getElementById('list-heading').textContent = `Petitions (Total: ${items.length})`;
+  // Rows are not petitions. A row can carry only an opposition (answering a paper
+  // we do not hold) or only a decision (the petition paper was never public), so
+  // labelling the row count "Petitions" contradicted the Petitions Collected KPI.
+  // Both numbers are shown, and both respect the current filters.
+  // items are raw trail rows here, not view() objects — the petition document is
+  // on .petition, and there is no pet_date field to test.
+  const withPet = items.filter((t) => t.petition).length;
+  document.getElementById('list-heading').textContent = withPet === items.length
+    ? `Petitions (${items.length})`
+    : `${items.length} rows — ${withPet} with a petition on file`;
   if (!items.length) { body.innerHTML = '<div class="state">No matching petitions.</div>'; document.getElementById('pager').innerHTML = ''; return; }
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   if (page > pageCount) page = pageCount;

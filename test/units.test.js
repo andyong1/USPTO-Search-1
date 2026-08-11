@@ -906,6 +906,62 @@ test('threadPetitions — an opposition past the answering window is not paired'
   assert.equal(t4[0].opposition.doc_id, 'opp');
 });
 
+test('threadPetitions — a stated opposition target beats the timing window', async () => {
+  const { threadPetitions } = await import('../lib/petitions.js');
+  // Once petopp has read the caption, the date it names decides the pairing —
+  // even at a gap the window alone would reject.
+  const t = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-01-01', doc_code: 'RXPET.', kind: 'petition' },
+    { doc_id: 'opp', official_date: '2026-06-01', doc_code: 'RXOPPPET', kind: 'opposition',
+      opp_opposes_date: '2026-01-01' },
+  ]);
+  assert.equal(t.length, 1);
+  assert.equal(t[0].opposition.doc_id, 'opp', 'evidence overrides the 45-day window');
+
+  // And the converse, which is the 90/015,704 case: the opposition names a paper
+  // that is not in the wrapper, so it pairs with nothing even though a petition
+  // sits well inside the window.
+  const t2 = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-02-23', doc_code: 'RXRPET', kind: 'petition' },
+    { doc_id: 'opp', official_date: '2026-03-05', doc_code: 'RXOPPPET', kind: 'opposition',
+      opp_opposes_date: '2026-03-30' },
+  ]);
+  assert.equal(t2.length, 2);
+  assert.equal(t2[0].opposition, null);
+  assert.equal(t2[1].opposition.doc_id, 'opp');
+
+  // Nobody opposes their own petition: a same-party candidate is disqualified
+  // even inside the window.
+  const t3 = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-05-01', doc_code: 'RXPET.', kind: 'petition',
+      req_party: 'patent_owner' },
+    { doc_id: 'opp', official_date: '2026-05-14', doc_code: 'RXOPPPET', kind: 'opposition',
+      opp_party: 'patent_owner' },
+  ]);
+  assert.equal(t3.length, 2);
+  assert.equal(t3[0].opposition, null);
+
+  // Opposing parties inside the window still pair.
+  const t4 = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-05-01', doc_code: 'RXPET.', kind: 'petition',
+      req_party: 'patent_owner' },
+    { doc_id: 'opp', official_date: '2026-05-14', doc_code: 'RXOPPPET', kind: 'opposition',
+      opp_party: 'third_party_requester' },
+  ]);
+  assert.equal(t4.length, 1);
+  assert.equal(t4[0].opposition.doc_id, 'opp');
+
+  // "unclear" is not evidence of sameness and must not block a pairing.
+  const t5 = threadPetitions([
+    { doc_id: 'pet', official_date: '2026-05-01', doc_code: 'RXPET.', kind: 'petition',
+      req_party: 'unclear' },
+    { doc_id: 'opp', official_date: '2026-05-14', doc_code: 'RXOPPPET', kind: 'opposition',
+      opp_party: 'unclear' },
+  ]);
+  assert.equal(t5.length, 1);
+  assert.equal(t5[0].opposition.doc_id, 'opp');
+});
+
 test('firms — extracts both cover-sheet blocks by label, never by position', async () => {
   const { extractFirmBlocks, normalizeFirm, classifyFiler, isCoverLabel } = await import('../lib/firms.js');
   // Real PTOL-90A shape (90016155): 7590 introduces the OWNER block; the requester

@@ -63,9 +63,15 @@ export default async function handler(req, res) {
       // requests for relief. Threading them produced phantom "pending petition"
       // rows, so drop them before pairing — but only once classification has
       // actually judged them (req_is_petition defaults true when unclassified).
+      // The opposition codes carry the same junk: reading all 234 turned up 14
+      // documents that are appendix copies of decisions from other proceedings,
+      // requester exhibit lists, and unrelated correspondence. Same treatment,
+      // same default -- opp_is_opposition is true until classification says
+      // otherwise.
       let excluded = 0;
       const docs = all.filter((d) => {
         if (d.kind === 'petition' && d.req_is_petition === false) { excluded++; return false; }
+        if (d.kind === 'opposition' && d.opp_is_opposition === false) { excluded++; return false; }
         return true;
       });
       const byApp = new Map();
@@ -92,7 +98,13 @@ export default async function handler(req, res) {
               petitioner: t.petition.req_party || null,
               confidence: t.petition.req_confidence || null,
             },
-            opposition: t.opposition && { doc_id: t.opposition.doc_id, date: t.opposition.official_date, code: t.opposition.doc_code },
+            opposition: t.opposition && {
+              doc_id: t.opposition.doc_id, date: t.opposition.official_date, code: t.opposition.doc_code,
+              // What the paper says it answers, so an unpaired opposition can say
+              // WHY it is unpaired instead of leaving the reader to guess.
+              opposes_date: t.opposition.opp_opposes_date || null,
+              party: t.opposition.opp_party || null,
+            },
             decision: t.decision && {
               doc_id: t.decision.doc_id, date: t.decision.official_date,
               code: t.decision.doc_code, outcome: t.decision.outcome,

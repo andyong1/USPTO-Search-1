@@ -456,13 +456,18 @@ function render() {
   const rows = slice.map((t) => {
     const v = view(t);
     const num = v.app;
-    // An opposition standing alone answers a paper the Office never entered into
-    // the wrapper, so there is no petition to show and none is missing from our
-    // side. Says so rather than leaving a bare dash that reads as a data gap.
+    // An opposition standing alone says what it answers where the paper named a
+    // date, and otherwise only that nothing could be paired. Deliberately does
+    // NOT assert the opposed paper is missing from the docket: checking these
+    // showed some are on the docket under a code we do not read as a petition.
+    const oppOnly = t.opposition && !t.decision;
+    const oppTarget = oppOnly && t.opposition.opposes_date;
     const petCell = t.petition
       ? `${fmtDate(v.pet_date)}${docLinks(num, t.petition.doc_id)}`
-      : (t.opposition && !t.decision
-        ? '<span class="note" title="This opposition answers a paper that is not in the file wrapper — it was not entered by the Office — so there is no petition document to pair it with.">(opposes a paper not in the wrapper)</span>'
+      : (oppOnly
+        ? (oppTarget
+          ? `<span class="note" title="This opposition states that it answers a paper filed on this date. No petition we have collected carries that date — either the paper was never entered into the wrapper, or it is on the docket under a code not read as a petition.">(opposes a paper filed ${fmtDate(oppTarget)})</span>`
+          : '<span class="note" title="This opposition does not identify a dated paper in its front pages, and no petition could be paired with it.">(no petition paired)</span>')
         : '<span class="note" title="The decision is on file but the petition paper itself is not a separate public document.">(petition paper not on file)</span>');
     const oppCell = t.opposition ? `${fmtDate(v.opp_date)}${docLinks(num, t.opposition.doc_id)}` : dash;
     const decCell = t.decision ? `${outcomeBadge(v)} ${fmtDate(v.dec_date)}${docLinks(num, t.decision.doc_id)}` : outcomeBadge(v);

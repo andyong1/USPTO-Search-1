@@ -89,9 +89,16 @@ console.log(`  not oppositions at all: ${nonOpp}`);
 console.log(`  target date read: ${dated} | target named but undated: ${undatedRead}`);
 console.log('party:', JSON.stringify(partyTally), '| confidence:', JSON.stringify(confTally));
 
-// The payoff: how many stated targets actually exist as a petition in the same
-// proceeding. A miss is not an error — it is a paper the Office never entered
-// into the wrapper, and the reason an opposition should stand on its own row.
+// The payoff: how many stated targets actually exist as a petition we harvested.
+// A miss is not an error, but it has TWO very different causes and this report
+// must not assert either one:
+//   - the opposed paper was never entered into the wrapper (90/015,704), or
+//   - it is on the docket that day under a code the classifier does not read as
+//     a petition. Checking the first batch, RXLET. and SES.REQ.PC both carried
+//     real patent owner petitions, which is a harvest gap rather than a missing
+//     paper.
+// So the miss is reported as "no petition-coded document on that date" and left
+// for a person to resolve.
 if (rows.length) {
   const withDate = rows.filter((r) => r.opposesDate);
   let hit = 0;
@@ -103,9 +110,11 @@ if (rows.length) {
         AND substring(official_date::text, 1, 10) = ${r.opposesDate} LIMIT 1`);
     if (q.length) hit++; else misses.push(`${r.app}→${r.opposesDate}`);
   }
-  console.log(`\nstated target present as a petition in the same proceeding: ${hit}/${withDate.length}`);
+  console.log(`\nstated target present as a harvested petition: ${hit}/${withDate.length}`);
   if (misses.length) {
-    console.log(`opposes a paper NOT in the wrapper (${misses.length}) — these belong on their own row:`);
+    console.log(`no petition-coded document on the stated date (${misses.length}) — check each:`);
+    console.log('  either the paper was never entered into the wrapper, or it is on the');
+    console.log('  docket under a code the classifier does not read as a petition.');
     for (const m of misses.slice(0, 25)) console.log(`  ${m}`);
   }
 }

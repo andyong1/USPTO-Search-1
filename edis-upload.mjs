@@ -49,12 +49,12 @@ if (!process.env.POSTGRES_URL) {
 
 const DIR = 'itc-work';
 const DOC_DIR = `${DIR}/documents`;
-const DERIVED_V = 1;          // bump to force re-derivation of every investigation
+const DERIVED_V = 2;          // bump to force re-derivation of every investigation
 const BLOB_PATH = 'itc/itc-data.json';
 // Detail-blob format/derivation version. Bump this whenever the per-investigation
 // blob shape (publishInvestigationDocs) or deriveOne changes, so the next run does a
 // FULL republish and every blob adopts the new format instead of waiting to change.
-const PUBLISH_FMT_V = 1;
+const PUBLISH_FMT_V = 2;
 const STATE_FILE = `${DIR}/.publish-state.json`;   // per-run signatures for incremental republish (gitignored)
 // How many investigations to derive+publish at once. Each is a Neon write + a Vercel
 // Blob PUT (network-bound), so a pool is a large win over the old sequential loop.
@@ -159,9 +159,37 @@ function institutionDate(docs) {
   return first ? first.received_date : null;
 }
 
-// The Commission and its staff are not "participants" worth listing; drop obvious
-// Commission/staff filers from the party/firm rollups.
-const isCommission = (s) => /usitc|office of the secretary|office of unfair import|international trade commission|commission investigative/i.test(s || '');
+// The Commission and its staff are not "participants" worth listing. This must
+// test the WHOLE entry, not look for a substring anywhere in it: on_behalf_of is
+// often a combined party list, and a substring test threw away real complainants
+// and respondents whenever staff appeared alongside them — "Netlist, Inc.,
+// Samsung Electronics Co., Ltd., … and Office of Unfair Import Investigations"
+// was dropped in full, losing Netlist and Samsung from the /itc search index.
+//
+// The previous pattern also missed every judge and commissioner, which is how
+// "Administrative Law Judge" (42,636 documents) and "Chief Administrative Law
+// Judge" (7,847) ended up as searchable "participants" on thousands of
+// investigations. "Adminstrative" is a real misspelling in the EDIS data.
+const ROLE_ONLY = new RegExp('^(?:the\\s+)?(?:' + [
+  '(?:acting\\s+)?(?:chief\\s+)?admin[is]*trative\\s+law\\s+judges?',
+  'office\\s+of\\s+(?:the\\s+)?(?:administrative\\s+law\\s+judges?|secretary|chair(?:man)?|commissioners?|general\\s+counsel|external\\s+relations|administration|unfair\\s+imports?\\s+investigations?)',
+  'office\\s+of\\s+unfair\\s+imports?\\s+investigations?',
+  'commission(?:ers?)?',
+  'commission\\s+investigative\\s+staff',
+  'u\\.?s\\.?\\s*international\\s+trade\\s+commission',
+  'usitc',
+].join('|') + ')\\.?$', 'i');
+
+const norm = (s) => String(s || '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+
+/** True when the entry is ONLY a Commission office or judge, with no real party. */
+const isCommission = (s) => ROLE_ONLY.test(norm(s));
+
+// A combined entry that ends in a staff clause keeps its parties and loses the
+// clause, so searching a party name still works and "unfair import" does not
+// match half the corpus.
+const STAFF_TAIL = /\s*,?\s*and\s+(?:the\s+)?office\s+of\s+unfair\s+imports?\s+investigations?\.?$/i;
+const stripStaffTail = (s) => norm(s).replace(STAFF_TAIL, '').replace(/[,;]\s*$/, '');
 
 function deriveOne(docs, status) {
   const publicDocs = docs.filter((d) => (d.security_level || '').toLowerCase() === 'public');
@@ -171,7 +199,10 @@ function deriveOne(docs, status) {
   const parties = new Set();
   for (const d of docs) {
     if (d.firm_organization && !isCommission(d.firm_organization)) firmCounts.set(d.firm_organization, (firmCounts.get(d.firm_organization) || 0) + 1);
-    if (d.on_behalf_of && !isCommission(d.on_behalf_of)) parties.add(d.on_behalf_of);
+    if (d.on_behalf_of && !isCommission(d.on_behalf_of)) {
+      const p = stripStaffTail(d.on_behalf_of);
+      if (p && !isCommission(p)) parties.add(p);
+    }
   }
   const topFirms = [...firmCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([firm, count]) => ({ firm, count }));
   const dates = docs.map((d) => d.received_date).filter(Boolean).sort();

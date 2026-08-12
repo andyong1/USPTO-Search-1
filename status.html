@@ -36,6 +36,16 @@
     button { cursor: pointer; background: var(--brand); color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 9px 16px; border-radius: 8px; }
     button:hover { background: var(--brand-hover); }
     .muted { color: var(--text-5); font-size: 0.8rem; }
+    /* New-filings feed (moved here from the main search page). */
+    .finding-new td { background: var(--warn-bg); }
+    /* The bg/fg token PAIR, not --bad-fg as a background: that token flips to a
+       light red in dark mode, which would leave white text unreadable on it. */
+    .badge-count { background: var(--bad-bg); color: var(--bad-fg); border-radius: 10px; padding: 1px 9px; font-size: 0.72rem; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+    a.dl { display: inline-block; color: var(--heading); font-size: 0.78rem; font-weight: 600; text-decoration: none; margin-right: 8px; }
+    a.dl:hover { text-decoration: underline; }
+    /* A button that reads as a link, for the per-row "Seen" action. */
+    button.linkish { background: none; color: var(--heading); font-size: 0.78rem; font-weight: 600; padding: 0; border-radius: 0; }
+    button.linkish:hover { text-decoration: underline; }
     .err { color: var(--bad-fg); font-weight: 600; margin-top: 10px; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     a { color: var(--heading); }
@@ -143,11 +153,14 @@ async function statusRemoveWatch(appNum) {
 
 async function load(pw) {
   const h = { 'X-Admin-Password': pw };
-  const [res, subRes, trackedRes, ptabRes] = await Promise.all([
+  const [res, subRes, trackedRes, ptabRes, findRes] = await Promise.all([
     fetch('/api/watchlist?status=1', { headers: h }),
     fetch('/api/watchlist?subscribers=1', { headers: h }),
     fetch('/api/watchlist?tracked=1', { headers: h }),
     fetch('/api/ptab?summary=1'),
+    // Newly filed documents on tracked applications. The plain GET carries the
+    // findings; it is unauthenticated, but acknowledging one is admin-gated.
+    fetch('/api/watchlist', { headers: h }),
   ]);
   if (res.status === 401) throw new Error('Incorrect or missing admin password.');
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -156,7 +169,86 @@ async function load(pw) {
   try { if (subRes.ok) status._subscribers = (await subRes.json()).subscribers || []; } catch { status._subscribers = []; }
   try { if (trackedRes.ok) status._tracked = (await trackedRes.json()).tracked || []; } catch { status._tracked = []; }
   try { status._ptab = ptabRes.ok ? await ptabRes.json() : null; } catch { status._ptab = null; }
+  try { status._findings = findRes.ok ? ((await findRes.json()).findings || []) : []; } catch { status._findings = []; }
   return status;
+}
+
+// ── New filings on tracked applications ────────────────────────────
+// Moved here from the main search page: this is an operational feed — what the
+// daily check turned up and what still needs acknowledging — which is the same
+// question every other card on this page answers, and it sat above the search
+// form for everyone even though only an admin can act on it.
+function newFilingsHtml(s) {
+  const list = s._findings || [];
+  const rows = list.map((f) => {
+    const app = escHtml(f.application_number);
+    const appJs = jsq(f.application_number);
+    const idJs = jsq(f.document_identifier);
+    const formats = String(f.formats || '').split(',').filter(Boolean);
+    const dl = formats.map((fmt) => `<a class="dl" href="/api/document?appNum=${encodeURIComponent(f.application_number)}&documentId=${encodeURIComponent(f.document_identifier)}&format=${encodeURIComponent(fmt)}&disposition=attachment" download>${escHtml(fmt)}</a>`).join('');
+    const view = formats.find((x) => /pdf/i.test(x));
+    // The main page opened these in its own modal viewer. There is no viewer
+    // here, so a PDF opens inline in a new tab instead of porting the modal.
+    const viewLink = view
+      ? `<a class="dl" href="/api/document?appNum=${encodeURIComponent(f.application_number)}&documentId=${encodeURIComponent(f.document_identifier)}&format=${encodeURIComponent(view)}&disposition=inline" target="_blank" rel="noopener">View</a>`
+      : '';
+    return `<tr class="finding-new">
+      <td><a href="/uspto-search?app=${encodeURIComponent(f.application_number)}" target="_blank" rel="noopener">${app}</a>${f.label ? `<br><span class="muted">${escHtml(f.label)}</span>` : ''}</td>
+      <td>${escHtml(f.document_code || '')}<br><span class="muted">${escHtml(f.description || '')}</span></td>
+      <td>${fmtDate(f.official_date)}</td>
+      <td>${escHtml(f.direction || '')}</td>
+      <td style="white-space:nowrap">${viewLink}${dl || (viewLink ? '' : '<span class="muted">—</span>')}</td>
+      <td><button class="linkish" onclick="ackOne('${appJs}','${idJs}')">✓ Seen</button></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div><h2 style="margin:0">New Filings (daily check)${list.length ? ` <span class="badge-count">${list.length} new</span>` : ''}</h2>
+      <div class="sub" style="margin:4px 0 0">Documents newly filed on tracked applications. Documents dated tomorrow are not retrievable until tomorrow.</div></div>
+      ${list.length ? '<button onclick="ackFindings()">Mark all as seen</button>' : ''}
+    </div>
+    ${list.length
+      ? `<div style="overflow:auto;margin-top:14px"><table><thead><tr>
+          <th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>View / Download</th><th>Action</th>
+        </tr></thead><tbody>${rows}</tbody></table></div>`
+      : '<div class="muted" style="margin-top:12px">No new filings awaiting review. The daily check lists newly filed documents here.</div>'}
+  </div>`;
+}
+
+// Acknowledge every outstanding finding. Admin-gated server-side; the stored
+// session password is reused rather than re-prompting, as the edit/remove
+// actions above already do.
+async function ackFindings() {
+  const pw = sessionStorage.getItem(PW_KEY);
+  if (!pw) { location.reload(); return; }
+  if (!confirm('Mark all new filings as seen?')) return;
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+      body: JSON.stringify({ action: 'acknowledge' }),
+    });
+    if (res.status === 401) { sessionStorage.removeItem(PW_KEY); alert('Session expired — please sign in again.'); location.reload(); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || ('HTTP ' + res.status)); }
+    refresh();
+  } catch (e) { alert('Could not update: ' + e.message); }
+}
+
+/** Acknowledge a single finding. */
+async function ackOne(appNum, documentId) {
+  const pw = sessionStorage.getItem(PW_KEY);
+  if (!pw) { location.reload(); return; }
+  try {
+    const res = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
+      // Same action as the bulk case; naming a document scopes it to that one.
+      body: JSON.stringify({ action: 'acknowledge', applicationNumber: appNum, documentIdentifier: documentId }),
+    });
+    if (res.status === 401) { sessionStorage.removeItem(PW_KEY); alert('Session expired — please sign in again.'); location.reload(); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || ('HTTP ' + res.status)); }
+    refresh();
+  } catch (e) { alert('Could not update: ' + e.message); }
 }
 
 // Coverage audits — unlike the backlog cards above, a non-zero count here is not
@@ -317,6 +409,7 @@ function render(s) {
         ${dueCard(s.engine2_pending, 'Engine-2 OCR pending')}
       </div>
     </div>
+    ${newFilingsHtml(s)}
     <div class="card">
       <h2>Last activity &amp; emails</h2>
       <table>

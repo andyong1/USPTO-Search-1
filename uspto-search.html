@@ -189,13 +189,11 @@
     }
     .chip button { border: none; background: none; cursor: pointer; color: var(--bad-fg); font-weight: 700; font-size: 1.05rem; line-height: 1; }
     .chip button:hover { color: var(--bad-fg); opacity: 0.8; }
-    .finding-new td { background: var(--warn-bg); }
     .dl-link {
       display: inline-block; margin: 0 6px 4px 0; color: var(--link); font-weight: 600;
       text-decoration: none; font-size: 0.78rem; border: 1px solid var(--border-2); padding: 2px 9px; border-radius: 4px;
     }
     .dl-link:hover { background: var(--surface-3); }
-    .badge-count { background: #c53030; color: white; border-radius: 10px; padding: 1px 9px; font-size: 0.72rem; margin-left: 8px; vertical-align: middle; }
     .dl-all-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .btn-dl-all { cursor: pointer; background: var(--brand); color: #fff; border: none; font-weight: 600; font-size: 0.82rem; padding: 8px 14px; border-radius: 8px; }
     .btn-dl-all:hover { background: var(--brand-hover); }
@@ -339,16 +337,7 @@
         <div class="spinner" id="track-spinner"></div>
       </button>
     </div>
-    <p class="hint" style="margin:-4px 0 16px">We email the addresses above whenever a new document is filed on a tracked application. Unsubscribe anytime via the link in every email.</p>
-
-    <div class="results-header" style="margin-bottom:10px">
-      <h2 style="border:none;padding:0;margin:0">New Filings (daily check) <span id="new-count"></span></h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-secondary" style="padding:6px 14px;font-size:0.8rem" onclick="ackFindings()">Mark all as seen</button>
-      </div>
-    </div>
-    <p class="hint" style="margin:0 0 10px"><strong>Note:</strong> Documents with tomorrow's date will not be accessible until tomorrow.</p>
-    <div id="findings-list"></div>
+    <p class="hint" style="margin:-4px 0 16px">We email the addresses above whenever a new document is filed on a tracked application. Unsubscribe anytime via the link in every email. Newly filed documents are listed on the <a href="/status">status page</a>.</p>
   </div>
     </div>
   </div>
@@ -1055,66 +1044,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Tracked proceedings + new filings ──────────────────────────────
-async function loadWatchlist() {
-  renderFindings([]);
-  try {
-    const res = await fetch('/api/watchlist');
-    if (!res.ok) return; // proxy/DB not configured yet (e.g. local static preview)
-    const data = await res.json();
-    renderFindings(data.findings || []);
-  } catch { /* not deployed / offline — keep empty states */ }
-}
-
-function renderFindings(list) {
-  document.getElementById('new-count').innerHTML =
-    list.length ? `<span class="badge-count">${list.length} new</span>` : '';
-
-  const el = document.getElementById('findings-list');
-  if (!list.length) {
-    el.innerHTML = '<p class="hint">No new filings detected yet. The daily job lists newly filed documents here.</p>';
-    return;
-  }
-  const rows = list.map(f => {
-    const formats = (f.formats || '').split(',').filter(Boolean);
-    const dls = formats.map(fmt => docLink(f.application_number, f.document_identifier, fmt)).join('');
-    const appJs = jsq(f.application_number);
-    const idJs  = jsq(f.document_identifier);
-    const viewFmt = formats.find(x => /pdf/i.test(x)) || formats[0] || '';
-    const codeJs = jsq(f.document_code || 'Document');
-    const viewBtn = (f.document_identifier && viewFmt)
-      ? `<button class="btn-view" onclick="openDocViewer('${appJs}','${idJs}','${jsq(viewFmt)}','${codeJs}')">View</button>`
-      : '';
-    return `<tr class="finding-new">
-      <td><a class="app-link" href="#" onclick="openInAppLookup('${appJs}');return false;" title="View full record in this app">${esc(f.application_number)}</a>${f.label ? '<br><span class="hint">' + esc(f.label) + '</span>' : ''}</td>
-      <td>${esc(f.document_code || '')}<br><span class="hint">${esc(f.description || '')}</span></td>
-      <td>${fmtDate(f.official_date)}</td>
-      <td>${esc(f.direction || '')}</td>
-      <td style="white-space:nowrap">${viewBtn}${dls || (viewBtn ? '' : '<span class="hint">—</span>')}</td>
-      <td><button class="dl-link" style="cursor:pointer" onclick="ackOne('${appJs}','${idJs}')">✓ Seen</button></td>
-    </tr>`;
-  }).join('');
-  el.innerHTML = `<div class="result-table-wrap"><table>
-    <thead><tr><th>Application</th><th>Document</th><th>Date</th><th>Dir.</th><th>View / Download</th><th>Action</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
-}
-
-// Tracking mutations are admin-gated server-side. Prompt once per session for
-// the admin password (same sessionStorage key as the /status page) and send it
-// as X-Admin-Password; a 401 clears it so the next try re-prompts.
-const ADMIN_PW_KEY = 'reexamAdminPw';
-function adminPw() {
-  let pw = sessionStorage.getItem(ADMIN_PW_KEY);
-  if (!pw) {
-    pw = prompt('Admin password (required to modify tracked proceedings):') || '';
-    if (pw) sessionStorage.setItem(ADMIN_PW_KEY, pw.trim());
-  }
-  return (pw || '').trim();
-}
-function adminAuthFailed() {
-  sessionStorage.removeItem(ADMIN_PW_KEY);
-  alert('Incorrect or missing admin password.');
-}
-
 // Expand/collapse the "track a specific application" disclosure. Collapsed by
 // default so the search below is the obvious primary action.
 function toggleTrack() {
@@ -1157,35 +1086,6 @@ async function addWatch() {
   } finally {
     trackLoading(false);
   }
-}
-
-async function ackFindings() {
-  const pw = adminPw();
-  if (!pw) return;
-  try {
-    const res = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
-      body: JSON.stringify({ action: 'acknowledge' }),
-    });
-    if (res.status === 401) { adminAuthFailed(); return; }
-    loadWatchlist();
-  } catch (e) { alert('Could not update: ' + e.message); }
-}
-
-// Mark a single finding as seen.
-async function ackOne(appNum, documentId) {
-  const pw = adminPw();
-  if (!pw) return;
-  try {
-    const res = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': pw },
-      body: JSON.stringify({ action: 'acknowledge', applicationNumber: appNum, documentIdentifier: documentId }),
-    });
-    if (res.status === 401) { adminAuthFailed(); return; }
-    loadWatchlist();
-  } catch (e) { alert('Could not update: ' + e.message); }
 }
 
 // Escape a value for safe use inside a single-quoted inline onclick string.
@@ -1777,7 +1677,6 @@ function openDocViewer(appNum, documentId, format, label) {
 // Restore view from the URL (shared links) and set the initial history entry.
 restoreFromUrl();
 
-loadWatchlist();
 </script>
 <script src="/subscribe.js" defer></script>
 </body>

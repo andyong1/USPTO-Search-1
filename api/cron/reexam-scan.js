@@ -75,9 +75,24 @@ function baseUrl() {
 // office actions, certificates, petitions) whose USPTO date was the previous PT
 // day — to all subscribers, each with a personal one-click unsubscribe link. Only
 // the scan run in the 8 AM PT hour sends (so the hourly scan doesn't email every
-// run); skips entirely when nothing issued. ?forceSubEmail=1 bypasses the gate.
+// run); skips entirely when nothing issued. ?forceSubEmail=1 bypasses the gate,
+// and ?subEmailTo=<address> additionally narrows the send to that one address for
+// a safe end-to-end test of the mail path (see below). Pair either with
+// ?digestOnly=1 so the scan steps are skipped and the request cannot time out
+// before the digest is reached.
 async function maybeSendSubscriberDigest(req) {
-  const force = req.query && req.query.forceSubEmail === '1';
+  // ?subEmailTo=<address> sends the digest to ONE address instead of every
+  // subscriber, for checking that the mail path works without emailing the list.
+  // It implies force (no hour gate, no already-handled check), and because force
+  // also skips the setSubDigestDate stamp below, a test run cannot consume the
+  // day and suppress the real digest. The endpoint is CRON_SECRET-gated, and a
+  // single well-formed address is required so this cannot be used to fan out.
+  const testToRaw = (req.query && req.query.subEmailTo) ? String(req.query.subEmailTo).trim() : '';
+  if (testToRaw && !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(testToRaw)) {
+    return { error: 'subEmailTo must be a single valid email address.' };
+  }
+  const testTo = testToRaw;
+  const force = (req.query && req.query.forceSubEmail === '1') || !!testTo;
   const now = new Date();
   const todayPT = ymdInTZ(now, SUB_TZ);
   const targetDate = (req.query && req.query.date) ? String(req.query.date) : previousDay(todayPT);
@@ -143,20 +158,39 @@ async function maybeSendSubscriberDigest(req) {
   // Mark the day handled even when empty, so we check at most once per day.
   if (!force) await setSubDigestDate(targetDate);
 
-  if (!events.length && !ptabDecisions.length && !ptabDecisionEvents.length) return { date: targetDate, newDocs: 0, ptab: 0, ptabDecisions: 0, sent: 0 };
+  if (!events.length && !ptabDecisions.length && !ptabDecisionEvents.length) return { date: targetDate, newDocs: 0, ptab: 0, ptabDecisions: 0, sent: 0, testTo: testTo || undefined };
 
-  const subscribers = await listReexamSubscribers();
+  const all = await listReexamSubscribers();
+  // A test send goes to exactly one address. When it is already a subscriber the
+  // stored token comes with it, so the email — unsubscribe link included — is
+  // identical to the one the list receives, which is what makes the test valid.
+  let subscribers = all;
+  if (testTo) {
+    const known = all.find((s) => String(s.email).toLowerCase() === testTo.toLowerCase());
+    subscribers = [known || { email: testTo, token: '' }];
+  }
   const base = baseUrl(req);
   const dateLabel = prettyDate(targetDate);
   let sent = 0; const errors = [];
   for (const s of subscribers) {
     const r = await sendComprehensiveDigestTo(s.email, events, {
-      dateLabel, unsubscribeUrl: `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}`, ptabDecisions, ptabDecisionEvents,
+      dateLabel,
+      // No token (a test address that never subscribed) means no unsubscribe
+      // link, rather than a link with an empty token that would 404.
+      unsubscribeUrl: s.token ? `${base}/api/reexam-subscribe?token=${encodeURIComponent(s.token)}` : '',
+      ptabDecisions, ptabDecisionEvents,
     });
     if (r && r.sent) sent++;
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
-  return { date: targetDate, newDocs: events.length, ptab: ptabDecisions.length, ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors };
+  return {
+    date: targetDate, newDocs: events.length, ptab: ptabDecisions.length,
+    ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors,
+    // Stated explicitly so a test run is never mistaken for the real one: the day
+    // is left unhandled, so the 8 AM run still sends to everybody.
+    testTo: testTo || undefined,
+    dayMarkedHandled: !force,
+  };
 }
 
 // Anything the classifier rejects but that reads as a petition/request paper is
@@ -371,6 +405,23 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ?digestOnly=1 — run the subscriber digest and nothing else.
+    //
+    // A forced digest on top of the full hourly scan does not fit in the 60s
+    // maxDuration: enumeration, the scan batch, the backfills and the
+    // conclusion/petition sweeps all run first, and the digest then adds three
+    // PTAB API calls plus its upserts before it sends. The request 504s at the
+    // proxy, which tells you nothing about the mail path — the exact problem this
+    // was meant to diagnose. Skipping the scan makes the digest the only work in
+    // the invocation, so its result is what the response reports.
+    if (req.query.digestOnly === '1') {
+      let digest;
+      try { digest = await maybeSendSubscriberDigest(req); }
+      catch (e) { digest = { error: String((e && e.message) || e) }; }
+      res.status(200).json({ ok: true, mode: 'digestOnly', subscriberDigest: digest });
+      return;
+    }
+
     // One shared deadline for the whole run. Each step below caps its own budget
     // against this, so later steps shrink (or skip) when earlier ones run long,
     // keeping the function under its maxDuration instead of summing independent

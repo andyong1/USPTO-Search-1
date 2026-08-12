@@ -20,7 +20,7 @@ import {
   setRequesterType, getAppsMissingRequesterType, resetRequesterTypes, setRequesterLogicVersion,
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
-  listReexamSubscribers, getSubDigestDate, setSubDigestDate,
+  listReexamSubscribers, getSubDigestDate, setSubDigestDate, setSubDigestResult,
   getDocEventsByOfficialDate, getD325SummariesByDocIds,
   getDeterminationsToCheckConclusion, recordConclusionDocs, recordPetitionDocs,
   recordUnclassifiedPetitionCode,
@@ -98,7 +98,14 @@ async function maybeSendSubscriberDigest(req) {
   const targetDate = (req.query && req.query.date) ? String(req.query.date) : previousDay(todayPT);
 
   if (!force) {
-    if (hourInTZ(now, SUB_TZ) !== SUB_SEND_HOUR) return { skipped: 'not the 8 AM PT hour' };
+    // 8 AM PT is when the digest is DUE, not the only chance to send it. It used
+    // to be an equality test, so the single run in that hour was the only
+    // attempt — and because the day was stamped before the send, one failed send
+    // lost that day for good: by the next 8 AM the target date had moved on. Any
+    // run from 8 AM onwards now attempts a day that is still unhandled, and the
+    // stamp moved to after a successful send, so a failure simply retries at 9,
+    // 10, 11 and so on until it goes out.
+    if (hourInTZ(now, SUB_TZ) < SUB_SEND_HOUR) return { skipped: 'before the 8 AM PT send hour' };
     const lastSent = await getSubDigestDate();
     if (lastSent === targetDate) return { skipped: 'already handled today' };
   }
@@ -155,10 +162,15 @@ async function maybeSendSubscriberDigest(req) {
     push(inst.rows, 'Institution', 'inst_type');
   } catch (e) { ptabDecisionEvents = []; }
 
-  // Mark the day handled even when empty, so we check at most once per day.
-  if (!force) await setSubDigestDate(targetDate);
-
-  if (!events.length && !ptabDecisions.length && !ptabDecisionEvents.length) return { date: targetDate, newDocs: 0, ptab: 0, ptabDecisions: 0, sent: 0, testTo: testTo || undefined };
+  // An empty day IS handled — there is nothing to send and nothing to retry — so
+  // stamp it here and stop re-checking for the rest of the day. A day WITH
+  // content is only stamped once something actually went out (below).
+  if (!events.length && !ptabDecisions.length && !ptabDecisionEvents.length) {
+    if (!force) await setSubDigestDate(targetDate);
+    const empty = { date: targetDate, newDocs: 0, ptab: 0, ptabDecisions: 0, sent: 0, testTo: testTo || undefined, dayMarkedHandled: !force };
+    if (!force) await setSubDigestResult({ ...empty, at: new Date().toISOString(), outcome: 'nothing-to-send' }).catch(() => {});
+    return empty;
+  }
 
   const all = await listReexamSubscribers();
   // A test send goes to exactly one address. When it is already a subscriber the
@@ -183,14 +195,27 @@ async function maybeSendSubscriberDigest(req) {
     if (r && r.sent) sent++;
     else if (r && (r.error || r.skipped)) errors.push({ email: s.email, reason: r.error || r.reason });
   }
-  return {
+
+  // Stamp only now, and only if something actually went out. If every send
+  // failed, the day stays unhandled so a later run this same PT day tries again
+  // — which is the whole point of the change: a mailer outage at 8 AM no longer
+  // silently costs a day.
+  const delivered = sent > 0;
+  if (!force && delivered) await setSubDigestDate(targetDate);
+
+  const result = {
     date: targetDate, newDocs: events.length, ptab: ptabDecisions.length,
     ptabDecisions: ptabDecisionEvents.length, subscribers: subscribers.length, sent, errors,
     // Stated explicitly so a test run is never mistaken for the real one: the day
     // is left unhandled, so the 8 AM run still sends to everybody.
     testTo: testTo || undefined,
-    dayMarkedHandled: !force,
+    dayMarkedHandled: !force && delivered,
+    willRetry: !force && !delivered,
   };
+  // Persisted so /status shows the last attempt. Best-effort: failing to RECORD a
+  // send must never make the caller think the send itself failed.
+  if (!force) await setSubDigestResult({ ...result, at: new Date().toISOString(), outcome: delivered ? 'sent' : 'failed' }).catch(() => {});
+  return result;
 }
 
 // Anything the classifier rejects but that reads as a petition/request paper is

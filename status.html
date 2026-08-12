@@ -173,6 +173,22 @@ async function load(pw) {
   return status;
 }
 
+// What the last digest attempt did. A failed send used to leave no trace at all
+// — the only record was an HTTP response the scheduler discarded — so a digest
+// that never went out looked exactly like a day with nothing to report.
+function digestAttemptHtml(r) {
+  if (!r || typeof r !== 'object') return '<span class="muted">no attempt recorded yet</span>';
+  const when = r.at ? `<span class="muted"> (${fmtTs(r.at)})</span>` : '';
+  const forDay = r.date ? ` for ${fmtDate(r.date)}` : '';
+  if (r.outcome === 'nothing-to-send') return `nothing to send${forDay}${when}`;
+  if (r.outcome === 'sent') return `<span style="color:var(--ok-fg);font-weight:600">sent to ${Number(r.sent) || 0}</span>${forDay}${when}`;
+  const reasons = Array.isArray(r.errors) ? r.errors.map((e) => escHtml(e && (e.reason || e.email) || '')).filter(Boolean) : [];
+  // The reason is the whole point of recording this — show it, don't just flag red.
+  return `<span style="color:var(--bad-fg);font-weight:600">FAILED</span>${forDay}${when}`
+    + (r.willRetry ? ' <span class="muted">— not marked handled, so the next run today retries</span>' : '')
+    + (reasons.length ? `<div class="muted" style="margin-top:2px">${reasons.join('<br>')}</div>` : '');
+}
+
 // ── New filings on tracked applications ────────────────────────────
 // Moved here from the main search page: this is an operational feed — what the
 // daily check turned up and what still needs acknowledging — which is the same
@@ -415,6 +431,7 @@ function render(s) {
       <table>
         <tr><td>Last reexam enumeration</td><td>${ago(s.last_enumerated_at)} <span class="muted">(${fmtTs(s.last_enumerated_at)})</span></td></tr>
         <tr><td>Daily subscriber digest — last day handled</td><td>${fmtDate(s.subscriber_digest_date)}</td></tr>
+        <tr><td>Daily subscriber digest — last attempt</td><td>${digestAttemptHtml(s.subscriber_digest_result)}</td></tr>
         <tr><td>Most recent determination on file</td><td>${fmtDate(s.latest_determination)}</td></tr>
         <tr><td>Oldest not-yet-rescanned (undetermined)</td><td>${ago(s.oldest_scan)} <span class="muted">(${fmtTs(s.oldest_scan)})</span></td></tr>
       </table>

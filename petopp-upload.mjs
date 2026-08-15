@@ -5,14 +5,12 @@
 //
 //     set -a && . ./grounds-secrets.env && set +a && node petopp-upload.mjs [--dir NAME]
 
-import { readFile, rename } from 'node:fs/promises';
 import { sql } from '@vercel/postgres';
 import { setPetitionOppositionSubject, countOppositionsNeedingSubject } from './lib/db.js';
+import { requireEnv, argStr, retry, manifestByDocId, readJsonl, archiveJsonl, closeDb } from './lib/pipeline.mjs';
 
-if (!process.env.POSTGRES_URL) { console.error('POSTGRES_URL is not set.'); process.exit(1); }
-const args = process.argv.slice(2);
-const di = args.indexOf('--dir');
-const DIR = `snq-cumulative/${di >= 0 ? args[di + 1] : 'petopp-prod'}`;
+requireEnv('POSTGRES_URL');
+const DIR = `snq-cumulative/${argStr('--dir', 'petopp-prod')}`;
 const IN = `${DIR}/petopp-out.jsonl`;
 
 const PARTY = new Set(['patent_owner', 'third_party_requester', 'unclear']);
@@ -22,40 +20,20 @@ const clean = (v) => v == null ? '' : String(v).replace(/\s+/g, ' ').trim();
 // is the exact failure this pass is fixing.
 const isoDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(clean(v)) ? clean(v) : null);
 
-async function retry(label, fn, attempts = 4) {
-  for (let i = 1; ; i++) {
-    try { return await fn(); }
-    catch (e) {
-      const transient = /ECONNRESET|fetch failed|ETIMEDOUT|socket hang up/i.test(String(e.message || e));
-      if (!transient || i >= attempts) throw e;
-      const wait = 1500 * i;
-      console.log(`  ${label}: transient DB error (attempt ${i}/${attempts}), retrying in ${wait}ms…`);
-      await new Promise((r) => setTimeout(r, wait));
-    }
-  }
-}
+const byDoc = await manifestByDocId(DIR);
+if (!byDoc.size) { console.error('No manifest.json — run petopp-fetch.mjs first.'); process.exit(1); }
 
-let manifest;
-try { manifest = JSON.parse(await readFile(`${DIR}/manifest.json`, 'utf-8')); }
-catch { console.error('No manifest.json — run petopp-fetch.mjs first.'); process.exit(1); }
-const byDoc = new Map(manifest.map((m) => [m.doc_id, m]));
-
-let raw;
-try { raw = await readFile(IN, 'utf-8'); }
-catch { console.error(`No ${IN} — run the AI pass per petopp-verify.md first.`); process.exit(1); }
+const { rows: parsed, bad: unparseable } = await readJsonl(IN, 'run the AI pass per petopp-verify.md first.');
 
 const NOT_OPP_NOTE = /^\s*not an opposition/i;
 
-let uploaded = 0, bad = 0, nonOpp = 0, dated = 0, undatedRead = 0;
+let uploaded = 0, bad = unparseable, nonOpp = 0, dated = 0, undatedRead = 0;
 const partyTally = {}, confTally = {};
 const rows = [];
-for (const line of raw.split(/\r?\n/)) {
-  if (!line.trim()) continue;
-  let o;
-  try { o = JSON.parse(line); } catch { bad++; continue; }
+for (const o of parsed) {
   const docId = clean(o.doc_id);
   const m = byDoc.get(docId);
-  if (!m) { bad++; console.error('  not in manifest:', docId || line.slice(0, 60)); continue; }
+  if (!m) { bad++; console.error('  not in manifest:', docId || JSON.stringify(o).slice(0, 60)); continue; }
 
   const party = PARTY.has(clean(o.party)) ? clean(o.party) : 'unclear';
   const conf = clean(o.confidence).toLowerCase() || null;
@@ -83,7 +61,7 @@ for (const line of raw.split(/\r?\n/)) {
   }
 }
 
-try { await rename(IN, IN.replace(/\.jsonl$/, `.${Date.now()}.done.jsonl`)); } catch { /* best-effort */ }
+await archiveJsonl(IN);
 console.log(`\nDone. ${uploaded} document(s) uploaded; ${bad} rejected.`);
 console.log(`  not oppositions at all: ${nonOpp}`);
 console.log(`  target date read: ${dated} | target named but undated: ${undatedRead}`);
@@ -120,4 +98,4 @@ if (rows.length) {
 }
 
 console.log(`\n${await retry('left', () => countOppositionsNeedingSubject()).catch(() => '?')} opposition(s) still awaiting extraction.`);
-try { await sql.end(); } catch { /* */ }
+await closeDb(sql);

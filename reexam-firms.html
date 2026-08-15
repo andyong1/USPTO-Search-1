@@ -11,6 +11,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
   <script src="/theme.js"></script>
+  <script src="/names.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
@@ -132,57 +133,6 @@ const OPEN = new Set();
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (n, d) => (d ? Math.round((n / d) * 100) + '%' : '—');
-
-// Entity forms that stay upright when a name is de-shouted. "LLC" and "LLP" are
-// written upper by convention; "Inc.", "Corp.", "Ltd." and "Co." are NOT, so they
-// are deliberately absent and get title-cased like any other word.
-const KEEP_UPPER = new Set([
-  'LLC', 'LLP', 'PLLC', 'PC', 'PA', 'PLC', 'ULC', 'LP', 'LL',
-  'SA', 'SAS', 'NV', 'BV', 'OY', 'AB', 'PTE', 'SRL', 'SPA', 'KG', 'KK', 'APS',
-  // Initialisms the corpus actually contains.
-  'IP', 'US', 'USA', 'UK', 'EU', 'PTAB', 'IPR', 'TC', 'CN', 'DC', 'SV', 'NY',
-  'BDX', 'DLA', 'KED', 'MRG', 'EML', 'MCP', 'VDPP', 'DIVX', 'LCD', 'FMC', 'GME',
-  'NEC', 'KPN', 'HD', 'IQ', 'MVW', 'OS',
-]);
-// Names whose correct form is neither all-upper nor plain title case.
-const MIXED_CASE = new Map([['GMBH', 'GmbH']]);
-// Words that stay down inside a name, so "HAYNES AND BOONE" does not read as
-// "Haynes And Boone".
-const KEEP_LOWER = new Set(['and', 'of', 'the', 'at', 'for', 'in', 'on', 'de', 'van', 'von', 'der', 'da']);
-
-/**
- * De-shout an ALL-CAPS firm or party name.
- *
- * Names that already carry lower case are left exactly as filed -- they are
- * printed correctly and any transform could only damage them ("IPspeedy" ->
- * "Ipspeedy", "Haynes and Boone" -> "Haynes And Boone"). So this runs only when
- * there is no lower case to lose.
- *
- * Casing is applied per RUN OF LETTERS rather than per whitespace-delimited
- * token, because the punctuation is where the words actually divide:
- * "CO.,LTD." is one token but two words, and "P.L.L.C." is one token but four
- * single letters that must each stay upright. Digits fall outside every run, so
- * "3D" and "H2" keep their letter upper without a special case.
- */
-function titleCaseName(s) {
-  const t = String(s || '');
-  if (!t || /[a-z]/.test(t)) return t;
-  let n = 0;
-  return t.replace(/[A-Za-z][A-Za-z’']*/g, (run) => {
-    const first = n++ === 0;
-    const up = run.toUpperCase();
-    if (KEEP_UPPER.has(up)) return up;
-    if (MIXED_CASE.has(up)) return MIXED_CASE.get(up);
-    if (run.length === 1) return up;                    // an initial, or P.L.L.C.
-    let w = run.charAt(0).toUpperCase() + run.slice(1).toLowerCase();
-    // Scottish/Irish prefixes and anything after an apostrophe carry their own
-    // capital: MCANDREWS -> McAndrews, O'MELVENY -> O'Melveny.
-    w = w.replace(/^Mc([a-z])/, (m, c) => 'Mc' + c.toUpperCase());
-    w = w.replace(/([’'])([a-z])/g, (m, q, c) => q + c.toUpperCase());
-    // A small word keeps its case only inside the name, never at the start.
-    return !first && KEEP_LOWER.has(w.toLowerCase()) ? w.toLowerCase() : w;
-  });
-}
 
 // --- Aggregation --------------------------------------------------------------
 // Grouped client-side so the volume threshold and filer-type filter re-apply

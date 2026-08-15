@@ -763,6 +763,47 @@ test('pickAssignmentOwner — latest ownership transfer wins; security interests
   assert.equal(pickAssignmentOwner([]), '');
 });
 
+test('assign.js — reads the chain, and never disagrees with the server copy', async () => {
+  // assign.js is the browser-side twin of lib/uspto.js's owner logic: the /reexam
+  // Patent Owner column is filled server-side, the assignment page renders
+  // client-side, and the two disagreeing about who owns a patent would be a
+  // worse failure than the duplication. This test is the thing that stops them
+  // drifting apart.
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../assign.js', import.meta.url), 'utf-8');
+  const scope = {};
+  new Function('root', src.replace(/\(typeof window[^;]*\);\s*$/, '(root);'))(scope);
+  const { classifyConveyance, ownershipChain, pickAssignmentOwner: pickClient, assignmentAddressLine } = scope;
+
+  // Real chain from app 12814566 (patent 8,392,598), plus a lien layered on top.
+  const bag = [
+    { conveyanceText: "ASSIGNMENT OF ASSIGNOR'S INTEREST", assignmentRecordedDate: '2010-09-14', assigneeBag: [{ assigneeNameText: 'RESEARCH IN MOTION CORPORATION' }] },
+    { conveyanceText: 'CHANGE OF NAME', assignmentRecordedDate: '2013-07-09', assigneeBag: [{ assigneeNameText: 'BLACKBERRY LIMITED' }] },
+    { conveyanceText: 'SECURITY INTEREST', assignmentRecordedDate: '2022-01-05', assigneeBag: [{ assigneeNameText: 'HERCULES CAPITAL, INC., AS AGENT' }] },
+    { conveyanceText: 'RELEASE OF SECURITY INTEREST', assignmentRecordedDate: '2023-03-01', assigneeBag: [{ assigneeNameText: 'SOMEBODY ELSE' }] },
+  ];
+  // The lender recorded most recently, and is NOT the owner.
+  assert.equal(pickClient(bag), 'BLACKBERRY LIMITED');
+  assert.equal(ownershipChain(bag).length, 2);
+  assert.deepEqual(bag.map((b) => classifyConveyance(b.conveyanceText)),
+    ['ownership', 'ownership', 'security', 'security']);
+  assert.equal(classifyConveyance(''), 'other');
+  assert.equal(pickClient([]), '');
+  assert.equal(pickClient(null), '');
+
+  // Both implementations must agree on every fixture, including the ones the
+  // server-side test above already pins.
+  const fixtures = [bag, [], [{ conveyanceText: 'RELEASE OF SECURITY INTEREST', assigneeBag: [{ assigneeNameText: 'A BANK' }] }],
+    [{ conveyanceText: "ASSIGNMENT OF ASSIGNOR'S INTEREST", assigneeBag: [{ assigneeNameText: 'MASSIVELY BROADBAND LLC' }] }],
+    [{ conveyanceText: 'MERGER', assignmentRecordedDate: '2020-01-01', assigneeBag: [{ assigneeNameText: 'SURVIVOR CORP' }] },
+     { conveyanceText: 'LICENSE', assignmentRecordedDate: '2021-01-01', assigneeBag: [{ assigneeNameText: 'A LICENSEE' }] }]];
+  for (const f of fixtures) assert.equal(pickClient(f), pickAssignmentOwner(f), JSON.stringify(f).slice(0, 60));
+
+  assert.equal(assignmentAddressLine({ addressLineOneText: '1209 ORANGE ST', cityName: 'WILMINGTON', geographicRegionCode: 'DE', postalCode: '19801', countryName: 'UNITED STATES' }),
+    '1209 ORANGE ST, WILMINGTON, DE, 19801');   // domestic country name suppressed
+  assert.equal(assignmentAddressLine(null), '');
+});
+
 test('classifyPetitionDoc — code-first kinds and outcomes', async () => {
   const { classifyPetitionDoc } = await import('../lib/petitions.js');
   assert.deepEqual(classifyPetitionDoc('RXPET.', 'Receipt of Petition in a Reexam'), { kind: 'petition' });

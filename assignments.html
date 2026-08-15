@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Assignment Chain — USPTO Patent File Wrapper Search</title>
+  <!-- Unlinked while it is being evaluated: nothing in the site navigation points
+       here, and it is kept out of search indexes. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/base.css">
+  <script src="/theme.js"></script>
+  <script src="/fmt.js"></script>
+  <script src="/names.js"></script>
+  <script src="/assign.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--page-bg); color: var(--text); min-height: 100vh; }
+    header { background: var(--brand); color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    header h1 { font-size: 1.25rem; font-weight: 600; line-height: 1.2; }
+    header h1 a { color: inherit; text-decoration: none; }
+    header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
+    .card + .card { margin-top: 20px; }
+    .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
+    .sub { color: var(--text-3); font-size: 0.85rem; }
+    .explainer { font-size: 0.9rem; line-height: 1.55; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin: 14px 0 4px; }
+    .row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    label { display: block; font-size: 0.78rem; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 5px; }
+    input[type="text"], select { background: var(--input-bg); color: var(--text); border: 1px solid var(--border-2); border-radius: 8px; padding: 9px 12px; font-size: 0.95rem; font-family: inherit; }
+    input[type="text"] { min-width: 240px; }
+    button { cursor: pointer; background: var(--brand); color: #fff; border: none; font-weight: 600; font-size: 0.92rem; padding: 10px 18px; border-radius: 8px; }
+    button:hover { background: var(--brand-hover); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .state { text-align: center; padding: 36px 20px; color: var(--text-3); }
+    .err { color: var(--bad-fg); font-weight: 600; }
+    .owner { background: var(--ok-bg); border: 1px solid var(--ok-fg); border-radius: 8px; padding: 14px 16px; }
+    .owner .who { font-size: 1.15rem; font-weight: 700; color: var(--ok-fg); }
+    .owner.none { background: var(--surface-2); border-color: var(--border); }
+    .owner.none .who { color: var(--text-2); font-size: 1rem; font-weight: 600; }
+    .meta { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-3); margin-top: 10px; }
+    .meta b { color: var(--text); font-weight: 600; }
+    .chain { margin-top: 16px; }
+    .asg { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 10px; background: var(--surface-2); }
+    .asg.ownership { border-left: 4px solid var(--ok-fg); }
+    .asg.security { border-left: 4px solid var(--warn-fg); }
+    .asg.other { border-left: 4px solid var(--border-2); }
+    .asg-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+    .conv { font-weight: 700; color: var(--heading); font-size: 0.95rem; }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.72rem; font-weight: 700; margin-left: 8px; vertical-align: middle; }
+    .badge.ownership { background: var(--ok-bg); color: var(--ok-fg); }
+    .badge.security { background: var(--warn-bg); color: var(--warn-fg); }
+    .badge.other { background: var(--border); color: var(--text-2); }
+    .badge.current { background: var(--info-bg); color: var(--info-fg); }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+    @media (max-width: 640px) { .parties { grid-template-columns: 1fr; } }
+    .pty h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); margin-bottom: 4px; }
+    .pty div { font-size: 0.88rem; }
+    .addr { font-size: 0.78rem; color: var(--text-3); }
+    .foot { margin-top: 10px; font-size: 0.78rem; color: var(--text-3); display: flex; gap: 14px; flex-wrap: wrap; }
+    .foot a { color: var(--heading); font-weight: 600; text-decoration: none; }
+    .foot a:hover { text-decoration: underline; }
+    footer { text-align: center; padding: 24px 16px 8px; color: var(--text-3); font-size: 0.8rem; }
+  </style>
+  <script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+<header>
+  <div>
+    <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
+    <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
+  </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Assignment chain</h2>
+    <div class="explainer">
+      <p>Every assignment recorded at the USPTO for a patent or application, newest first, with the assignors, assignees, execution and recording dates, and a link to each recorded document. The <strong>current owner</strong> is taken from the most recent record that actually transfers title — security interests, releases, liens and licences are shown but never treated as ownership, because the &ldquo;assignee&rdquo; on those is a lender or collateral agent.</p>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <div>
+        <label for="kind">Look up by</label>
+        <select id="kind">
+          <option value="auto" selected>Auto-detect</option>
+          <option value="patent">Patent number</option>
+          <option value="application">Application number</option>
+        </select>
+      </div>
+      <div style="flex:1 1 260px">
+        <label for="q">Patent or application number</label>
+        <input type="text" id="q" placeholder="e.g. 8,392,598 or 12/814,566" onkeydown="if(event.key==='Enter')lookup()" />
+      </div>
+      <button id="go" onclick="lookup()">Look up</button>
+    </div>
+    <div class="sub" style="margin-top:10px">Assignments are recorded against the underlying application, not against a reexamination control number — enter the patent or its application, not a 90/ or 96/ control number.</div>
+  </div>
+
+  <div id="out"></div>
+</div>
+
+<footer><a href="/privacy">Privacy</a></footer>
+
+<script>
+const outEl = () => document.getElementById('out');
+
+// Digits only; patents are ≤8 digits, applications are 8 (or 7 for older series).
+const digits = (s) => String(s || '').replace(/[^0-9]/g, '');
+
+/** Guess whether the input is a patent or an application number. */
+function detectKind(raw) {
+  const d = digits(raw);
+  // Application numbers are 8 digits and conventionally written 12/814,566 —
+  // a slash is decisive. Patent numbers run to 8 digits now (12,000,000+), so
+  // length alone cannot separate them; the slash and the comma pattern can.
+  if (/\//.test(raw)) return 'application';
+  if (d.length === 8 && /^(0[1-9]|1[0-9]|2[0-9]|6[0-9]|9[0-9])/.test(d)) return 'application';
+  return 'patent';
+}
+
+async function resolveApp(kind, raw) {
+  if (kind === 'application') {
+    const d = digits(raw);
+    if (!d) throw new Error('Enter an application number.');
+    return { appNum: d, via: null };
+  }
+  const pn = digits(raw);
+  if (!pn) throw new Error('Enter a patent number.');
+  const res = await fetch('/api/search', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      q: `applicationMetaData.patentNumber:${pn}`,
+      fields: ['applicationNumberText', 'applicationMetaData.patentNumber', 'applicationMetaData.inventionTitle'],
+      pagination: { offset: 0, limit: 1 },
+    }),
+  });
+  if (!res.ok) throw new Error('Patent lookup failed (HTTP ' + res.status + ').');
+  const data = await res.json().catch(() => ({}));
+  const rec = (data.patentFileWrapperDataBag || [])[0];
+  const appNum = rec && (rec.applicationNumberText || (rec.applicationMetaData || {}).applicationNumberText);
+  if (!appNum) throw new Error('No application found for patent ' + pn + '.');
+  return { appNum: digits(appNum), via: pn, title: (rec.applicationMetaData || {}).inventionTitle || '' };
+}
+
+async function lookup() {
+  const raw = document.getElementById('q').value.trim();
+  if (!raw) return;
+  const sel = document.getElementById('kind').value;
+  const kind = sel === 'auto' ? detectKind(raw) : sel;
+  const btn = document.getElementById('go');
+  btn.disabled = true;
+  outEl().innerHTML = '<div class="card"><div class="state">Looking up…</div></div>';
+  try {
+    const { appNum, via, title } = await resolveApp(kind, raw);
+    const res = await fetch('/api/application?appNum=' + encodeURIComponent(appNum) + '&section=assignment');
+    if (!res.ok) throw new Error('Assignment lookup failed (HTTP ' + res.status + ').');
+    const data = await res.json().catch(() => ({}));
+    const rec = (data.patentFileWrapperDataBag || [data])[0] || {};
+    const bag = rec.assignmentBag || rec.patentAssignmentBag || [];
+    render(bag, { appNum, via, title, kind });
+    // Shareable: the resolved lookup goes in the URL.
+    history.replaceState(null, '', location.pathname + '?q=' + encodeURIComponent(raw) + (sel === 'auto' ? '' : '&kind=' + sel));
+  } catch (e) {
+    outEl().innerHTML = '<div class="card"><div class="state err">' + esc(e.message) + '</div></div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function partyHtml(heading, rows) {
+  if (!rows.length) return '';
+  return '<div class="pty"><h4>' + heading + '</h4>' + rows.join('') + '</div>';
+}
+
+function render(bag, ctx) {
+  const appLink = '<a href="/uspto-search?app=' + encodeURIComponent(ctx.appNum) + '" target="_blank" rel="noopener">' + esc(ctx.appNum) + '</a>';
+  const head = '<div class="card"><h2>Application ' + appLink + '</h2>'
+    + '<div class="sub">' + (ctx.via ? 'Patent ' + esc(ctx.via) + ' → application ' + esc(ctx.appNum) + '. ' : '')
+    + (ctx.title ? esc(titleCaseName(ctx.title)) : '') + '</div>';
+
+  if (!bag.length) {
+    return void (outEl().innerHTML = head
+      + '<div class="owner none" style="margin-top:14px"><div class="who">No assignments recorded</div>'
+      + '<div class="sub" style="margin-top:6px">The USPTO has no recorded assignment for this application. Ownership then rests with the applicant of record — which is not the same statement as &ldquo;unassigned&rdquo;, since an unrecorded transfer is still valid between the parties.</div></div></div>');
+  }
+
+  // Newest first for reading; the owner logic sorts independently.
+  const sorted = bag.slice().sort((a, b) =>
+    String(b.assignmentRecordedDate || b.recordedDate || '').localeCompare(String(a.assignmentRecordedDate || a.recordedDate || '')));
+  const owner = pickAssignmentOwner(bag);
+  const chain = ownershipChain(bag);
+  const latestOwnership = chain.length ? chain[chain.length - 1] : null;
+  const counts = { ownership: 0, security: 0, other: 0 };
+  for (const a of bag) counts[classifyConveyance(a.conveyanceText)]++;
+
+  const ownerHtml = owner
+    ? '<div class="owner"><div class="sub">Current owner of record</div><div class="who">' + esc(titleCaseName(owner)) + '</div>'
+      + '<div class="meta"><span>from <b>' + esc(latestOwnership.conveyanceText || '') + '</b></span>'
+      + '<span>recorded <b>' + fmtDate(latestOwnership.assignmentRecordedDate) + '</b></span>'
+      + '<span>reel/frame <b>' + esc(latestOwnership.reelAndFrameNumber || '') + '</b></span></div></div>'
+    : '<div class="owner none"><div class="who">No ownership transfer recorded</div>'
+      + '<div class="sub" style="margin-top:6px">' + bag.length + ' record(s) on file, but none of them transfers title — so the current owner cannot be read from the assignment chain alone.</div></div>';
+
+  const rows = sorted.map((a) => {
+    const cls = classifyConveyance(a.conveyanceText);
+    const isCurrent = latestOwnership && a === latestOwnership;
+    const assignors = (a.assignorBag || []).map((x) =>
+      '<div>' + esc(titleCaseName(x.assignorName || '')) + (x.executionDate ? ' <span class="addr">executed ' + fmtDate(x.executionDate) + '</span>' : '') + '</div>');
+    const assignees = (a.assigneeBag || []).map((x) =>
+      '<div>' + esc(titleCaseName(x.assigneeNameText || x.assigneeName || ''))
+      + (assignmentAddressLine(x.assigneeAddress) ? '<div class="addr">' + esc(assignmentAddressLine(x.assigneeAddress)) + '</div>' : '') + '</div>');
+    const corr = a.correspondenceAddress && a.correspondenceAddress.correspondentNameText;
+    return '<div class="asg ' + cls + '">'
+      + '<div class="asg-head"><div class="conv">' + esc(a.conveyanceText || '(no conveyance stated)')
+      + '<span class="badge ' + cls + '">' + (cls === 'ownership' ? 'transfers title' : cls === 'security' ? 'security / licence' : 'other') + '</span>'
+      + (isCurrent ? '<span class="badge current">current owner</span>' : '') + '</div>'
+      + '<div class="sub">recorded ' + fmtDate(a.assignmentRecordedDate) + '</div></div>'
+      + '<div class="parties">' + partyHtml('Assignor', assignors) + partyHtml('Assignee', assignees) + '</div>'
+      + '<div class="foot">'
+      + (a.reelAndFrameNumber ? '<span>reel/frame <b>' + esc(a.reelAndFrameNumber) + '</b></span>' : '')
+      + (a.pageTotalQuantity ? '<span>' + a.pageTotalQuantity + ' page(s)</span>' : '')
+      + (corr ? '<span>correspondent ' + esc(titleCaseName(corr)) + '</span>' : '')
+      + (a.assignmentDocumentLocationURI ? '<a href="' + esc(a.assignmentDocumentLocationURI) + '" target="_blank" rel="noopener">Recorded document &#8599;</a>' : '')
+      + '</div></div>';
+  }).join('');
+
+  outEl().innerHTML = head + '<div style="margin-top:14px">' + ownerHtml + '</div>'
+    + '<div class="chain"><div class="sub" style="margin-bottom:2px">' + bag.length + ' recorded assignment(s) — '
+    + counts.ownership + ' transferring title, ' + counts.security + ' security/licence, ' + counts.other + ' other. Newest first.</div>'
+    + rows + '</div></div>';
+}
+
+// Deep link: /assignments?q=8392598
+(function () {
+  const p = new URLSearchParams(location.search);
+  const q = p.get('q');
+  if (q) {
+    document.getElementById('q').value = q;
+    const k = p.get('kind');
+    if (k === 'patent' || k === 'application') document.getElementById('kind').value = k;
+    lookup();
+  }
+})();
+</script>
+</body>
+</html>

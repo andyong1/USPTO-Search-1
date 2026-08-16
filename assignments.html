@@ -4,9 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Assignment Chain — USPTO Patent File Wrapper Search</title>
-  <!-- Unlinked while it is being evaluated: nothing in the site navigation points
-       here, and it is kept out of search indexes. -->
-  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="Look up the recorded assignment chain for any US patent or application: assignors, assignees, conveyance type, execution and recording dates, reel/frame, and the current owner of record." />
+  <meta property="og:title" content="Patent Assignment Search - USPTO Patent File Wrapper" />
+  <meta property="og:description" content="Every recorded assignment for a patent or application, with the current owner read only from records that actually transfer title." />
+  <meta property="og:type" content="website" />
+  <link rel="canonical" href="https://andy-ong.com/assignments" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='6'%20fill='%231a3a6b'/%3E%3Cpath%20d='M7%2025V12l9-6%209%206v13H7z'%20fill='none'%20stroke='white'%20stroke-width='2'%20stroke-linejoin='round'/%3E%3Crect%20x='13'%20y='17'%20width='6'%20height='8'%20fill='white'/%3E%3Ccircle%20cx='16'%20cy='12.5'%20r='2'%20fill='white'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/base.css">
   <script src="/theme.js"></script>
@@ -21,6 +23,7 @@
     header h1 a { color: inherit; text-decoration: none; }
     header p { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
     .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+    .site-nav { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; align-items: flex-start; }
     .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; }
     .card + .card { margin-top: 20px; }
     .card h2 { font-size: 1.15rem; color: var(--heading); margin-bottom: 6px; }
@@ -67,6 +70,12 @@
 </head>
 <body>
 <header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <rect width="36" height="36" rx="6" fill="white" opacity="0.15"/>
+    <path d="M8 28V12l10-6 10 6v16H8z" stroke="white" stroke-width="1.5" fill="none"/>
+    <rect x="14" y="18" width="8" height="10" fill="white" opacity="0.6"/>
+    <circle cx="18" cy="14" r="2.5" fill="white" opacity="0.8"/>
+  </svg>
   <div>
     <h1><a href="/uspto-search">USPTO Patent File Wrapper Search - Created by A. Ong</a></h1>
     <p>Open Data Portal · api.uspto.gov · via secure proxy</p>
@@ -74,6 +83,39 @@
 </header>
 
 <div class="container">
+  <div style="margin:0 0 12px"><a href="/itc" style="display:inline-block;padding:7px 12px;border-radius:8px;font-weight:600;font-size:0.84rem;text-decoration:none;background:#0d9488;color:#fff">&larr; ITC investigations data</a></div>
+  <nav class="site-nav">
+    <div class="nav-section">
+      <span class="nav-section-label">Application Search</span>
+      <div class="nav-section-links">
+        <a href="/uspto-search">Application Search &amp; Tracking</a>
+        <a href="/assignments" class="active" aria-current="page">Patent Assignment Search</a>
+        <a href="/file-history">File History Print to PDF</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">Reexam Stats</span>
+      <div class="nav-section-links">
+        <a href="/reexam">Reexam Determinations</a>
+        <a href="/reexam-actions">Reexam Office Action Timing</a>
+        <a href="/reexam-nirc">Reexam NIRCs</a>
+        <a href="/reexam-outcomes">Reexam Final Outcomes</a>
+      </div>
+      <div class="nav-section-links">
+        <a href="/reexam-petition-decisions">Reexam Petition Decisions</a>
+        <a href="/reexam-preorder">Pre-Order SNQ Submissions</a>
+        <a href="/reexam-petitions">Post-Order Petitions</a>
+      </div>
+    </div>
+    <div class="nav-section">
+      <span class="nav-section-label">PTAB Stats</span>
+      <div class="nav-section-links">
+        <a href="/ptab-decisions">PTAB Discretionary / Institution Decisions</a>
+        <a href="/ptab">PTAB FWD Outcomes</a>
+      </div>
+    </div>
+  </nav>
+
   <div class="card">
     <h2>Assignment chain</h2>
     <div class="explainer">

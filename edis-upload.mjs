@@ -19,11 +19,17 @@
 //   node edis-upload.mjs                  # ingest + derive + publish. Per-investigation
 //                                           detail blobs are republished INCREMENTALLY:
 //                                           only investigations whose documents or catalog
-//                                           meta (status/title/docket) changed this run,
-//                                           plus a full sweep every Sunday (UTC). The main
-//                                           projection blob is always rebuilt in full.
+//                                           meta (status/title/docket) changed this run.
+//                                           The main projection blob is always rebuilt in
+//                                           full (one blob write, not ~1,350).
 //   node edis-upload.mjs --full-republish # force a full detail-blob republish this run
-//                                           (also automatic on a PUBLISH_FMT_V bump)
+//                                           (also automatic on a PUBLISH_FMT_V bump).
+//                                           NOTE: ~1,350 Vercel Blob advanced operations
+//                                           against a 2,000/month Hobby allowance, so the
+//                                           --max-publish budget spreads it over runs.
+//   node edis-upload.mjs --max-publish N  # cap detail blobs written this run (default 250).
+//                                           Anything over the cap is marked for retry and
+//                                           picked up by the following runs.
 //   node edis-upload.mjs --derive-only    # skip ingest; re-derive from DB + publish ALL
 //                                           (use when documents are already in Neon)
 //   node edis-upload.mjs --publish-only   # ONLY rebuild the main projection blob
@@ -37,8 +43,9 @@ import { put } from '@vercel/blob';
 import {
   upsertInvestigation, upsertDocuments, documentsForInvestigation,
   setInvestigationDerived, listInvestigations, logScan, numbersWithDocuments, listOutcomes, listParties,
-  listOutcomeDocLinks,
+  listOutcomeDocLinks, getPublishState, setPublishState,
 } from './lib/itc-db.js';
+import { argNum } from './lib/pipeline.mjs';
 import { loadCatalogMaps, publishInvestigationDocs } from './lib/itc-publish.js';
 import { dispositiveRole } from './lib/itc-outcome.js';
 
@@ -55,7 +62,10 @@ const BLOB_PATH = 'itc/itc-data.json';
 // blob shape (publishInvestigationDocs) or deriveOne changes, so the next run does a
 // FULL republish and every blob adopts the new format instead of waiting to change.
 const PUBLISH_FMT_V = 2;
-const STATE_FILE = `${DIR}/.publish-state.json`;   // per-run signatures for incremental republish (gitignored)
+// Per-run signatures for the incremental republish. The DB holds the authoritative
+// copy (see lib/itc-db.js getPublishState); this local file is a gitignored cache
+// read only to migrate a pre-existing state on the first run after that move.
+const STATE_FILE = `${DIR}/.publish-state.json`;
 // How many investigations to derive+publish at once. Each is a Neon write + a Vercel
 // Blob PUT (network-bound), so a pool is a large win over the old sequential loop.
 const CONCURRENCY = Math.max(1, Number(process.env.ITC_PUBLISH_CONCURRENCY) || 10);
@@ -97,15 +107,27 @@ const hashInvMeta = (m) => sha1(JSON.stringify({
     .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
 }));
 
+// Neon is the source of truth; the local file is read ONCE to migrate an existing
+// state across. Without that fallback the first run after the move would see "no
+// prior state" and rewrite all ~1,350 detail blobs — spending exactly the
+// operations this change exists to save.
 async function loadPublishState() {
   try {
+    const s = await getPublishState();
+    if (s) return { fmtV: s.fmtV, invHash: s.invHash || {}, docHash: s.docHash || {} };
+  } catch (e) { console.log(`  (could not read publish state from the DB: ${(e && e.message) || e})`); }
+  try {
     const s = JSON.parse(await readFile(STATE_FILE, 'utf-8'));
+    console.log('  migrating publish state from the local file into the database.');
     return { fmtV: s.fmtV, invHash: s.invHash || {}, docHash: s.docHash || {} };
-  } catch { return null; }   // missing/corrupt → treat as first run (forces a full republish)
+  } catch { return null; }   // genuinely first run → full republish
 }
 async function savePublishState(state) {
-  try { await writeFile(STATE_FILE, JSON.stringify(state)); }
-  catch (e) { console.log(`  (could not save publish state: ${(e && e.message) || e})`); }
+  // Written to the DB, which is durable. The local copy is kept purely as a
+  // human-readable record of the last run; losing it no longer costs anything.
+  try { await retry(() => setPublishState(state)); }
+  catch (e) { console.log(`  (could not save publish state to the DB: ${(e && e.message) || e})`); }
+  try { await writeFile(STATE_FILE, JSON.stringify(state)); } catch { /* cache only */ }
 }
 
 // ── Phase-1 heuristic outcome/remedy classifier (metadata only) ────────
@@ -309,12 +331,17 @@ async function ingestDocuments() {
 
   const prev = await loadPublishState();
   // A FULL republish (every investigation on disk) happens on: an explicit flag, the
-  // first run / missing state, a format-version bump, or the weekly (Sunday UTC)
-  // sweep — the safety net that heals anything an incremental diff could miss.
+  // first run / missing state, or a format-version bump.
+  //
+  // The weekly Sunday-UTC sweep used to be here. It rewrote all ~1,350 detail
+  // blobs to heal drift — 1,350 Vercel Blob advanced operations, or ~2.7x the
+  // entire Hobby monthly allowance every month, for a job the content hashes
+  // already do. Verified before removing it: 1,345 of 1,345 document files
+  // matched their recorded hash, so the sweep was rewriting identical bytes.
+  // Run `--full-republish` deliberately if drift is ever suspected.
   const fullReason = args.includes('--full-republish') ? 'flag'
     : !prev ? 'no prior state'
     : prev.fmtV !== PUBLISH_FMT_V ? 'format bump'
-    : new Date().getUTCDay() === 0 ? 'weekly sweep'
     : null;
   const full = fullReason !== null;
 
@@ -351,18 +378,41 @@ async function ingestDocuments() {
     if (!full && (!prev || prev.invHash[number] !== hh)) changed.add(number);
   }
 
-  const publishSet = full ? [...allNumbers] : [...changed].filter((n) => allNumbers.has(n));
+  const wanted = full ? [...allNumbers] : [...changed].filter((n) => allNumbers.has(n));
+
+  // Each detail blob written is one Vercel Blob ADVANCED operation, and the Hobby
+  // allowance is 2,000 a month — so a single unbounded sweep of 1,350 blobs eats
+  // two thirds of the month in one run. Capping how many a run may write turns
+  // that spike into a trickle: whatever is deferred is marked for retry below and
+  // picked up by the following runs, so a full sweep still completes, just over
+  // several nights instead of all at once. Raise it with --max-publish when the
+  // allowance is not the binding constraint (e.g. right after a billing reset).
+  const MAX_PUBLISH = Math.max(1, argNum('--max-publish', 250));
+  const publishSet = wanted.slice(0, MAX_PUBLISH);
+  const deferred = wanted.slice(MAX_PUBLISH);
+
   console.log(full
-    ? `Full republish (${fullReason}): ${publishSet.length} investigation(s).`
-    : `Incremental republish: ${publishSet.length} of ${allNumbers.size} investigation(s) changed (documents and/or catalog).`);
+    ? `Full republish (${fullReason}): ${wanted.length} investigation(s).`
+    : `Incremental republish: ${wanted.length} of ${allNumbers.size} investigation(s) changed (documents and/or catalog).`);
+  if (deferred.length) {
+    console.log(`  publishing ${publishSet.length} this run (--max-publish ${MAX_PUBLISH}); ${deferred.length} deferred to the next run(s).`);
+  }
 
   const failed = await deriveNumbers(publishSet);
 
   // Persist the new signatures so the next run can diff. Record current hashes for
-  // everything, but poison the still-failed numbers' invHash so they re-publish next
-  // run even if their inputs don't move again.
+  // everything, but poison the invHash of anything still owed work so it publishes
+  // next run even if its inputs never move again: the numbers that FAILED, and the
+  // ones deferred by the budget. Without the deferred half of that, capping the
+  // run would silently drop them — they would look up-to-date forever.
   const newInvHash = { ...(prev ? prev.invHash : {}), ...curInvHash };
   for (const n of failed) newInvHash[n] = '__retry__';
+  for (const n of deferred) newInvHash[n] = '__retry__';
+  // --no-blob wrote nothing, so nothing in the publish set is actually up to date.
+  // Recording it as clean (which this did until now) strands those detail blobs
+  // stale forever: the diff sees a match and never revisits them. The document
+  // hashes are still saved — those describe Neon, which we did write.
+  if (!PUBLISH) for (const n of publishSet) newInvHash[n] = '__retry__';
   await savePublishState({ fmtV: PUBLISH_FMT_V, invHash: newInvHash, docHash: { ...(prev ? prev.docHash : {}), ...curDocHash } });
 }
 
@@ -454,6 +504,10 @@ try {
   } else if (args.includes('--derive-only')) {
     const numbers = await numbersWithDocuments();
     console.log(`Re-deriving from ${numbers.length} investigation(s) already in Neon…`);
+    // Deliberately NOT subject to --max-publish: this flag's contract is "all of them",
+    // and it does not touch publish state, so a cap here would silently drop the rest
+    // with nothing marked for retry. It does cost one blob write each, so say so.
+    if (PUBLISH) console.log(`  note: this writes ${numbers.length} detail blobs (${numbers.length} Vercel Blob advanced operations, allowance 2,000/month). Add --no-blob to derive without publishing.`);
     await deriveNumbers(numbers);
   } else {
     await ingestInvestigations();

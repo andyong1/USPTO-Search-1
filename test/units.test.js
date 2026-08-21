@@ -1177,3 +1177,117 @@ test('firms — curated corrections outrank the corpus majority', async () => {
   assert.equal(corr.get('K & L GATES'), 'K&L Gates LLP');
   assert.equal(corr.get('CARMICHAEL IP'), 'Carmichael IP, PLLC');
 });
+
+// ── Daily digest assembly ────────────────────────────────────────────────────
+// Rendered through the public sender (with the Resend POST intercepted) rather
+// than by exporting the internals, so these exercise the same path production
+// takes. Neon's driver also uses fetch, so the stub must pass everything that is
+// not a Resend call through to the real one.
+async function renderDigest(events, opts = {}) {
+  const prev = { key: process.env.RESEND_API_KEY, from: process.env.DIGEST_FROM, base: process.env.APP_BASE_URL, fetch: globalThis.fetch };
+  process.env.RESEND_API_KEY = 'test-key';
+  process.env.DIGEST_FROM = 'Test <t@example.com>';
+  process.env.APP_BASE_URL = 'https://example.test';
+  let captured = null;
+  const realFetch = prev.fetch.bind(globalThis);
+  globalThis.fetch = async (url, o) => {
+    if (String(url).includes('api.resend.com')) { captured = JSON.parse(o.body); return { ok: true, json: async () => ({ id: 'x' }) }; }
+    return realFetch(url, o);
+  };
+  try {
+    const { sendComprehensiveDigestTo } = await import('../lib/email.js');
+    await sendComprehensiveDigestTo('a@b.test', events, opts);
+    return captured;
+  } finally {
+    globalThis.fetch = prev.fetch;
+    if (prev.key === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = prev.key;
+    if (prev.from === undefined) delete process.env.DIGEST_FROM; else process.env.DIGEST_FROM = prev.from;
+    if (prev.base === undefined) delete process.env.APP_BASE_URL; else process.env.APP_BASE_URL = prev.base;
+  }
+}
+const ev = (category, o = {}) => ({ category, application_number: o.app || '90099999', document_id: o.doc || 'D1', doc_code: o.code || null, official_date: '2026-08-20', label: o.label || 'Doc', ...o });
+// Strips tags and decodes the entities esc() introduces, so an expectation can be
+// written as the reader sees it ("&" not "&amp;").
+const headings = (html) => [...html.matchAll(/<h3[^>]*>(.*?)<\/h3>/gs)]
+  .map((m) => m[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim());
+
+test('digest — sections with nothing to report are omitted, not rendered as "None."', async () => {
+  const c = await renderDigest([ev('determination', { label: 'Order granting' })]);
+  // One event: exactly one section, and none of the other twelve blocks.
+  assert.deepEqual(headings(c.html), ['1. Reexam Determinations (1)']);
+  assert.equal(/None\./.test(c.html), false);
+  assert.match(c.subject, /1 new item\b/);
+});
+
+test('digest — numbering is dynamic and the index matches the sections', async () => {
+  const c = await renderDigest([
+    ev('certificate', { doc: 'C1', label: 'Certificate' }),
+    ev('determination', { doc: 'D2', label: 'Order' }),
+    ev('nirc', { doc: 'N1', label: 'NIRC' }),
+  ]);
+  // Certificate is LAST despite being first in the input: the NIRC states what
+  // happened to the claims, so it must precede the certificate formality.
+  assert.deepEqual(headings(c.html), [
+    '1. Reexam Determinations (1)',
+    '2. Notices of Intent to Issue a Certificate (1)',
+    '3. Reexam Certificates (1)',
+  ]);
+  // The index line is a table of contents over exactly those sections.
+  for (const t of ['1. Reexam Determinations (1)', '2. Notices of Intent to Issue a Certificate (1)', '3. Reexam Certificates (1)']) {
+    assert.ok(c.html.includes(t), t);
+  }
+});
+
+test('digest — an unclaimed category is surfaced, not silently dropped', async () => {
+  const c = await renderDigest([ev('determination'), ev('something_new', { doc: 'X1' })]);
+  assert.deepEqual(headings(c.html), ['1. Reexam Determinations (1)', '2. Other Tracked Filings (1)']);
+  // The headline count must equal what the sections actually show.
+  assert.match(c.subject, /2 new items/);
+});
+
+test('digest — headline count never disagrees with the rendered sections', async () => {
+  const c = await renderDigest([ev('determination'), ev('action_nonf', { doc: 'A1' }), ev('action_finl', { doc: 'A2' })], {
+    ptabDecisions: [{ trial: 'IPR2026-00001', type: 'IPR', patent: '9,999,999' }],
+    ptabDecisionEvents: [{ trial: 'IPR2026-00002', type: 'IPR', kind: 'Discretionary', decision: 'deny' }],
+  });
+  assert.match(c.subject, /5 new items/);
+  assert.deepEqual(headings(c.html), [
+    '1. Reexam Determinations (1)',
+    '2. Reexam Office Actions (2)',
+    '3. PTAB Discretionary & Institution Decisions (1)',
+    '4. PTAB Final Written Decisions (1)',
+  ]);
+});
+
+test('digest — rows name the patent owner and third-party requester', async () => {
+  const c = await renderDigest([ev('determination', {
+    patent_owner: 'NETSKOPE, INC.', requester_type: 'third_party', requester_name: 'FORTINET, INC.',
+  })]);
+  // ALL-CAPS storage is title-cased for display through the shared formatter.
+  assert.ok(c.html.includes('Owner: Netskope, Inc.'), 'owner line');
+  assert.ok(c.html.includes('Requester: Fortinet, Inc.'), 'requester line');
+});
+
+test('digest — a patent-owner-requested reexam is labelled, not left blank', async () => {
+  const c = await renderDigest([ev('determination', { patent_owner: 'ACME CORP.', requester_type: 'patent_owner', requester_name: null })]);
+  assert.ok(c.html.includes('Requester: Patent owner'), 'type label stands in for the missing name');
+});
+
+test('digest — an inferred requester name is flagged, not stated as fact', async () => {
+  const withMark = await renderDigest([ev('determination', { requester_type: 'third_party', requester_name: 'ACME LLC', requester_confidence: 'low' })]);
+  assert.match(withMark.html, /Acme LLC<sup[^>]*>~<\/sup>/);
+  const without = await renderDigest([ev('determination', { requester_type: 'third_party', requester_name: 'ACME LLC', requester_confidence: 'high' })]);
+  assert.equal(/<sup/.test(without.html), false);
+});
+
+test('digest — document codes are not shown in row labels or subheadings', async () => {
+  const c = await renderDigest([
+    ev('action_nonf', { doc: 'A1', code: 'RXR.NF', label: 'First non-final office action' }),
+    ev('action_finl', { doc: 'A2', code: 'RXR.F', label: 'Final office action' }),
+  ]);
+  assert.equal(/RXR\.NF|RXR\.F/.test(c.html), false, 'no doc codes anywhere in the body');
+  assert.ok(c.html.includes('First non-final office action'), 'the human label is still shown');
+  // The subheadings split the two, without codes.
+  const subs = [...c.html.matchAll(/<h4[^>]*>(.*?)<\/h4>/gs)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+  assert.deepEqual(subs, ['Non-final (1)', 'Final (1)']);
+});

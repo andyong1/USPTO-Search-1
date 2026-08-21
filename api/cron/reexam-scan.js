@@ -21,7 +21,7 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate, setSubDigestResult,
-  getDocEventsByOfficialDate, getD325SummariesByDocIds,
+  getDocEventsByOfficialDate, getD325SummariesByDocIds, getReexamPartiesByApps,
   getDeterminationsToCheckConclusion, recordConclusionDocs, recordPetitionDocs,
   recordUnclassifiedPetitionCode,
   getDeterminationsToCheckTechCenter,
@@ -124,6 +124,21 @@ async function maybeSendSubscriberDigest(req) {
       }
     }
   } catch { /* summaries are optional */ }
+
+  // Name the parties on each row (patent owner, third-party requester). One query
+  // for the whole digest; best-effort, because a bare control number is still a
+  // usable alert and this must never be the reason a digest fails to go out.
+  try {
+    const parties = await getReexamPartiesByApps(events.map((e) => e.application_number));
+    for (const e of events) {
+      const p = parties.get(e.application_number);
+      if (!p) continue;
+      e.patent_owner = p.patent_owner;
+      e.requester_name = p.requester_name;
+      e.requester_confidence = p.requester_confidence;
+      e.requester_type = p.requester_type;
+    }
+  } catch { /* party names are optional */ }
 
   // PTAB final written decisions issued that same day (best-effort — a failure
   // here must not block the reexam digest). Dedupe to one row per trial.

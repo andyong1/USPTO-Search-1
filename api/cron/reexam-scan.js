@@ -21,7 +21,7 @@ import {
   recordPreorder, updatePreorderPetition, PREORDER_CUTOFF,
   getPreorderCounts, setPreorderCounts,
   listReexamSubscribers, getSubDigestDate, setSubDigestDate, setSubDigestResult,
-  getDocEventsByOfficialDate, getD325SummariesByDocIds, getReexamPartiesByApps,
+  getDocEventsByOfficialDate, getReexamPartiesByApps,
   getDeterminationsToCheckConclusion, recordConclusionDocs, recordPetitionDocs,
   recordUnclassifiedPetitionCode,
   getDeterminationsToCheckTechCenter,
@@ -112,18 +112,10 @@ async function maybeSendSubscriberDigest(req) {
 
   const events = await getDocEventsByOfficialDate(targetDate);
 
-  // Attach AI §325(d) summaries to determination rows when the nightly local
-  // pipeline has produced one (best-effort — never blocks the digest).
-  try {
-    const detIds = events.filter((e) => e.category === 'determination' && e.document_id).map((e) => e.document_id);
-    if (detIds.length) {
-      const sums = await getD325SummariesByDocIds(detIds);
-      for (const e of events) {
-        const s = sums.get(e.document_id);
-        if (s) e.d325_summary = s.summary;
-      }
-    }
-  } catch { /* summaries are optional */ }
+  // The AI §325(d) summary used to be attached to determination rows here. It was
+  // the only analysis any row carried, which made determinations read as a
+  // different kind of entry from every other document type; the summary lives on
+  // /reexam, where it can be expanded next to the rest of the analysis.
 
   // Name the parties on each row (patent owner, third-party requester). One query
   // for the whole digest; best-effort, because a bare control number is still a

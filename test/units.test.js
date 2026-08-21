@@ -1291,3 +1291,34 @@ test('digest — document codes are not shown in row labels or subheadings', asy
   const subs = [...c.html.matchAll(/<h4[^>]*>(.*?)<\/h4>/gs)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
   assert.deepEqual(subs, ['Non-final (1)', 'Final (1)']);
 });
+
+test('digest — no §325(d) analysis on determination rows', async () => {
+  // The summary was the only analysis any row carried, which made determinations
+  // read as a different kind of entry from every other document type. It stays on
+  // /reexam. Passed in deliberately here: presence in the event must not surface.
+  const c = await renderDigest([ev('determination', { d325_summary: 'The order declines to exercise discretion.' })]);
+  assert.equal(/325\(d\)|declines to exercise/.test(c.html), false);
+  assert.ok(c.html.includes('Doc'), 'the row itself still renders');
+});
+
+test('digest — every section offers View / Download, PTAB included', async () => {
+  const c = await renderDigest([ev('determination')], {
+    ptabDecisionEvents: [{ trial: 'IPR2026-00123', type: 'IPR', kind: 'Discretionary', decision: 'deny', pdfUrl: 'https://uspto.gov/dd.pdf' }],
+    ptabDecisions: [{ trial: 'IPR2025-00987', type: 'IPR', petitioner: 'Acme', pdfUrl: 'https://uspto.gov/fwd.pdf' }],
+  });
+  // One View and one Download per document row — the PTAB tables used to offer a
+  // lone "View", so the same action depended on which section a document sat in.
+  assert.equal((c.html.match(/>View</g) || []).length, 3);
+  assert.equal((c.html.match(/>Download</g) || []).length, 3);
+  assert.equal(/View decision/.test(c.html), false, 'the old lone PTAB link is gone');
+  // The PTAB proxy switches to an attachment on ?dl=1, one per PTAB row.
+  assert.equal((c.html.match(/api\/ptab\?file=[^"]*&dl=1/g) || []).length, 2);
+  // Every table's LAST column is the link column, and all three name it the same
+  // way. Asserted positionally rather than by banning other names: "Document"
+  // (the reexam label column) and "Decision" (the discretionary OUTCOME) are both
+  // legitimate headers elsewhere in the same email.
+  const tables = [...c.html.matchAll(/<thead>(.*?)<\/thead>/gs)].map((m) =>
+    [...m[1].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((t) => t[1]));
+  assert.equal(tables.length, 3);
+  for (const ths of tables) assert.equal(ths[ths.length - 1], 'View / Download', ths.join('|'));
+});
